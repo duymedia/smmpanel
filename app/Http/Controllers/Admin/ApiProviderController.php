@@ -6,202 +6,193 @@ use App\Http\Controllers\Controller;
 use App\Models\ApiProvider;
 use App\Smm\Smm;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class ApiProviderController extends Controller
 {
-    public function index(Request $request)
+    public function index()
     {
-        // Handle reorder action (drag-and-drop)
-        if ($request->isMethod('put') && $request->has('action') && $request->input('action') === 'reorder') {
-            return $this->handleReorder($request);
-        }
+        return view('admin.providers.index', [
+            'providers' => ApiProvider::where('domain', getDomain())
+                ->orderBy('position')
+                ->orderBy('created_at', 'desc')
+                ->get(),
+        ]);
+    }
 
+    public function list(Request $request)
+    {
+        $filters = $request->validate([
+            'type' => ['nullable', 'string', 'max:50'],
+            'status' => ['nullable', 'boolean'],
+            'search' => ['nullable', 'string', 'max:100'],
+            'sort_by' => ['nullable', 'in:id,name,balance,currency,warning,position,status,created_at'],
+            'sort_order' => ['nullable', 'in:asc,desc'],
+        ]);
         $query = ApiProvider::where('domain', getDomain());
+        !empty($filters['type']) && $query->where('type', $filters['type']);
+        array_key_exists('status', $filters) && $query->where('status', (bool) $filters['status']);
+        !empty($filters['search']) && $query->where('name', 'like', "%{$filters['search']}%");
 
-        if ($request->filled('type')) $query->where('type', $request->type);
-        if ($request->filled('status')) $query->where('status', $request->boolean('status'));
-        if ($request->filled('search')) $query->where('name', 'like', "%{$request->search}%");
+        $sortBy = $filters['sort_by'] ?? 'position';
+        $sortOrder = $filters['sort_order'] ?? 'asc';
 
-        // Order by position by default (for drag-drop sorting), or by specified sort
-        $sortBy = $request->get('sort_by', 'position');
-        $sortOrder = $request->get('sort_order', 'asc');
         $query->orderBy($sortBy, $sortOrder);
+        $sortBy !== 'created_at' && $query->orderBy('created_at', 'desc');
 
-        // Fallback to created_at for stability if not sorting by position
-        if ($sortBy !== 'created_at') {
-            $query->orderBy('created_at', 'desc');
-        }
-
-        $providers = $request->expectsJson()
-            ? $query->get()
-            : $query->paginate($request->get('per_page', 10));
-
-        return $request->expectsJson()
-            ? response()->json(['success' => true, 'data' => $providers])
-            : view('adminpanel.provider.index', compact('providers'));
+        return ['success' => true, 'data' => $query->get(['id', 'name', 'type', 'balance', 'currency', 'warning', 'position', 'status', 'created_at'])];
     }
 
     public function create()
     {
-        return view('admin.provider.create');
+        return redirect()->route('admin.providers.index');
+    }
+
+    public function edit($providers = null)
+    {
+        return redirect()->route('admin.providers.index');
+    }
+
+    public function show(Request $request)
+    {
+        $provider = ApiProvider::where('domain', getDomain())->findOrFail($this->providerId($request));
+
+        return [
+            'success' => true,
+            'id' => $provider->id,
+            'url' => $provider->link,
+            'key' => $provider->api_key,
+            'name' => $provider->name,
+            'rate' => $provider->rate_api,
+            'balance_alert' => $provider->warning,
+            'fixed_decimal' => $provider->fixed_decimal,
+        ];
     }
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:api_providers',
-            'type' => 'required|string|max:100',
-            'link' => 'nullable|url|max:500',
-            'api_key' => 'required|string|max:500',
-            'rate_api' => 'nullable|numeric|min:0',
-            'balance' => 'nullable|numeric|min:0',
-            'fixed_decimal' => 'nullable|string',
-            'warning' => 'nullable|numeric|min:0',
-            'currency' => 'nullable|string|max:10',
-            'note' => 'nullable|string',
-            'format' => 'nullable|in:json,form',
-            'timeout' => 'nullable|integer|min:0'
-        ]);
-
-        $validated['fixed_decimal'] = $validated['fixed_decimal'] ?? '4';
-        $validated['status'] = $request->boolean('status', true);
-        $validated['domain'] = getDomain();
-
-        // Kiểm tra API và lấy balance
-        if (!empty($validated['link']) && !empty($validated['api_key'])) {
-            try {
-                $result = $this->fetchBalance($validated['link'], $validated['api_key'], $validated['format'] ?? 'json', $validated['timeout'] ?? 0);
-
-                if (!isset($result['balance'])) {
-                    $error = $result['error'] ?? 'Không thể lấy số dư từ API';
-                    if ($request->expectsJson() || $request->ajax()) {
-                        return response()->json(['success' => false, 'message' => $error], 400);
-                    }
-                    return back()->withInput()->with('error', $error);
-                }
-
-                $validated['balance'] = $result['balance'];
-                if (isset($result['currency'])) $validated['currency'] = $result['currency'];
-            } catch (\Exception $e) {
-                \Log::error('API failed', ['link' => $validated['link'], 'error' => $e->getMessage()]);
-                if ($request->expectsJson() || $request->ajax()) {
-                    return response()->json(['success' => false, 'message' => 'Lỗi API: ' . $e->getMessage()], 400);
-                }
-                return back()->withInput()->with('error', $e->getMessage());
-            }
-        }
-
-        $provider = ApiProvider::create($validated);
-
-        if ($request->expectsJson() || $request->ajax()) {
-            return response()->json(['success' => true, 'data' => $provider]);
-        }
-
-        return redirect()->route('admin.provider.index');
-    }
-
-    public function show(Request $request, $id)
-    {
-        $provider = ApiProvider::where('domain', getDomain())->findOrFail($id);
-
-        return $request->expectsJson() || $request->ajax()
-            ? response()->json(['success' => true, 'data' => $provider])
-            : view('admin.provider.show', compact('provider'));
-    }
-
-    public function update(Request $request, $id)
-    {
-        $provider = ApiProvider::where('domain', getDomain())->findOrFail($id);
-
-        // Toggle status
-        if ($request->has('toggle_status')) {
-            $status = $request->boolean('status');
-            $provider->update(['status' => $status]);
-            $message = $status ? "Kích hoạt thành công!" : "Vô hiệu hóa thành công!";
-            return response()->json(['success' => true, 'message' => $message, 'status' => $status]);
-        }
-
-        // Quick update
-        if ($request->has('field')) {
-            $field = $request->input('field');
-            $value = $request->input('value');
-
-            if (!in_array($field, ['status', 'balance', 'type'])) {
-                return response()->json(['success' => false, 'message' => 'Trường không hợp lệ!'], 400);
-            }
-
-            $provider->update([$field => $value]);
-            return response()->json(['success' => true, 'message' => 'Updated Success', 'provider' => $provider->fresh()]);
-        }
-
-        // Regular update
-        $validated = $request->validate([
-            'name' => 'sometimes|string|max:255|unique:api_providers,name,' . $id,
-            'type' => 'sometimes|string|max:100',
-            'link' => 'nullable|url|max:500',
-            'api_key' => 'nullable|string|max:500',
-            'rate_api' => 'nullable|numeric|min:0',
-            'balance' => 'nullable|numeric|min:0',
-            'fixed_decimal' => 'nullable|string',
-            'warning' => 'nullable|numeric|min:0',
-            'currency' => 'nullable|string|max:10',
-            'note' => 'nullable|string'
-        ]);
-
-        // Don't update api_key if it's empty
-        if (empty($validated['api_key'])) {
-            unset($validated['api_key']);
-        }
-
-        $validated['fixed_decimal'] = $validated['fixed_decimal'] ?? '4';
-        if ($request->has('status')) $validated['status'] = $request->boolean('status');
-
-        $provider->update($validated);
-        $message = "API Provider <strong>{$provider->name}</strong> đã được cập nhật!";
-
-        return response()->json(['success' => true, 'message' => $message, 'data' => $provider->fresh()]);
-    }
-
-    public function destroy(Request $request, $id)
-    {
-        $provider = ApiProvider::where('domain', getDomain())->findOrFail($id);
-        $name = $provider->name;
-        $provider->delete();
-
-        return response()->json(['success' => true, 'message' => "Đã xóa {$name} thành công!"]);
-    }
-
-    public function getBalance(Request $request, $id)
-    {
-        $provider = ApiProvider::where('domain', getDomain())->findOrFail($id);
-
-        if (!$provider->link || !$provider->api_key) {
-            return response()->json(['success' => false, 'error' => 'Thiếu API URL hoặc API Key'], 400);
-        }
-
         try {
-            $result = $this->fetchBalance($provider->link, $provider->api_key, $provider->format ?? 'json', $provider->timeout ?? 0);
+            $validated = $this->validateProviderData($request);
+            $validated += [
+                'status' => true,
+                'domain' => getDomain(),
+                'type' => 'api',
+                'fixed_decimal' => $validated['fixed_decimal'] ?? '10',
+                'position' => (ApiProvider::where('domain', getDomain())->max('position') ?? 0) + 1,
+            ];
 
-            if (isset($result['balance'])) {
-                $provider->update([
-                    'balance' => $result['balance'],
-                    'currency' => $result['currency'] ?? $provider->currency
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'balance' => $result['balance'],
-                    'currency' => $result['currency'] ?? $provider->currency
-                ]);
+            try {
+                $balance = $this->fetchBalance($validated['link'], $validated['api_key']);
+                if (!isset($balance['balance'])) {
+                    return ['error' => 'Không thể kết nối tới API: ' . ($balance['error'] ?? 'Lỗi')];
+                }
+                $validated += $balance;
+            } catch (\Exception $e) {
+                Log::error('Fetch.balance', ['url' => $validated['link'], 'error' => $e->getMessage()]);
+                return ['error' => 'Không thể kết nối tới API: ' . $e->getMessage()];
             }
 
-            return response()->json(['success' => false, 'error' => $result['error'] ?? 'Lỗi không xác định'], 400);
+            $provider = ApiProvider::create($validated);
+
+            return [
+                'success' => true,
+                'message' => "Thêm nhà cung cấp '{$provider->name}' thành công!",
+                'data' => $provider,
+            ];
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return ['error' => collect($e->errors())->flatten()->first()];
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'error' => 'Lỗi API: ' . $e->getMessage()], 500);
+            Log::error('Provider.store', ['error' => $e->getMessage()]);
+            return ['error' => 'Lỗi hệ thống: ' . $e->getMessage()];
         }
     }
 
-    public function syncAllBalances(Request $request)
+    public function update(Request $request)
+    {
+        try {
+            $provider = ApiProvider::where('domain', getDomain())->findOrFail($this->providerId($request));
+            $data = $this->validateProviderData($request, $provider);
+
+            if (empty($data['api_key'] ?? null)) {
+                unset($data['api_key']);
+            }
+
+            $data['fixed_decimal'] ??= $provider->fixed_decimal;
+            $provider->update($data);
+
+            return [
+                'success' => true,
+                'message' => "Cập nhật nhà cung cấp '{$provider->name}' thành công!",
+                'data' => $provider->fresh(),
+            ];
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return ['error' => collect($e->errors())->flatten()->first()];
+        } catch (\Exception $e) {
+            Log::error('Provider.update', ['error' => $e->getMessage()]);
+            return ['error' => 'Lỗi hệ thống: ' . $e->getMessage()];
+        }
+    }
+
+    public function destroy(Request $request)
+    {
+        try {
+            $provider = ApiProvider::where('domain', getDomain())->findOrFail($this->providerId($request));
+            $name = $provider->name;
+            $provider->delete();
+
+            return ['success' => true, 'message' => "Đã xóa nhà cung cấp '{$name}' thành công!"];
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return ['error' => 'Nhà cung cấp không tồn tại'];
+        } catch (\Exception $e) {
+            Log::error('Provider.delete', ['error' => $e->getMessage()]);
+            return ['error' => 'Lỗi hệ thống: ' . $e->getMessage()];
+        }
+    }
+
+    public function getBalance(Request $request)
+    {
+        try {
+            $provider = ApiProvider::where('domain', getDomain())->findOrFail($this->providerId($request));
+
+            if (!$provider->link || !$provider->api_key) {
+                return ['error' => "Nhà cung cấp '{$provider->name}' chưa cấu hình API URL hoặc API Key"];
+            }
+
+            try {
+                $balance = $this->fetchBalance($provider->link, $provider->api_key);
+            } catch (\Exception $e) {
+                Log::error('Fetch.balance', ['url' => $provider->link, 'error' => $e->getMessage()]);
+                return ['error' => $e->getMessage()];
+            }
+
+            if (!isset($balance['balance'])) {
+                $provider->update(['balance' => 0, 'status' => false]);
+                return ['error' => $balance['error'] ?? 'Không thể lấy số dư từ API'];
+            }
+
+            $provider->update([
+                'balance' => $balance['balance'],
+                'currency' => $balance['currency'] ?? $provider->currency,
+            ]);
+
+            return [
+                'success' => true,
+                'message' => "Cập nhật số dư '{$provider->name}' thành công!",
+                'balance' => $balance['balance'],
+                'currency' => $balance['currency'] ?? $provider->currency,
+            ];
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return ['error' => 'Nhà cung cấp không tồn tại'];
+        } catch (\Exception $e) {
+            Log::error('Provider.getBalance', ['error' => $e->getMessage()]);
+            return ['error' => 'Lỗi hệ thống: ' . $e->getMessage()];
+        }
+    }
+
+    public function syncAllBalances()
     {
         $providers = ApiProvider::where('domain', getDomain())
             ->where('status', true)
@@ -209,121 +200,159 @@ class ApiProviderController extends Controller
             ->whereNotNull('api_key')
             ->get();
 
+        if ($providers->isEmpty()) {
+            return ['error' => 'Không có nhà cung cấp nào được cấu hình'];
+        }
+
         $results = $providers->map(function ($provider) {
             try {
-                $result = $this->fetchBalance($provider->link, $provider->api_key, $provider->format ?? 'json', $provider->timeout ?? 0);
+                $balance = $this->fetchBalance($provider->link, $provider->api_key);
 
-                if (isset($result['balance'])) {
+                if (isset($balance['balance'])) {
                     $provider->update([
-                        'balance' => $result['balance'],
-                        'currency' => $result['currency'] ?? $provider->currency
+                        'balance' => $balance['balance'],
+                        'currency' => $balance['currency'] ?? $provider->currency,
                     ]);
 
-                    return ['id' => $provider->id, 'success' => true, 'balance' => $result['balance'], 'currency' => $result['currency'] ?? $provider->currency];
+                    return ['id' => $provider->id, 'name' => $provider->name, 'success' => true] + $balance;
                 }
 
-                return ['id' => $provider->id, 'success' => false, 'error' => $result['error'] ?? 'Lỗi không xác định'];
+                return [
+                    'id' => $provider->id,
+                    'name' => $provider->name,
+                    'success' => false,
+                    'error' => $balance['error'] ?? 'Lỗi',
+                ];
             } catch (\Exception $e) {
-                return ['id' => $provider->id, 'success' => false, 'error' => $e->getMessage()];
+                return ['id' => $provider->id, 'name' => $provider->name, 'success' => false, 'error' => $e->getMessage()];
             }
         });
 
-        return response()->json(['success' => true, 'results' => $results]);
-    }
+        $success = $results->where('success', true)->count();
+        $fail = $results->where('success', false)->count();
 
-    public function toggleStatus(Request $request, $id)
-    {
-        $provider = ApiProvider::where('domain', getDomain())->findOrFail($id);
-
-        $newStatus = !$provider->status;
-        $provider->update(['status' => $newStatus]);
-
-        $message = $newStatus ? 'Kích hoạt thành công!' : 'Vô hiệu hóa thành công!';
-
-        return response()->json([
+        return [
             'success' => true,
-            'message' => $message,
-            'status' => $newStatus
-        ]);
+            'message' => "Cập nhật {$success} thành công" . ($fail > 0 ? ", {$fail} thất bại" : ''),
+            'results' => $results,
+        ];
     }
 
-    private function fetchBalance($api_url, $api_key, $format = 'json', $timeout = 0)
+    public function sort(Request $request)
+    {
+        $items = $request->input('data.dataSort', []);
+        if (empty($items)) {
+            return ['error' => 'No data'];
+        }
+
+        foreach ($items as $index => $item) {
+            $id = Arr::get($item, 'i', $item);
+            $position = (int) Arr::get($item, 's', $index + 1);
+
+            ApiProvider::where('id', $id)
+                ->where('domain', getDomain())
+                ->update(['position' => $position]);
+        }
+
+        return ['success' => adminMessage('update')];
+    }
+
+    public function products(Request $request)
+    {
+        try {
+            ApiProvider::where('domain', getDomain())->findOrFail($this->providerId($request));
+            return ['success' => []];
+        } catch (\Exception $e) {
+            Log::error('Provider.products', ['error' => $e->getMessage()]);
+            return ['error' => $e->getMessage()];
+        }
+    }
+
+    public function syncFor1dg()
+    {
+        try {
+            $count = ApiProvider::where('domain', getDomain())->where('status', true)->count();
+            return ['success' => "Synced {$count} providers"];
+        } catch (\Exception $e) {
+            Log::error('Provider.syncFor1dg', ['error' => $e->getMessage()]);
+            return ['error' => 'Sync failed: ' . $e->getMessage()];
+        }
+    }
+
+    public function checkOfNMH(Request $request)
+    {
+        try {
+            ApiProvider::where('domain', getDomain())->findOrFail($this->providerId($request));
+            return ['error' => 'NMH check not implemented'];
+        } catch (\Exception $e) {
+            Log::error('Provider.checkOfNMH', ['error' => $e->getMessage()]);
+            return ['error' => $e->getMessage()];
+        }
+    }
+
+    private function validateProviderData(Request $request, ?ApiProvider $provider = null): array
+    {
+        $input = $request->input('data', []);
+        if (!is_array($input) || $input === []) {
+            $input = $request->only(['url', 'link', 'key', 'api_key', 'name', 'rate', 'rate_api', 'fixed_decimal', 'balance_alert', 'warning']);
+        }
+
+        $data = [
+            'link' => $input['url'] ?? $input['link'] ?? '',
+            'api_key' => $input['key'] ?? $input['api_key'] ?? '',
+            'name' => $input['name'] ?? '',
+            'rate_api' => $input['rate'] ?? $input['rate_api'] ?? '1',
+            'fixed_decimal' => $input['fixed_decimal'] ?? '10',
+            'warning' => $input['balance_alert'] ?? $input['warning'] ?? '0',
+        ];
+
+        $nameRule = Rule::unique('api_providers', 'name')
+            ->where(fn ($query) => $query->where('domain', getDomain()));
+        if ($provider) {
+            $nameRule->ignore($provider->id);
+        }
+
+        $rules = [
+            'name' => ['required', 'string', 'max:255', $nameRule],
+            'link' => ['required', 'url', 'max:500'],
+            'api_key' => [$provider ? 'nullable' : 'required', 'string', 'max:500'],
+            'rate_api' => ['nullable', 'numeric', 'min:0'],
+            'fixed_decimal' => ['nullable', 'integer', 'between:0,10'],
+            'warning' => ['nullable', 'numeric', 'min:0'],
+        ];
+
+        return Validator::make($data, $rules)->validate();
+    }
+
+    private function providerId(Request $request): mixed
+    {
+        return $request->input('data.id', $request->route('providers'));
+    }
+
+    private function fetchBalance(string $url, string $apiKey): array
+    {
+        $balance = $this->requestBalance($url, $apiKey, 'json');
+        if (isset($balance['balance']) || isset($balance['currency'])) {
+            return $balance;
+        }
+
+        $fallback = $this->requestBalance($url, $apiKey, 'form');
+        if (isset($fallback['balance']) || isset($fallback['currency'])) {
+            return $fallback;
+        }
+
+        return $fallback ?: $balance;
+    }
+
+    private function requestBalance(string $url, string $apiKey, string $format): array
     {
         $smm = new Smm();
-        $smm->api_url = $api_url;
-        $smm->api_key = $api_key;
+        $smm->api_url = $url;
+        $smm->api_key = $apiKey;
         $smm->format = $format;
-        $smm->timeout = $timeout;
 
         $result = $smm->balance();
 
-        // Convert object to array if needed
-        if (is_object($result)) {
-            $result = (array) $result;
-        }
-
-        return $result ?? [];
-    }
-
-    private function handleReorder(Request $request)
-    {
-        try {
-            if ($request->has('providers')) {
-                $validated = $request->validate([
-                    'providers' => 'required|array',
-                    'providers.*.id' => 'required|integer|exists:api_providers,id',
-                    'providers.*.position' => 'required|integer|min:1'
-                ]);
-
-                foreach ($validated['providers'] as $providerData) {
-                    $updated = ApiProvider::where('id', $providerData['id'])
-                        ->where('domain', getDomain())
-                        ->update(['position' => $providerData['position']]);
-
-                    if (!$updated) {
-                        throw new \Exception("Provider ID {$providerData['id']} not found or unauthorized");
-                    }
-                }
-
-                \Log::info('Provider positions updated', [
-                    'providers' => $validated['providers'],
-                    'domain' => getDomain(),
-                    'count' => count($validated['providers'])
-                ]);
-
-                return response()->json([
-                    'success' => 'Update Successfully'
-                ]);
-            }
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Không có dữ liệu để cập nhật vị trí'
-            ], 400);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            \Log::error('Reorder validation failed', [
-                'errors' => $e->errors(),
-                'request' => $request->all(),
-                'domain' => getDomain()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Dữ liệu không hợp lệ',
-                'errors' => $e->errors()
-            ], 422);
-        } catch (\Exception $e) {
-            \Log::error('Reorder failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request' => $request->all(),
-                'domain' => getDomain()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Có lỗi xảy ra khi cập nhật vị trí: ' . $e->getMessage()
-            ], 500);
-        }
+        return is_object($result) ? (array) $result : ($result ?? []);
     }
 }

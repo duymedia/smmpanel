@@ -1,172 +1,103 @@
-@extends('clients.theme-default.layouts.app')
-
-@section('title', __('massOrder.title'))
+﻿@extends('clients.theme-default.layouts.app')
+@section('title', 'Mass Order')
 
 @section('content')
+    <div class="content flex-column-fluid" id="kt_content">
+        @include('clients.theme-default.layouts.toolbar', [
+            'title' => 'Mass Order',
+            'langKey' => 'menu::Mass order',
+        ])
 
-    <!-- Main variables *content* -->
-    <div id="block_73">
-        <div class="block-bg"></div>
-        <div class="container">
-            <div class="new_order-block">
-                <div class="row mass-order__alignment">
-                    <div class="col-lg-12">
-                        <div class="component_card">
-                            <div class="card">
-                                <!-- Alert Section -->
-                                <div id="alertSection" style="display: none; margin-bottom: 20px;">
-                                </div>
+        <div class="post" id="kt_post">
+            <div class="card">
+                <div class="card-body">
 
-                                <form id="massOrderForm">
-                                    <div class="component_form_group">
-                                        <div class="">
-                                            <div class="form-group">
-                                                <label for="links"
-                                                    class="control-label">{{ __('massOrder.format_example') }}</label>
-                                                <textarea class="form-control" name="orders" rows="15" id="links"
-                                                    placeholder="{{ __('massOrder.format_placeholder') }}"></textarea>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="component_button_submit">
-                                        <div class="">
-                                            <button type="submit" class="btn btn-block btn-big-primary" id="submitBtn">
-                                                {{ __('massOrder.submit') }}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </form>
+                    {{-- Textarea nhập liệu --}}
+                    <div class="mb-3">
+                        <label class="form-label" data-page="/mass" data-lang="One order per line in format">One order per line in format</label>
+                        <textarea id="txa-data-order" class="form-control"
+                            placeholder="service_id | link | quantity
+service_id | link | quantity | comment1 / comment2 / comment3 / ... (Separate by /)
+service_id | link | quantity | suggest video list
+service_id | link | quantity | keyword search
+service_id | link | quantity | suggest video list | keyword search (Mix views)"
+                            rows="15"></textarea>
+                    </div>
+
+                    {{-- Schedule --}}
+                    <div class="mb-3 schedule">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" id="cb-schedule" class="form-check-input"
+                                onchange="document.querySelector('.schedule-time').style.display = this.checked ? '' : 'none';">
+                            <label class="form-check-label">
+                                <span class="fw-bold" data-page="/new" data-lang="Schedule">Schedule</span>.
+                                <span data-page="/new" data-lang="Your timezone">Your timezone</span>:
+                                <span class="fw-bolder">+07:00</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3 schedule-time" style="display: none;">
+                        <label class="form-label" data-page="/new" data-lang="Choose time">Choose time</label>
+                        <input type="text" id="ipt-schedule-time" class="form-control form-control-solid" readonly="">
+                    </div>
+
+                    {{-- Loop --}}
+                    <div class="mb-3 loop">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" id="cb-loop" class="form-check-input"
+                                onchange="document.querySelector('.loop-quantity').style.display = this.checked ? '' : 'none';document.querySelector('.loop-spacing').style.display = this.checked ? '' : 'none';">
+                            <label class="form-check-label">
+                                <span class="fw-bold" data-page="/new" data-lang="Loop">Loop</span>.
+                                <span data-page="/new" data-lang="Loop desciption">Auto Re-order when this order has been
+                                    <span class="fw-bolder">COMPLETED</span>. Carefully when to use this function.
+                                    Always make sure balance is enough.</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="row g-5">
+                        <div class="col-sm-6">
+                            <div class="mb-3 loop-quantity" style="display: none;">
+                                <label for="sl-loop-quantity" class="form-label" data-page="/mass" data-lang="Loop quantity">Loop
+                                    quantity</label>
+                                <select id="sl-loop-quantity" class="form-select form-select-solid">
+                                    @foreach ([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100] as $v)
+                                        <option value="{{ $v }}">{{ $v }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="mb-3 loop-spacing" style="display: none;">
+                                <label for="sl-loop-spacing" class="form-label" data-page="/mass" data-lang="Loop spacing (minutes)">Loop
+                                    spacing (minutes)</label>
+                                <select id="sl-loop-spacing" class="form-select form-select-solid">
+                                    @for ($i = 0; $i <= 1440; $i++)
+                                        <option value="{{ $i }}">{{ $i }}</option>
+                                    @endfor
+                                </select>
                             </div>
                         </div>
                     </div>
+
+                    {{-- Submit --}}
+                    <button type="button" id="btn-order" class="btn btn-primary w-100 mt-3"
+                        onclick="_mass.on.click.order()" data-page="/mass" data-lang="Submit">Submit</button>
+
+                    {{-- Result table (giữ nguyên cấu trúc gốc, không có thead) --}}
+                    <div class="table-responsive mt-10">
+                        <table class="table align-middle table-row-dashed fs-7 gy-2 gs-3 table-log-bulk"
+                            style="display: none;">
+                            <tbody></tbody>
+                        </table>
+                    </div>
+
                 </div>
             </div>
         </div>
     </div>
-
-
-    <script>
-        document.getElementById('massOrderForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const textarea = document.getElementById('links');
-            const lines = textarea.value.trim().split('\n').filter(line => line.trim());
-
-            if (lines.length === 0) {
-                alert('{{ __('massOrder.please_enter_order') }}');
-                return;
-            }
-
-            const alertSection = document.getElementById('alertSection');
-            const submitBtn = document.getElementById('submitBtn');
-
-            // Hide alert section initially
-            alertSection.style.display = 'none';
-            alertSection.innerHTML = '';
-            submitBtn.disabled = true;
-
-            let successCount = 0;
-            let errorCount = 0;
-            const orderIds = [];
-
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-                const parts = line.split('|').map(p => p.trim());
-
-                if (parts.length !== 3) {
-                    errorCount++;
-                    continue;
-                }
-
-                const [serviceId, link, quantity] = parts;
-
-                // Validate inputs
-                if (!serviceId || !link || !quantity) {
-                    errorCount++;
-                    continue;
-                }
-
-                if (isNaN(quantity) || parseInt(quantity) <= 0) {
-                    errorCount++;
-                    continue;
-                }
-
-                try {
-                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-
-                    const response = await fetch('{{ route('clients.orders.store') }}', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': csrfToken || ''
-                        },
-                        body: JSON.stringify({
-                            service: parseInt(serviceId),
-                            link: link,
-                            quantity: parseInt(quantity)
-                        })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        successCount++;
-                        if (data.order_id) {
-                            orderIds.push(data.order_id);
-                        }
-                    } else {
-                        errorCount++;
-                    }
-                } catch (error) {
-                    errorCount++;
-                }
-
-                // Add small delay between requests
-                await new Promise(resolve => setTimeout(resolve, 300));
-            }
-
-            // Show alert notification
-            showAlert(alertSection, successCount, errorCount, orderIds);
-
-            submitBtn.disabled = false;
-        });
-
-        function showAlert(container, successCount, errorCount, orderIds = []) {
-            const totalOrders = successCount + errorCount;
-            let detailsLink = 'javascript:void(0);';
-
-            // Generate details link if there are successful orders
-            if (orderIds.length > 0) {
-                detailsLink = `/orders?ids=${orderIds.join(',')}`;
-            }
-
-            if (errorCount > 0) {
-                // Show error alert
-                const alertHTML = `
-                    <div class="alert alert-dismissible alert-danger">
-                                        <button type="button" class="close" data-dismiss="alert">×</button>
-                                                                                    <h4>{{ __('massOrder.failed') }}</h4>
-                                            {{ __('massOrder.total_orders') }}: ${totalOrders}<br>
-                                            {{ __('massOrder.total_errors') }}: ${errorCount}<br>
-                                            <a href="${detailsLink}" target="_blank">{{ __('massOrder.details') }}</a>
-                                                                            </div>
-                `;
-                container.innerHTML = alertHTML;
-            } else {
-                // Show success alert
-                const alertHTML = `
-                    <div class="alert alert-dismissible alert-success">
-                                        <button type="button" class="close" data-dismiss="alert">×</button>
-                                                                                    <h4>{{ __('massOrder.failed') }}</h4>
-                                            {{ __('massOrder.total_orders') }}: ${totalOrders}<br>
-                                            {{ __('massOrder.total_errors') }}: ${errorCount}<br>
-                                            <a href="${detailsLink}" target="_blank">{{ __('massOrder.details') }}</a>
-                                                                            </div>
-                `;
-                container.innerHTML = alertHTML;
-            }
-
-            container.style.display = 'block';
-        }
-    </script>
 @endsection
+
+@push('scripts')
+    <script>_mass.init();</script>
+@endpush
+

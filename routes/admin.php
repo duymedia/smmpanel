@@ -5,7 +5,6 @@ use App\Http\Controllers\Admin\{
     AnalyticsController,
     ProductController,
     MessageController,
-    DashboardController,
     UserController,
     OrderController,
     TransactionController,
@@ -15,10 +14,8 @@ use App\Http\Controllers\Admin\{
     CategoryController,
     ServiceController,
     ApiProviderController,
-    LanguageController,
     CurrencyController,
     PaymentMethodController,
-    PaymentController,
     TicketController,
     TicketSubjectController,
     ActivityLogController,
@@ -30,32 +27,15 @@ use App\Http\Controllers\Admin\{
     ApiController,
     NewsController,
     RefillCancelController,
-    ConfigController
+    CouponController,
+    BackupController
 };
 
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+// Includes authentication; only users.role = 1 can enter this group.
+Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
 
-    // Update admin language
-    Route::post('update-language', function (\Illuminate\Http\Request $request) {
-        $lang = $request->input('lang', 'vi');
-        $allowed = ['en', 'vi'];
-        if (!in_array($lang, $allowed)) {
-            return response()->json(['success' => false, 'message' => 'Invalid language'], 400);
-        }
-        session(['language' => $lang]);
-        if ($user = \Illuminate\Support\Facades\Auth::user()) {
-            $user->update(['lang' => $lang]);
-        }
-        return response()->json(['success' => true, 'lang' => $lang]);
-    })->name('update-language');
 
-    // Redirect /admin to /admin/orders
-    Route::get('/', function () {
-        return redirect()->route('admin.orders.index');
-    });
-
-    // Dashboard
-    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/', function () { return redirect()->route('admin.orders.index'); });
 
     // Products
     Route::get('product_orders', [ProductController::class, 'product_orders'])->name('products.orders.index');
@@ -73,19 +53,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('products/edit', [ProductController::class, 'edit'])->name('products.edit');
     Route::put('products/{product}', [ProductController::class, 'update'])->name('products.update');
 
-    // Users Management
-    // Route::prefix('users')->name('users.')->group(function () {
-    //     Route::get('/', [UserController::class, 'index'])->name('index');
-    //     Route::put('/', [UserController::class, 'index'])->name('bulk-update'); // For bulk operations
-    //     Route::get('/create', [UserController::class, 'create'])->name('create');
-    //     Route::post('/', [UserController::class, 'store'])->name('store');
-    //     Route::get('/{user}', [UserController::class, 'show'])->name('show');
-    //     Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit');
-    //     Route::put('/{user}', [UserController::class, 'update'])->name('update');
-    //     Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
-    //     Route::post('/{user}/update-balance', [UserController::class, 'updateBalance'])->name('update-balance');
-    // });
-
     Route::prefix('accounts')->name('accounts.')->group(function () {
         Route::get('/', [AccountController::class, 'index'])->name('index');
         Route::put('/', [AccountController::class, 'index'])->name('bulk-update'); // For bulk operations
@@ -96,6 +63,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::post('/{username}/customrates', [AccountController::class, 'customRatesStore'])->name('customrates.store');
         Route::delete('/{username}/customrates', [AccountController::class, 'customRatesDestroy'])->name('customrates.destroy');
         Route::get('/{username}/signinhistory', [AccountController::class, 'signInHistory'])->name('signinhistory');
+        // Dedicated endpoint for the account transactions DataTable. Keep it
+        // before the username wildcard so `transactions/data` is not treated
+        // as an account name by the router.
+        Route::post('/transactions/data', [AccountController::class, 'transactionsData'])->name('transactions.data');
         Route::get('/{username}/transactions', [AccountController::class, 'transactions'])->name('transactions');
         Route::get('/{username}/affiliates', [AccountController::class, 'affiliates'])->name('affiliates');
         Route::get('/{username}', [AccountController::class, 'show'])->name('show');
@@ -185,19 +156,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::delete('/{orders}', [OrderController::class, 'destroy'])->name('destroy')->where('orders', '[0-9]+');
     });
 
-    Route::prefix('language')->name('language.')->group(function () {
-        Route::get('/', [LanguageController::class, 'index'])->name('index');
-        Route::get('/create', [LanguageController::class, 'create'])->name('create');
-        Route::post('/', [LanguageController::class, 'store'])->name('store');
-        Route::get('/{language}', [LanguageController::class, 'show'])->name('show');
-        Route::get('/{language}/edit', [LanguageController::class, 'edit'])->name('edit');
-        Route::put('/{language}', [LanguageController::class, 'update'])->name('update');
-        Route::delete('/{language}', [LanguageController::class, 'destroy'])->name('destroy');
-
-        // API routes
-        Route::post('/{language}/toggle-status', [LanguageController::class, 'toggleStatus'])->name('toggle-status');
-    });
-
     Route::prefix('currency')->name('currency.')->group(function () {
         Route::get('/', [CurrencyController::class, 'index'])->name('index');
         Route::get('/create', [CurrencyController::class, 'create'])->name('create');
@@ -219,7 +177,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // Payments Management
     Route::prefix('payments')->name('payments.')->group(function () {
         // Payment Methods sub-routes
-        Route::prefix('methods')->name('method.')->group(function () {
+        Route::prefix('method')->name('method.')->group(function () {
             Route::get('/', [PaymentMethodController::class, 'index'])->name('index');
             Route::put('/', [PaymentMethodController::class, 'index'])->name('bulk-update'); // For bulk operations and reorder
             Route::get('/create', [PaymentMethodController::class, 'create'])->name('create');
@@ -228,13 +186,20 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
             Route::delete('/{paymentMethod}', [PaymentMethodController::class, 'destroy'])->name('destroy');
             Route::get('/{paymentMethod}', [PaymentMethodController::class, 'show'])->name('show');
             Route::post('/{paymentMethod}/toggle-status', [PaymentMethodController::class, 'toggleStatus'])->name('toggle-status');
-
         });
-        Route::post('/update-announcement', [PaymentMethodController::class, 'updateAnnouncement'])->name('update-announcement');
-        Route::post('/update-addfund-content', [PaymentMethodController::class, 'updateAddfundContent'])->name('update-addfund-content');
+
+        // Payment Method Groups (stored in group_methods column)
+        Route::get('/groups/{id}', [PaymentMethodController::class, 'showGroup'])->name('groups.show');
+        Route::post('/groups', [PaymentMethodController::class, 'storeGroup'])->name('groups.store');
+        Route::put('/groups/{id}', [PaymentMethodController::class, 'updateGroupMethods'])->name('groups.update');
+        Route::delete('/groups/{id}', [PaymentMethodController::class, 'deleteGroup'])->name('groups.delete');
+
         // Payment transactions routes
         Route::get('/history', [PaymentMethodController::class, 'history'])->name('history');
         Route::get('/history-data', [PaymentMethodController::class, 'historyData'])->name('history-data');
+
+        // Addfund content update
+        Route::post('/update-addfund-content', [PaymentMethodController::class, 'updateAddfundContent'])->name('update-addfund-content');
     });
 
 
@@ -250,7 +215,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::put('/{providers}', [ApiProviderController::class, 'update'])->name('update');
         Route::delete('/{providers}', [ApiProviderController::class, 'destroy'])->name('destroy');
         Route::post('/{providers}/balance', [ApiProviderController::class, 'getBalance'])->name('balance');
-        Route::post('/{providers}/toggle-status', [ApiProviderController::class, 'toggleStatus'])->name('toggle-status');
         Route::post('/sync-all-balances', [ApiProviderController::class, 'syncAllBalances'])->name('sync-all-balances');
     });
 
@@ -290,6 +254,22 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('news/{news}', [NewsController::class, 'show'])->name('news.show');
     Route::put('news/{news}', [NewsController::class, 'update'])->name('news.update');
     Route::delete('news/{news}', [NewsController::class, 'destroy'])->name('news.destroy');
+
+    // Coupons
+    Route::prefix('coupons')->name('coupons.')->group(function () {
+        Route::get('/', [CouponController::class, 'index'])->name('index');
+        Route::post('/', [CouponController::class, 'store'])->name('store');
+        Route::get('/usage', [CouponController::class, 'usage'])->name('usage');
+        Route::get('/{coupon}', [CouponController::class, 'show'])->name('show')->whereNumber('coupon');
+        Route::put('/{coupon}', [CouponController::class, 'update'])->name('update')->whereNumber('coupon');
+        Route::delete('/{coupon}', [CouponController::class, 'destroy'])->name('destroy')->whereNumber('coupon');
+    });
+
+    // Backup
+    Route::prefix('backup')->name('backup.')->group(function () {
+        Route::get('/', [BackupController::class, 'index'])->name('index');
+        Route::get('/download', [BackupController::class, 'download'])->name('download');
+    });
 
     // Ticket Subjects Management
     Route::prefix('ticket-subjects')->name('ticket-subjects.')->group(function () {
@@ -339,12 +319,39 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/', [ApiController::class, 'index'])->name('index');
         Route::post('/change-key', [ApiController::class, 'changeKey'])->name('change-key');
     });
+    Route::get('api_v2', [ApiController::class, 'v2'])->name('api_v2');
 
     // Settings
     Route::prefix('settings')->name('settings.')->group(function () {
-        Route::get('/', [SettingController::class, 'general'])->name('general');
+        Route::get('/', function () {
+            return redirect()->route('admin.settings.general');
+        });
         Route::get('/general', [SettingController::class, 'general'])->name('general');
         Route::get('/theme', [SettingController::class, 'theme'])->name('theme');
+        Route::get('/theme/editor/{default_login}', [SettingController::class, 'themeEditor'])
+            ->where('default_login', '[A-Za-z0-9_-]+')
+            ->name('theme.editor');
+        Route::get('/landing/editor/{theme}', [SettingController::class, 'landingEditor'])
+            ->where('theme', 'default|[0-9]+')
+            ->name('landing.editor');
+        Route::get('/client-theme/editor/{theme}', [SettingController::class, 'clientThemeEditor'])
+            ->where('theme', 'default|4|6')
+            ->name('client-theme.editor');
+        Route::post('/client-theme/editor/{theme}', [SettingController::class, 'saveClientThemeSource'])
+            ->where('theme', 'default|4|6')
+            ->name('client-theme.editor.save');
+        Route::post('/client-theme/editor/{theme}/reset', [SettingController::class, 'resetClientThemeSource'])
+            ->where('theme', 'default|4|6')
+            ->name('client-theme.editor.reset');
+        Route::post('/client-theme/editor/{theme}/preview', [SettingController::class, 'previewClientThemeSource'])
+            ->where('theme', 'default|4|6')
+            ->name('client-theme.editor.preview');
+        Route::post('/landing/editor/upload', [SettingController::class, 'uploadLandingImage'])
+            ->name('landing.editor.upload');
+        Route::post('/theme/editor/save', [SettingController::class, 'saveSignInHTML'])
+            ->name('theme.editor.save');
+        Route::post('/theme/editor/reset', [SettingController::class, 'resetSignInCustomization'])
+            ->name('theme.editor.reset');
         Route::get('/design', [SettingController::class, 'design'])->name('design');
         Route::get('/price', [SettingController::class, 'price'])->name('price');
         Route::get('/service', [SettingController::class, 'service'])->name('service');
@@ -358,6 +365,14 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/social', [SettingController::class, 'social'])->name('social');
         Route::get('/pricing', [SettingController::class, 'pricing'])->name('pricing');
         Route::get('/notifications', [SettingController::class, 'notifications'])->name('notifications');
+        Route::post('/notifications/webhook/clear', function () {
+            $path = storage_path('app/notifications.json');
+            if (is_file($path)) {
+                unlink($path);
+            }
+
+            return response()->json(['status' => true, 'msg' => 'Notification cleared']);
+        })->name('notifications.webhook.clear');
         Route::get('/email', [SettingController::class, 'email'])->name('email');
         Route::get('/advanced', [SettingController::class, 'advanced'])->name('advanced');
         Route::get('/keep-orders', [SettingController::class, 'keepOrders'])->name('keep-orders');
@@ -387,6 +402,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::post('/modules/enable', [SettingController::class, 'enableModule'])->name('modules.enable');
         Route::post('/modules/config', [SettingController::class, 'updateModuleConfig'])->name('modules.config');
 
+        // Announcement
+        Route::post('/announcement', [SettingController::class, 'updateAnnouncement'])->name('update.announcement');
+
         // Language settings API
         Route::get('/language/load/{code}', [SettingController::class, 'loadLanguageData'])->name('language.load');
         Route::post('/language/save', [SettingController::class, 'createLanguage'])->name('language.save');
@@ -396,7 +414,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     // Analytics
     Route::get('analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
-
     // Activity Logs
     Route::get('activity', [ActivityLogController::class, 'index'])->name('activity.index');
 
@@ -424,8 +441,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::post('{childPanel}/approve', [\App\Http\Controllers\Admin\ChildPanelController::class, 'approve'])->name('approve');
         Route::post('{childPanel}/suspend', [\App\Http\Controllers\Admin\ChildPanelController::class, 'suspend'])->name('suspend');
         Route::post('{childPanel}/status', [\App\Http\Controllers\Admin\ChildPanelController::class, 'updateStatus'])->name('update-status');
+        Route::post('{childPanel}/access', [\App\Http\Controllers\Admin\ChildPanelController::class, 'updateAccess'])->name('update-access');
         Route::post('{childPanel}/settings', [\App\Http\Controllers\Admin\ChildPanelController::class, 'updateSettings'])->name('update-settings');
         Route::get('{childPanel}/settings', [\App\Http\Controllers\Admin\ChildPanelController::class, 'getSettings'])->name('get-settings');
+        Route::put('{childPanel}', [\App\Http\Controllers\Admin\ChildPanelController::class, 'update'])->name('update');
         Route::delete('{childPanel}', [\App\Http\Controllers\Admin\ChildPanelController::class, 'destroy'])->name('destroy');
     });
 });
+

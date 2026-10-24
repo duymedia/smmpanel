@@ -14,34 +14,38 @@
 
         body {
             font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-            padding: 20px;
+            background: #fff;
+            padding: 0;
         }
 
         .invoice-container {
-            max-width: 800px;
+            width: 100%;
+            max-width: 794px;
             margin: 0 auto;
             background: white;
-            padding: 60px 40px;
-            border: 2px solid #333;
+            min-height: 1123px;
+            padding: 56px 55px;
+            border-top: 3px solid #252525;
+            border-bottom: 3px solid #252525;
         }
 
         .invoice-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 60px;
+            margin-bottom: 0;
         }
 
         .company-info {
-            font-size: 13px;
-            line-height: 1.8;
-            color: #666;
+            width: 50%;
+            font-size: 14px;
+            line-height: 1.05;
+            color: #111827;
         }
 
         .company-info strong {
-            color: #333;
-            font-weight: bold;
+            color: inherit;
+            font-weight: normal;
         }
 
         .company-logo {
@@ -49,29 +53,30 @@
         }
 
         .company-logo img {
-            max-width: 150px;
+            max-width: 220px;
+            max-height: 145px;
             height: auto;
         }
 
         .invoice-title {
             text-align: center;
-            margin: 80px 0 20px 0;
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
+            margin: 100px 0 0;
+            font-size: 16px;
+            font-weight: normal;
+            color: #111827;
         }
 
         .invoice-date {
             text-align: center;
             font-size: 13px;
-            color: #666;
-            margin-bottom: 80px;
+            color: #6b7280;
+            margin-bottom: 208px;
         }
 
         .invoice-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 40px;
+            margin-bottom: 45px;
         }
 
         .invoice-table thead {
@@ -79,19 +84,20 @@
         }
 
         .invoice-table th {
-            padding: 12px;
+            padding: 7px 8px;
             text-align: left;
-            font-size: 12px;
-            font-weight: bold;
-            color: #333;
-            border: 1px solid #ccc;
+            font-size: 14px;
+            font-weight: normal;
+            color: #111827;
+            border: 0;
         }
 
         .invoice-table td {
-            padding: 12px;
-            font-size: 13px;
-            color: #333;
-            border: 1px solid #ccc;
+            padding: 7px 8px;
+            font-size: 14px;
+            color: #111827;
+            border: 0;
+            border-bottom: 1px solid #d1d5db;
         }
 
         .text-right {
@@ -106,12 +112,12 @@
         .totals-row {
             display: flex;
             justify-content: flex-end;
-            margin-bottom: 8px;
-            font-size: 13px;
+            margin-bottom: 7px;
+            font-size: 14px;
         }
 
         .totals-label {
-            width: 150px;
+            width: 190px;
             text-align: right;
             padding-right: 20px;
             font-weight: bold;
@@ -125,8 +131,6 @@
         }
 
         .totals-row.total {
-            border-top: 2px solid #333;
-            border-bottom: 2px solid #333;
             padding: 8px 0;
             font-weight: bold;
             font-size: 14px;
@@ -140,7 +144,8 @@
 
             .invoice-container {
                 box-shadow: none;
-                border: 1px solid #333;
+                border-top: 3px solid #252525;
+                border-bottom: 3px solid #252525;
             }
         }
 
@@ -152,22 +157,27 @@
 </head>
 
 <body>
+    @php
+        $invoiceLogo = !empty($config?->logo)
+            ? asset('assets/media/' . basename($config->logo))
+            : asset('assets/media/logo.png');
+        $companyName = $config->title ?? config('app.name');
+        $companyPhone = $config->phone_admin ?? '';
+        $companyEmail = $config->other_contact ?? '';
+        $currencyCode = $currency->code ?? 'USD';
+        $currencyMark = $currencyCode === 'USD' ? '$' : $currencyCode;
+    @endphp
     <div class="invoice-container">
         <!-- Header -->
         <div class="invoice-header">
             <div class="company-info">
-                <strong>{{ config('app.name') }}</strong><br>
-                {{ config('app.url') }}<br>
-                <br>
-                <strong>Invoice #{{ $payment->id }}</strong><br>
-                <strong>{{ $payment->created_at->format('Y-m-d') }}</strong>
+                {{ $companyName }}<br>
+                {{ config('app.name') }}<br>
+                @if ($companyPhone) {{ $companyPhone }}<br> @endif
+                @if ($companyEmail) {{ $companyEmail }} @endif
             </div>
             <div class="company-logo">
-                @if (config('app.logo'))
-                    <img src="{{ config('app.logo') }}" alt="{{ config('app.name') }}">
-                @else
-                    <div style="font-size: 24px; font-weight: bold; color: #007bff;">{{ config('app.name') }}</div>
-                @endif
+                <img src="{{ $invoiceLogo }}" alt="{{ $companyName }}">
             </div>
         </div>
 
@@ -181,8 +191,8 @@
                 <tr>
                     <th>{{ __('addfunds.description') }}</th>
                     <th class="text-right">{{ __('newOrder.quantity') }}</th>
-                    <th class="text-right">{{ __('addfunds.amount') }}, {{ $currency->code }}</th>
-                    <th class="text-right">{{ __('addfunds.total') }}, {{ $currency->code }}</th>
+                    <th class="text-right">Price, {{ $currencyMark }}</th>
+                    <th class="text-right">Amount, {{ $currencyMark }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -198,15 +208,15 @@
         <!-- Totals -->
         <div class="totals">
             <div class="totals-row">
-                <div class="totals-label">{{ __('cashflow.total') }}, {{ $currency->code }}</div>
+                <div class="totals-label">Subtotal, {{ $currencyMark }}</div>
                 <div class="totals-value">{{ number_format($payment->amount, 2) }}</div>
             </div>
             <div class="totals-row">
-                <div class="totals-label">TAX (0%), {{ $currency->code }}</div>
+                <div class="totals-label">TAX (0%), {{ $currencyMark }}</div>
                 <div class="totals-value">0.00</div>
             </div>
             <div class="totals-row total">
-                <div class="totals-label">{{ __('addfunds.total') }}, {{ $currency->code }}</div>
+                <div class="totals-label">Total Amount, {{ $currencyMark }}</div>
                 <div class="totals-value">{{ number_format($payment->amount, 2) }}</div>
             </div>
         </div>

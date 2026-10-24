@@ -1,1402 +1,1061 @@
 @extends('clients.theme-4.layouts.app')
+
 @section('title', __('addfunds.title'))
 
 @section('content')
-    <div class="content flex-column-fluid" id="kt_content">
-        <!--begin::Toolbar-->
-        @include('clients.theme-4.layouts.toolbar', [
-            'title' => 'Add Funds',
-            'langKey' => 'addfunds.title',
-        ])
-        <!--end::Toolbar-->
 
-        <!--begin::Post-->
-        <div class="post" id="kt_post">
-            <div class="row g-5 mb-5">
+    <div id="block_46">
+        <div class="block-bg"></div>
+        <div class="container-fluid">
+            <div class="add-funds">
 
-                {{-- Card 1: Hạng thành viên --}}
-                <div class="col-md-4 col-12">
-                    <div class="card border-hover-primary h-lg-100">
-                        <div class="card-body d-flex justify-content-between align-items-start flex-column">
-                            <div class="d-flex flex-column">
-                                <span class="fw-bold fs-2x lh-1 ls-2">{{ ucfirst(auth()->user()->level ?? 'Retail') }}</span>
-                                <div class="m-0">
-                                    <span class="fw-semibold fs-7 text-gray-500" data-lang="addfunds.member_level">Hạng
-                                        thành viên</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Card 2: Tổng tiền nạp --}}
-                <div class="col-md-4 col-12">
-                    <div class="card border-hover-primary h-lg-100">
-                        <div class="card-body d-flex justify-content-between align-items-start flex-column">
-                            <div class="d-flex flex-column">
-                                <span class="text-primary fw-bold fs-2x lh-1 ls-2">
-                                    {{ formatCurrencyAmount($transactions->where('status', 'completed')->sum('amount'), $currency, $nonDecimalCodes) }}
-                                </span>
-                                <div class="m-0">
-                                    <span class="fw-semibold fs-7 text-gray-500" data-lang="addfunds.total_deposit">Tổng
-                                        tiền nạp</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Card 3: Tổng tiền thưởng --}}
-                <div class="col-md-4 col-12">
-                    <div class="card border-hover-primary h-lg-100">
-                        <div class="card-body d-flex justify-content-between align-items-start flex-column">
-                            <div class="d-flex flex-column">
-                                <span class="text-warning fw-bold fs-2x lh-1 ls-2">
-                                    {{ formatCurrencyAmount($transactions->where('type', 'bonus')->sum('amount'), $currency, $nonDecimalCodes) }}
-                                </span>
-                                <div class="m-0">
-                                    <span class="fw-semibold fs-7 text-gray-500" data-lang="addfunds.total_bonus">Tổng tiền
-                                        thưởng</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Col trái: Chọn phương thức --}}
-                <div class="col-md-5 col-12">
+                {{-- Payment Form --}}
+                <div class="component_card">
                     <div class="card">
-                        <div class="card-body">
-
-                            {{-- Select phương thức thanh toán --}}
-                            <div class="mb-3">
-                                <label for="sl-pm-method" class="form-label" data-lang="addfunds.payment_method">Phương thức
-                                    thanh toán</label>
-                                <select id="sl-pm-method" class="form-select form-select-solid">
-                                    <option value="0" data-lang="addfunds.please_select">Vui lòng chọn</option>
-                                    @forelse($payments as $payment)
+                        <form id="main-payment-form" class="component_form_group" onsubmit="return false;">
+                            <div class="form-group">
+                                <label for="method" class="control-label">{{ __('addfunds.method') }}</label>
+                                <select class="form-control" id="method" name="AddFoundsForm[type]" data-select="true"
+                                    data-select-search="true" data-select-search-placeholder="{{ __('newOrder.search') }}"
+                                    data-select-container="#select-method-container">
+                                    @foreach ($payments ?? [] as $payment)
                                         @php
-                                            $bonus = $payment->parsed_config['bonus'] ?? ($payment->bonus ?? null);
-                                            $hasBonus = !empty($bonus);
-                                            $label = $payment->name . ($hasBonus ? __('addfunds.has_bonus') : '');
-                                            $imgTag = $payment->image
-                                                ? '<img src="' .
-                                                    e($payment->image) .
-                                                    '" class="rounded-circle h-20px me-2"/>'
-                                                : '';
-                                            $dataContent = $imgTag . ' ' . $label;
-                                        @endphp
-                                        <option value="{{ $payment->id }}" data-type="{{ $payment->type }}"
-                                            data-content="{{ $dataContent }}">
-                                            {{ $label }}
-                                        </option>
-                                    @empty
-                                        <option value="0" disabled>{{ __('addfunds.no_payment_methods') }}</option>
-                                    @endforelse
-                                </select>
-                            </div>
-
-                            <script>
-                                document.addEventListener('DOMContentLoaded', function() {
-                                    $('#sl-pm-method').select2({
-                                        escapeMarkup: function(markup) {
-                                            return markup;
-                                        },
-                                        minimumResultsForSearch: -1,
-                                        templateResult: function(option) {
-                                            if (!option.element) return option.text;
-                                            const style = option.element.getAttribute('style');
-                                            if (style && style.includes('display: none')) return null;
-                                            const content = option.element.getAttribute('data-content');
-                                            return content ? content : option.text;
-                                        },
-                                        templateSelection: function(option) {
-                                            if (!option.element) return option.text;
-                                            const content = option.element.getAttribute('data-content');
-                                            return content ? content : option.text;
-                                        },
-                                        width: '100%'
-                                    });
-
-                                    function onPaymentChange(pmId) {
-                                        // Ẩn tất cả
-                                        $('#pm-separator, .div-rate, .div-bonus, .div-options, #div-sieuthicode').hide();
-
-                                        if (!pmId || pmId === '0') return;
-
-                                        // Lấy pm từ PAYMENT_METHODS
-                                        var pm = null;
-                                        if (typeof PAYMENT_METHODS !== 'undefined') {
-                                            for (var i = 0; i < PAYMENT_METHODS.length; i++) {
-                                                if (String(PAYMENT_METHODS[i].id) === String(pmId)) {
-                                                    pm = PAYMENT_METHODS[i];
-                                                    break;
+                                            $bonusText = '';
+                                            if ($payment->bonus) {
+                                                $bonusArray = is_string($payment->bonus)
+                                                    ? json_decode($payment->bonus, true)
+                                                    : $payment->bonus;
+                                                if (is_array($bonusArray) && count($bonusArray) > 0) {
+                                                    $firstBonus = $bonusArray[0] ?? null;
+                                                    if (
+                                                        $firstBonus &&
+                                                        isset($firstBonus['min']) &&
+                                                        isset($firstBonus['percent'])
+                                                    ) {
+                                                        $bonusText =
+                                                            ' | ' .
+                                                            number_format($firstBonus['min'], 0) .
+                                                            ' + ' .
+                                                            $firstBonus['percent'] .
+                                                            '% Bonus';
+                                                    }
                                                 }
                                             }
-                                        }
-                                        if (!pm) return;
 
-                                        // Lấy type từ option element
-                                        var selectedOption = $('#sl-pm-method option:selected');
-                                        var pmType = selectedOption.data('type') || pm.type || '';
-
-                                        $('#pm-separator').show();
-
-                                        // Tỉ giá
-                                        if (pm.rate) {
-                                            $('#pm-rate-text').text('1 USD = ' + Number(pm.rate).toLocaleString() + ' ' + (pm.currency ||
-                                                'VND'));
-                                            $('.div-rate').show();
-                                        }
-
-                                        // Bảng tiền thưởng
-                                        var rows = (pm.bonus_data && pm.bonus_data.length) ? pm.bonus_data : [];
-                                        if (rows.length) {
-                                            var html = '';
-                                            rows.forEach(function(b) {
-                                                var amount = Number(b.min || b.q || 0).toLocaleString('en-US');
-                                                var percent = b.percent || b.p || 0;
-                                                html += '<tr><td class="ls-1">$ ' + amount + '</td><td class="fw-bold">' + percent +
-                                                    '%</td></tr>';
-                                            });
-                                            $('#bonus-tbody').html(html);
-                                            $('.div-bonus').show();
-                                        }
-
-                                        // Parse options
-                                        var opts = pm.options || {};
-
-                                        var account = pm.account_number || opts.account_number || opts.account || '';
-                                        var accName = pm.account_name || opts.account_name || opts.name || '';
-                                        var bankCode = pm.bank_code || opts.bank_code || opts.bank || '';
-                                        var content = (typeof TRANSFER_CODE !== 'undefined' && TRANSFER_CODE) ? TRANSFER_CODE : '';
-
-                                        // Show div theo type
-                                        if (pmType === 'bank_vn' || pmType === 'bank') {
-                                            // QR: https://img.vietqr.io/image/{pm.name}-{account}-qr_only.jpg?amount=0&accountName={name}&addInfo={transfer_code}
-                                            var transferCode = (typeof TRANSFER_CODE !== 'undefined' && TRANSFER_CODE) ? TRANSFER_CODE :
-                                                content;
-                                            var qrUrl = 'https://img.vietqr.io/image/' +
-                                                encodeURIComponent(pm.name) + '-' +
-                                                encodeURIComponent(account) +
-                                                '-qr_only.jpg?amount=0' +
-                                                (accName ? '&accountName=' + encodeURIComponent(accName) : '') +
-                                                '&addInfo=' + encodeURIComponent(transferCode);
-                                            $('#sieuthicode_qr_img').attr('src', qrUrl);
-                                            $('#sieuthicode_webhook_account').html(
-                                                (account ? '<span class="fw-boldest text-primary fs-4">' + account + '</span>' : '') +
-                                                (accName ? ' (<span class="fw-bolder fs-6">' + accName + '</span>)' : '')
-                                            );
-                                            $('#sieuthicode_content_text').text(transferCode);
-                                            $('#div-sieuthicode').show();
-
-                                        } else if (pmType === 'manual' || pmType === 'redirect' || pmType === 'form') {
-                                            // Form nhập số tiền
-                                            $('.div-options.div-36').find('[name="PM_ID"]').val(pmId);
-                                            $('.div-options.div-36').show();
-
-                                        } else if (pmType === 'crypto' || pmType === 'binance') {
-                                            // Chỉ hiển thị input Amount
-                                            window._currentBinancePm = pm;
-                                            $('#ipt-binance-pm-id').val(pmId);
-                                            $('#binance-currency-label').text(pm.currency || 'USD');
-                                            $('#div-binance').show();
-
-                                        } else {
-                                            // Fallback: show form nhập tiền
-                                            $('.div-options.div-36').find('[name="PM_ID"]').val(pmId);
-                                            $('.div-options.div-36').show();
-                                        }
-
-                                        // Min/max — chỉ hiển thị khi > 0
-                                        if (pm.min > 0 || pm.max > 0) {
-                                            var minMax = '';
-                                            if (pm.min > 0) minMax += 'Min: ' + Number(pm.min).toLocaleString();
-                                            if (pm.max > 0) minMax += (minMax ? ' | ' : '') + 'Max: ' + Number(pm.max).toLocaleString();
-                                            $('.div-minmax').text(minMax).show();
-                                        } else {
-                                            $('.div-minmax').hide();
-                                        }
-                                    }
-
-                                    // Khi chọn option
-                                    $('#sl-pm-method').on('change', function() {
-                                        onPaymentChange($(this).val());
-                                    });
-
-                                    // Mặc định ẩn khi vào trang
-                                    onPaymentChange('0');
-
-                                    // Binance Check → Open Modal with QR
-                                    $('#btn-binance-check').on('click', function() {
-                                        var pm = window._currentBinancePm;
-                                        if (!pm) return;
-
-                                        var amount = $('#ipt-binance-amount').val() || '0';
-                                        if (!amount || parseFloat(amount) <= 0) {
-                                            alert('Vui lòng nhập số tiền hợp lệ');
-                                            return;
-                                        }
-
-                                        // Store amount and PM for modal
-                                        window._binanceCheckoutData = {
-                                            pm_id: $('#ipt-binance-pm-id').val(),
-                                            amount: amount,
-                                            currency: pm.currency || 'USD',
-                                            binance_id: pm.binance_id || ''
-                                        };
-
-                                        // Open modal
-                                        _addfunds.binance.openModal(window._binanceCheckoutData);
-                                    });
-                                });
-                            </script>
-
-                            <div class="separator my-5" id="pm-separator" style="display: none;"></div>
-                            <div class="div-minmax mb-1 text-center"></div>
-                            <div class="div-rate mb-5 text-center" style="display: none;">
-                                <span class="fw-bolder fs-6 text-primary" id="pm-rate-text"></span>
+                                            // Extract binance_id and qr_image from config JSON
+                                            $binanceId = '';
+                                            $qrImage = '';
+                                            if ($payment->config) {
+                                                $configArray = is_string($payment->config)
+                                                    ? json_decode($payment->config, true)
+                                                    : $payment->config;
+                                                $binanceId = $configArray['binance_id'] ?? ($configArray['uid'] ?? '');
+                                                $qrImage = $configArray['qr_image'] ?? '';
+                                            }
+                                        @endphp
+                                        <option value="{{ $payment->id }}" data-type="{{ $payment->type }}"
+                                            data-payment-name="{{ $payment->name }}" data-qr-image="{{ $qrImage }}"
+                                            data-binance-id="{{ $binanceId }}"
+                                            data-image="{{ $payment->image_url ?? '' }}">
+                                            {{ $payment->name }}{{ $bonusText }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <div id="select-method-container" class="position-relative"></div>
                             </div>
 
-                            {{-- Bảng tiền thưởng - render động bằng JS --}}
-                            <div class="div-bonus mb-5 text-center" style="display: none;">
-                                <table class="table align-middle table-bordered fs-7 gy-2 gs-10 mb-0">
-                                    <tbody id="bonus-tbody"></tbody>
-                                </table>
+                            <div class="form-group">
+                                <label for="amount" class="control-label">
+                                    <span id="amount_label">{{ __('addfunds.amount') }}</span>
+                                    <span id="amount_label_currency" class="hidden"></span>
+                                </label>
+                                <input type="number" inputmode="decimal" class="form-control" name="AddFoundsForm[amount]"
+                                    id="amount">
                             </div>
 
-                            {{-- Các div-options (ẩn/hiện theo JS) --}}
-                            <div class="div-options div-1 div-2 div-9 div-26 div-30 div-31 text-center"
-                                style="display: none;">
-                                <img src="" class="w-250px mb-5">
-                                <div>
-                                    <span id="casso_account"></span>
-                                    <span class="d-block" id="casso_name"></span>
-                                    <span class="d-block" id="casso_content"></span>
-                                </div>
+                            <div class="component_button_submit">
+                                <button type="button" class="btn btn-block btn-big-primary"
+                                    id="payButton">{{ __('addfunds.pay') }}</button>
                             </div>
-
-                            <div class="div-options div-10 div-11 div-12 div-16 text-center" style="display: none;">
-                                <img src="" class="w-250px mb-5">
-                                <div class="mb-5">
-                                    <span id="web2m_account"></span>
-                                    <span class="d-block" id="web2m_content"></span>
-                                </div>
-                            </div>
-
-                            <div class="div-options div-13 text-center" style="display: none;">
-                                <img src="" class="w-250px mb-5">
-                                <div class="mb-5">
-                                    <span id="web2m_momo_phone"></span>
-                                    <span class="d-block" id="web2m_momo_content"></span>
-                                </div>
-                            </div>
-
-                            <div class="div-options div-19 div-20 div-21 div-29 div-37 text-center" style="display: none;">
-                                <img src="" class="w-250px mb-5">
-                                <div>
-                                    <span id="web2m_webhook_account"></span>
-                                    <span class="d-block" id="web2m_webhook_name"></span>
-                                    <span class="d-block" id="web2m_webhook_content">{{ __('addfunds.transfer_note') }}
-                                        <span class="fs-6 fw-bolder text-primary">{{ auth()->user()->name ?? '' }} chuyen
-                                            tien</span></span>
-                                </div>
-                                <h5 class="text-danger fw-bold" data-lang="addfunds.note_no_change_content"></h5>
-                            </div>
-
-                            {{-- div-23: sieuthicode webhook bank - render động bằng JS --}}
-                            <div id="div-sieuthicode" class="div-options div-23 div-24 div-25 div-38 text-center"
-                                style="display: none;">
-                                <img src="" class="w-250px mb-5" id="sieuthicode_qr_img">
-                                <div>
-                                    <span id="sieuthicode_webhook_account"></span>
-                                    <span class="d-block" id="sieuthicode_webhook_name"></span>
-                                    <span class="d-block"
-                                        id="sieuthicode_webhook_content">{{ __('addfunds.transfer_note') }} <span
-                                            class="fs-6 fw-bolder text-primary"
-                                            id="sieuthicode_content_text"></span></span>
-                                </div>
-                                <h5 class="text-danger fw-bold" data-lang="addfunds.note_no_change_content"></h5>
-                            </div>
-                            <div class="div-options div-39 div-40 div-41 div-42 div-43 div-44 text-center"
-                                style="display: none;">
-                                <img src="" class="w-250px mb-5">
-                                <div>
-                                    <span id="pay2s_account"></span>
-                                    <span class="d-block" id="pay2s_name"></span>
-                                    <span class="d-block" id="pay2s_content">{{ __('addfunds.transfer_note') }} <span
-                                            class="fs-6 fw-bolder text-primary">{{ $content ?? '' }} chuyen
-                                            tien1</span></span>
-                                </div>
-                                <h5 class="text-danger fw-bold" data-lang="addfunds.note_no_change_content"></h5>
-                            </div>
-
-                            {{-- Binance / Crypto: chỉ nhập Amount, Submit → modal QR --}}
-                            <div id="div-binance" class="div-options mb-5" style="display: none;">
-                                <div class="mb-5">
-                                    <label class="required form-label" data-lang="addfunds.enter_amount"></label>
-                                    <input type="hidden" id="ipt-binance-pm-id" name="PM_ID" value="">
-                                    <div class="input-group">
-                                        <span class="input-group-text" id="binance-currency-label">USD</span>
-                                        <input type="number" id="ipt-binance-amount" name="PAYMENT_AMOUNT"
-                                            value="" min="0" step="any"
-                                            class="form-control form-control-solid">
-                                    </div>
-                                </div>
-                                <button type="button" id="btn-binance-check" class="btn btn-primary w-100"
-                                    data-lang="addfunds.pay_now"></button>
-                            </div>
-
-                            <div class="div-options div-36" style="display: none;">
-                                <form method="post" action="">
-                                    @csrf
-                                    <div class="mb-5">
-                                        <label class="required form-label" data-lang="addfunds.enter_amount">Số
-                                            tiền</label>
-                                        <input type="hidden" name="PM_ID" value="">
-                                        <div class="input-group">
-                                            <input type="text" name="PAYMENT_AMOUNT" id="vnd-input" value=""
-                                                placeholder="1000000" class="form-control" inputmode="numeric"
-                                                style="text-align: right;">
-                                            <span class="input-group-text">VNĐ</span>
-                                        </div>
-                                    </div>
-                                    <input type="submit" name="PAYMENT_METHOD" class="btn btn-primary w-100"
-                                        data-lang="addfunds.pay_now" value="Thanh toán">
-                                </form>
-                                <script>
-                                    document.addEventListener('DOMContentLoaded', function() {
-                                        Inputmask({
-                                            alias: "numeric",
-                                            groupSeparator: ".",
-                                            radixPoint: ",",
-                                            autoGroup: true,
-                                            digits: 0,
-                                            digitsOptional: false,
-                                            prefix: "",
-                                            suffix: "",
-                                            rightAlign: true,
-                                            removeMaskOnSubmit: true
-                                        }).mask("#vnd-input");
-                                    });
-                                </script>
-                            </div>
-
-                            <div class="alert alert-addfunds alert-normal mt-5 mb-5" style="display: none;"></div>
-                            <script>
-                                var CONTENT = '{{ $content ?? '' }}';
-                                var TRANSFER_CODE = '{{ auth()->user()->transfer_code ?? '' }}';
-                            </script>
-
-                            {{-- Chi tiết phương thức --}}
-                            <div class="div-details mb-5"></div>
-
-                        </div>
+                        </form>
                     </div>
                 </div>
 
-                {{-- Col phải: Lịch sử giao dịch --}}
-                <div class="col-md-7 col-12">
-                    <div class="card">
-                        <div class="card-body p-0">
-                            <div class="mb-3 p-8 pb-3">
-                                <label class="form-label" data-lang="addfunds.filter">Lọc</label>
-                                <input type="text" id="ipt-date" class="form-control form-control-solid ipt-date"
-                                    placeholder="{{ __('addfunds.filter_placeholder') }}" readonly>
-                            </div>
-                            <div class="table-responsive">
-                                <table class="table align-middle table-row-dashed fs-7 gy-2 gs-5 mb-0"
-                                    id="table-history-fund">
-                                    <thead class="text-start text-muted bg-light fw-bold fs-7 text-uppercase gs-0">
-                                        <tr>
-                                            <th data-lang="addfunds.method">Phương thức</th>
-                                            <th data-lang="addfunds.amount">Số tiền</th>
-                                            <th data-lang="addfunds.created">Thời gian</th>
-                                            <th></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody style="display:none" id="transactions-tbody">
-                                        @forelse($transactions as $transaction)
-                                            @php
-                                                $isBonus = ($transaction->type ?? '') === 'bonus';
-                                            @endphp
-                                            <tr data-date="{{ $transaction->created_at->format('Y-m-d H:i:s') }}">
-                                                <td>
-                                                    @if ($transaction->paymentMethod?->image)
-                                                        <img src="{{ $transaction->paymentMethod->image }}"
-                                                            class="rounded-circle h-20px me-1 p-0"
-                                                            alt="{{ $transaction->paymentMethod->name }}">
-                                                    @endif
-                                                    {{ $transaction->paymentMethod->name ?? 'N/A' }}
-                                                    @if (!empty($transaction->reference))
-                                                        <p class="wrap fs-8 fst-italic m-1 mb-0">
-                                                            {{ $transaction->reference }}</p>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    <span
-                                                        class="fw-bolder {{ $isBonus ? 'text-warning' : 'text-primary' }}">
-                                                        {{ number_format($transaction->amount, 3) }}
-                                                    </span>
-                                                </td>
-                                                <td>{{ $transaction->created_at->format('Y-m-d H:i:s') }}</td>
-                                                <td>
-                                                    @if (!$isBonus)
-                                                        <a href="javascript:;" class="ms-2"
-                                                            onclick="invoice({{ $transaction->id }})"
-                                                            title="Download Invoice">
-                                                            <i class="fas fa-file-invoice"></i>
-                                                        </a>
-                                                    @endif
-                                                </td>
-                                            </tr>
-                                        @empty
-                                            <tr class="row-empty">
-                                                <td colspan="4" class="text-center text-muted py-8">
-                                                    <i class="ki-outline ki-inbox fs-3x d-block mb-2"></i>
-                                                    <span
-                                                        data-lang="addfunds.no_transactions">{{ $langData['addfunds.no_transactions'] ?? 'Chưa có giao dịch nào' }}</span>
-                                                </td>
-                                            </tr>
-                                        @endforelse
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-            {{-- Modal QR Binance/Crypto --}}
-            <div class="modal fade" id="modal-binance-qr" tabindex="-1">
-                <div class="modal-dialog modal-dialog-centered modal-sm">
-                    <div class="modal-content">
-                        <div class="modal-header py-4">
-                            <h5 class="modal-title" id="modal-binance-title">Binance Pay</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body text-center py-6">
-                            <div id="modal-binance-qr-wrap" class="mb-4" style="display:none;">
-                                <img id="modal-binance-qr-img" src="" alt="QR" class="w-200px rounded">
-                            </div>
-                            <div id="modal-binance-info" class="text-start fs-7"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Modal Binance Pay - Theme 4 Style --}}
-            <div class="modal fade" id="modal-binance-pay" tabindex="-1" data-bs-backdrop="static">
-                <div class="modal-dialog modal-dialog-centered modal-lg">
-                    <div class="modal-content border-0 shadow-lg">
-                        <!-- Header -->
-                        <div class="modal-header bg-gradient border-0 py-4">
-                            <div class="d-flex align-items-center gap-3">
-                                <div class="symbol symbol-45px bg-light-primary">
-                                    <span class="symbol-label">
-                                        <i class="ki-outline ki-wallet fs-2 text-primary"></i>
-                                    </span>
-                                </div>
-                                <div>
-                                    <h5 class="modal-title fw-bold mb-0">Binance Pay</h5>
-                                    <small class="text-muted" data-lang="addfunds.secure_payment">Thanh toán an
-                                        toàn</small>
-                                </div>
-                            </div>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"
-                                aria-label="Close"></button>
-                        </div>
-
-                        <!-- Body -->
-                        <div class="modal-body p-8">
-                            <!-- Progress Steps -->
-                            <div class="d-flex justify-content-between mb-8">
-                                <div class="step-item active" id="step-1-item">
-                                    <div class="step-circle bg-primary text-white fw-bold">1</div>
-                                    <div class="step-label mt-2 text-center fs-7" data-lang="addfunds.make_payment">Gửi
-                                        tiền</div>
-                                </div>
-                                <div class="step-line flex-grow-1 mx-3 mt-2">
-                                    <div class="line" id="step-line"></div>
-                                </div>
-                                <div class="step-item" id="step-2-item">
-                                    <div class="step-circle bg-light text-muted fw-bold">2</div>
-                                    <div class="step-label mt-2 text-center fs-7" data-lang="addfunds.verify_payment">Xác
-                                        minh</div>
-                                </div>
-                            </div>
-
-                            <!-- Alert Messages -->
-                            <div class="alert alert-danger d-none mb-6" id="binance-alert-error" role="alert">
-                                <div class="alert-icon"><i class="ki-outline ki-information fs-2x"></i></div>
-                                <div class="alert-text ms-3" id="binance-error-text"></div>
-                            </div>
-                            <div class="alert alert-success d-none mb-6" id="binance-alert-success" role="alert">
-                                <div class="alert-icon"><i class="ki-outline ki-check-circle fs-2x"></i></div>
-                                <div class="alert-text ms-3" id="binance-success-text"></div>
-                            </div>
-
-                            <!-- Loading Spinner -->
-                            <div class="text-center d-none mb-6" id="binance-loading">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                                <p class="mt-3 text-muted" data-lang="addfunds.verifying">Đang xác minh...</p>
-                            </div>
-
-                            <!-- Step 1: Make Payment -->
-                            <div id="binance-step-1">
-                                <!-- Amount Display -->
-                                <div class="card bg-light-primary border-0 mb-6">
-                                    <div class="card-body text-center py-6">
-                                        <div class="fs-1 fw-bold text-primary mb-2">
-                                            <span id="binance-amount-display">100</span>
-                                            <span class="fs-4 ms-2" id="binance-currency-display">USDT</span>
-                                        </div>
-                                        <small class="text-muted" data-lang="addfunds.amount_to_send">Số tiền cần
-                                            gửi</small>
-                                    </div>
-                                </div>
-
-                                <!-- QR Code -->
-                                <div class="text-center mb-6">
-                                    <div class="bg-light p-6 rounded-3 d-inline-block">
-                                        <img id="binance-qr-code-image" src="" alt="QR Code" class="img-fluid"
-                                            style="max-width: 180px; height: 180px;">
-                                    </div>
-                                    <p class="text-muted mt-3 fs-7" data-lang="addfunds.scan_qr">Quét mã QR bằng ứng dụng
-                                        Binance</p>
-                                </div>
-
-                                <!-- Binance ID -->
-                                <div class="mb-6">
-                                    <label class="form-label fw-bold mb-3" data-lang="addfunds.binance_id">Binance
-                                        ID</label>
-                                    <div class="input-group">
-                                        <input type="text" id="binance-uuid-input"
-                                            class="form-control form-control-lg" readonly placeholder="Binance ID">
-                                        <button class="btn btn-outline-primary" type="button"
-                                            data-for-clip="binance-uuid-input">
-                                            <i class="ki-outline ki-copy fs-2"></i>
-                                            <span class="ms-2" data-lang="addfunds.copy">Sao chép</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <!-- Instructions -->
-                                <div class="alert alert-info border-0 bg-light-info mb-0">
-                                    <div class="d-flex">
-                                        <i class="ki-outline ki-information-5 fs-2 text-info me-3"></i>
-                                        <div class="fs-7">
-                                            <p class="mb-2" data-lang="addfunds.instruction_1">1. Quét mã QR hoặc sao
-                                                chép Binance ID</p>
-                                            <p class="mb-0" data-lang="addfunds.instruction_2">2. Gửi tiền từ ứng dụng
-                                                Binance của bạn</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Step 2: Verify Payment -->
-                            <div id="binance-step-2" class="d-none">
-                                <!-- Summary -->
-                                <div class="row mb-6">
-                                    <div class="col-6">
-                                        <div class="card bg-light border-0">
-                                            <div class="card-body text-center py-4">
-                                                <small class="text-muted d-block mb-2" data-lang="addfunds.amount">Số
-                                                    tiền</small>
-                                                <div class="fs-5 fw-bold text-primary">
-                                                    <span id="binance-amount-display-2">100</span>
-                                                    <span class="fs-7" id="binance-currency-display-2">USDT</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="card bg-light border-0">
-                                            <div class="card-body text-center py-4">
-                                                <small class="text-muted d-block mb-2"
-                                                    data-lang="addfunds.binance_id">Binance ID</small>
-                                                <div class="fs-7 fw-bold text-truncate" id="binance-uuid-value-display">
-                                                    merchant_id</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Order ID Input -->
-                                <div class="mb-6">
-                                    <label class="form-label fw-bold mb-3" data-lang="addfunds.order_id">Order ID từ
-                                        Binance</label>
-                                    <input type="text" id="binance-order-id" class="form-control form-control-lg"
-                                        placeholder="Nhập Order ID từ Binance">
-                                    <small class="text-muted d-block mt-2" data-lang="addfunds.order_id_help">
-                                        Tìm Order ID trong lịch sử giao dịch Binance của bạn
-                                    </small>
-                                </div>
-
-                                <!-- Instructions -->
-                                <div class="alert alert-info border-0 bg-light-info mb-0">
-                                    <div class="d-flex">
-                                        <i class="ki-outline ki-information-5 fs-2 text-info me-3"></i>
-                                        <div class="fs-7">
-                                            <p class="mb-2" data-lang="addfunds.verify_instruction_1">1. Mở ứng dụng
-                                                Binance</p>
-                                            <p class="mb-0" data-lang="addfunds.verify_instruction_2">2. Tìm Order ID
-                                                trong lịch sử giao dịch và nhập vào trên</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Footer -->
-                        <div class="modal-footer border-top-0 py-4 px-8">
-                            <button type="button" class="btn btn-light" data-bs-dismiss="modal"
-                                data-lang="addfunds.cancel">Hủy</button>
-                            <button type="button" id="binance-primary-btn" class="btn btn-primary btn-lg px-8">
-                                <span class="indicator-label" data-lang="addfunds.confirm_payment">Xác nhận</span>
-                                <span class="indicator-progress d-none">
-                                    <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
-                                </span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Modal hạng thành viên --}}
-            <div class="modal fade" id="modal-memberlevel" tabindex="-1">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header py-4">
-                            <h4 class="modal-title" data-lang="addfunds.member_level">Hạng thành viên</h4>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"
-                                aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body p-0">
-                            <table class="table align-middle table-row-dashed fs-7 gy-3 gs-5 mb-0">
-                                <thead class="text-start text-muted bg-light fw-bold fs-7 text-uppercase gs-0">
+                {{-- Transaction History --}}
+                <div class="mt-4">
+                    <div class="table-bg component_table">
+                        <div class="table-wr table-responsive">
+                            <table class="table">
+                                <thead>
                                     <tr>
-                                        <td></td>
-                                        <th class="text-center" data-lang="addfunds.total_deposit">Tổng tiền nạp</th>
-                                        <th class="text-center" data-lang="addfunds.deposit_bonus">% tiền thưởng</th>
+                                        <th>{{ __('addfunds.id') }}</th>
+                                        <th>{{ __('addfunds.date') }}</th>
+                                        <th>{{ __('addfunds.method') }}</th>
+                                        <th>{{ __('addfunds.amount') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <th>NEWBIE</th>
-                                        <td class="text-center text-primary fw-bolder">&gt;= $0</td>
-                                        <td class="text-center text-warning fw-bolder">0%</td>
-                                    </tr>
-                                    <tr>
-                                        <th>JUNIOR</th>
-                                        <td class="text-center text-primary fw-bolder">&gt;= $1000</td>
-                                        <td class="text-center text-warning fw-bolder">0%</td>
-                                    </tr>
-                                    <tr>
-                                        <th>ELITE</th>
-                                        <td class="text-center text-primary fw-bolder">&gt;= $5000</td>
-                                        <td class="text-center text-warning fw-bolder">0%</td>
-                                    </tr>
-                                    <tr>
-                                        <th>FREQUENT</th>
-                                        <td class="text-center text-primary fw-bolder">&gt;= $10000</td>
-                                        <td class="text-center text-warning fw-bolder">0%</td>
-                                    </tr>
-                                    <tr>
-                                        <th>VIP</th>
-                                        <td class="text-center text-primary fw-bolder">&gt;= $20000</td>
-                                        <td class="text-center text-warning fw-bolder">0%</td>
-                                    </tr>
+                                    @forelse ($transactions ?? [] as $transaction)
+                                        @php
+                                            $hasBonus = $transaction->bonus_amount > 0;
+                                            $bonusPercent =
+                                                $hasBonus && $transaction->amount > 0
+                                                    ? round(
+                                                        ($transaction->bonus_amount / $transaction->amount) * 100,
+                                                        1,
+                                                    )
+                                                    : 0;
+                                        @endphp
+                                        <tr>
+                                            <td data-label="{{ __('addfunds.id') }}">
+                                                {{ $transaction->id }}
+                                            </td>
+                                            <td data-label="{{ __('addfunds.date') }}">
+                                                <span class="nowrap">{{ $transaction->created_at->format('Y-m-d') }}</span>
+                                                <span class="nowrap">{{ $transaction->created_at->format('H:i:s') }}</span>
+                                            </td>
+                                            <td data-label="{{ __('addfunds.method') }}">
+                                                <span
+                                                    class="nowrap">{{ $transaction->paymentMethod->name ?? 'N/A' }}</span>
+                                                @if ($hasBonus)
+                                                    <span class="tx-bonus-badge">+{{ $bonusPercent }}% bonus</span>
+                                                @endif
+                                            </td>
+                                            <td data-label="{{ __('addfunds.amount') }}">
+                                                <span class="nowrap">{{ number_format($transaction->amount, 2) }}
+                                                    {{ $transaction->currency }}</span>
+                                                @if ($hasBonus)
+                                                    <span class="nowrap tx-bonus-amount">
+                                                        +{{ number_format($transaction->bonus_amount, 2) }}
+                                                        {{ $transaction->currency }}
+                                                    </span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="4" class="text-center py-4">
+                                                <p class="nowrap">{{ __('addfunds.no_transactions') }}</p>
+                                            </td>
+                                        </tr>
+                                    @endforelse
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
+
             </div>
-
-            {{-- PAYMENT_METHODS JSON cho JS --}}
-            @php
-                $paymentMethodsJson = $payments
-                    ->map(function ($p) {
-                        $cfg = $p->parsed_config;
-                        $bonus = is_string($p->bonus) ? json_decode($p->bonus, true) : $p->bonus ?? [];
-                        $bonusData = [];
-                        foreach ($bonus ?? [] as $b) {
-                            $bonusData[] = [
-                                'q' => $b['min'] ?? ($b['q'] ?? 0),
-                                'p' => $b['percent'] ?? ($b['p'] ?? 0),
-                            ];
-                        }
-                        return [
-                            'id' => $p->id,
-                            'currency' => $p->currency,
-                            'name' => $p->name,
-                            'custom_icon' => $p->image,
-                            'icon' => $p->image,
-                            'rate' => $cfg['rate'] ?? 27000,
-                            'details' => $p->details ?? '',
-                            'options' => $cfg,
-                            'bonus' => !empty($bonus) ? 1 : 0,
-                            'bonus_data' => $bonusData,
-                            'min' => $p->min ?? 0,
-                            'max' => $p->max ?? 0,
-                            'type' => $p->type,
-                            'account_number' => $cfg['account_number'] ?? ($cfg['account'] ?? ''),
-                            'account_name' => $cfg['account_name'] ?? ($cfg['name'] ?? ''),
-                            'bank_code' => $cfg['bank_code'] ?? ($cfg['bank'] ?? ''),
-                            'qr_image' => $cfg['qr_image'] ?? '',
-                            'binance_id' => $cfg['binance_id'] ?? ($cfg['uid'] ?? ''),
-                        ];
-                    })
-                    ->values();
-            @endphp
-            <script>
-                var PAYMENT_METHODS = {!! json_encode($paymentMethodsJson) !!};
-            </script>
-
         </div>
-        <!--end::Post-->
     </div>
-@endsection
 
-@push('scripts')
+
+    <!-- Binance Payment Modal -->
+    <div class="modal binance-modal fade" tabindex="-1" role="dialog" id="binance-qr-modal"
+        data-backdrop="static" aria-hidden="true">
+        <div class="modal-dialog binance-modal-dialog binance-modal-dialog-scrollable" role="document">
+            <form class="binance-modal-content" id="binance-form" onsubmit="return false;">
+                <div class="binance-modal-header">
+                    <h4 class="binance-modal-title">Binance internal transfer</h4>
+                    <button type="button" class="binance-btn-close" data-dismiss="modal"
+                        aria-label="Close">&times;</button>
+                </div>
+
+                <div class="binance-modal-body">
+                    <div class="binance-alert binance-alert-danger hidden"><span class="content"></span></div>
+                    <div class="binance-alert binance-alert-success hidden"><span class="content"></span></div>
+
+                    <div id="binance-qr-modal-spinner" class="text-center hidden">
+                        <div class="spinner-block__wrapper spinner-block__container">
+                            <div class="spinner-block__wrapper spinner-block__high">
+                                <span class="fal fa-spinner-third" aria-hidden="true"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="binance-main" class="">
+                        <div class="binance-steps" id="binance-steps">
+                            <div class="binance-step start">
+                                <div class="binance-step-line before"></div>
+                                <div class="binance-step-wrap">
+                                    <span id="step-1" class="binance-step-num active">1</span>
+                                    <div class="binance-step-label">Make payment</div>
+                                </div>
+                                <div class="binance-step-line after"></div>
+                            </div>
+                            <div class="binance-step end">
+                                <div class="binance-step-line before"></div>
+                                <div class="binance-step-wrap">
+                                    <span id="step-2" class="binance-step-num">2</span>
+                                    <div class="binance-step-label">Verify payment</div>
+                                </div>
+                                <div class="binance-step-line after"></div>
+                            </div>
+                        </div>
+
+                        <!-- Step 1 -->
+                        <div id="binance-top-step1">
+                            <div class="binance-amount">
+                                <span class="binance-amount-value"><strong>1</strong></span>
+                                <span class="binance-currency-value">USDT</span>
+                            </div>
+                            <div class="binance-uuid">
+                                <div class="binance-form-group">
+                                    <label class="control-label" for="binance-uuid-input">Send to Binance ID</label>
+                                    <div class="binance-input-group">
+                                        <input id="binance-uuid-input" readonly class="binance-form-control"
+                                            value="" type="text">
+                                        <div class="binance-input-group-btn">
+                                            <button class="binance-btn binance-btn-default" type="button"
+                                                id="copy-uuid-1" data-for-clip="binance-uuid-input">
+                                                <span class="fa fa-copy" aria-hidden="true"></span>&nbsp;
+                                                <span>Copy</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="binance-pay-instruction" class="binance-pay-instruction">
+                                <img id="binance-qr-code-image" src="" class="img-responsive img-fluid center-block m-auto"
+                                    alt="Binance payment QR code">
+                                <div id="pay-instruction" class="binance-pay-instruction-text">
+                                    <p>1. Scan the QR using the Binance app or send funds using the Binance ID.</p>
+                                    <p>2. After completing the payment tap "Confirm payment".</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2 -->
+                        <div id="binance-top-step2" class="hidden">
+                            <div class="binance-amount-uuid">
+                                <div class="amount-currency">
+                                    <div class="amount-label">Amount</div>
+                                    <div class="amount-block">
+                                        <span class="binance-amount-value">1</span>
+                                        <span class="binance-currency-value">USDT</span>
+                                    </div>
+                                </div>
+                                <div class="uuid">
+                                    <div class="uuid-label">Send to Binance ID</div>
+                                    <div class="uuid-block">
+                                        <span class="binance-uuid-value" id="binance-uuid-value">228223025</span>
+                                        <button id="copy-uuid-2" class="binance-uuid-value-copy" type="button"
+                                            data-for-clip="binance-uuid-value">
+                                            <span class="far fa-copy"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="binance-order-id">
+                                <div class="binance-form-group">
+                                    <label class="control-label" for="binance-order-id">Enter your Binance Order
+                                        ID</label>
+                                    <input id="binance-order-id" class="binance-form-control" placeholder="Order ID">
+                                </div>
+                            </div>
+                            <div class="binance-verify-instruction text-center">
+                                <div id="verify-instruction" class="binance-verify-instruction-text mt-3">
+                                    <p>1. Copy the Order ID from the successful payment details in your Binance account.</p>
+                                    <p>2. Paste it into the field above and tap "Verify payment".</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="binance-modal-footer">
+                    <button id="binance-primary-btn" type="button"
+                        class="binance-btn binance-btn-primary binance-btn-block">
+                        Confirm payment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <style>
-        /* Binance Modal - Theme 4 Style */
+        @keyframes spinner {
+            to {
+                transform: rotate(360deg)
+            }
+        }
 
-        /* Step Indicator */
-        .step-item {
+        .hidden {
+            display: none !important;
+        }
+
+        .spinner-block__container {
+            display: block;
+            width: 100%;
+            height: 558px;
+        }
+
+        .spinner-block__inline {
+            display: inline-block;
+        }
+
+        .spinner-block__wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .spinner-block__small {
+            width: 16px;
+            height: 16px;
+        }
+
+        .spinner-block__small span {
+            font-size: 14px;
+        }
+
+        .spinner-block__medium {
+            width: 24px;
+            height: 24px;
+        }
+
+        .spinner-block__medium span {
+            font-size: 24px;
+        }
+
+        .spinner-block__high {
+            width: 42px;
+            height: 42px;
+        }
+
+        .spinner-block__high span {
+            font-size: 42px;
+        }
+
+        .spinner-block__wrapper span {
+            animation: spinner .6s linear infinite;
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 1040;
+            background-color: #000;
+        }
+
+        .modal-backdrop.in {
+            opacity: .5;
+        }
+
+        .modal-backdrop.fade {
+            opacity: 0;
+        }
+
+        .modal-backdrop.show {
+            opacity: 0.5;
+        }
+
+        .binance-modal .center-block {
+            display: block;
+            margin-right: auto;
+            margin-left: auto;
+        }
+
+        .binance-modal.modal {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+            font-size: 14px !important;
+            line-height: 1.42857143 !important;
+            color: #333 !important;
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 1050;
+            display: none;
+            overflow: hidden;
+            -webkit-overflow-scrolling: touch;
+            outline: 0;
+        }
+
+        #binance-qr-modal:not(.show):not(.in) {
+            display: none !important;
+        }
+
+        .modal-open .binance-modal.modal {
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        .binance-modal .binance-modal-dialog-scrollable {
+            display: flex;
+            width: 460px;
+            max-width: calc(100% - 24px);
+            max-height: calc(100% - 24px) !important;
+            height: auto !important;
+            margin: 12px auto;
+        }
+
+        .binance-modal .binance-alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+        }
+
+        .binance-modal .binance-alert-danger {
+            color: #a94442;
+            background-color: #f2dede;
+            border-color: #ebccd1;
+        }
+
+        .binance-modal .binance-alert-success {
+            color: #3c763d;
+            background-color: #dff0d8;
+            border-color: #d6e9c6;
+        }
+
+        .binance-modal .binance-modal-dialog-scrollable .binance-modal-content {
+            background-color: #fff !important;
+            max-height: calc(100vh - 24px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            border: none !important;
+            border-radius: 6px;
+            outline: 0;
+            position: relative;
+            background-clip: padding-box;
+            pointer-events: auto;
+        }
+
+        .binance-modal .binance-modal-dialog-scrollable .binance-modal-body {
+            background-color: #fff !important;
+            overflow-y: auto;
+            position: relative;
+            padding: 15px;
+        }
+
+        .binance-modal .binance-modal-dialog-scrollable .binance-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            border-bottom: 1px solid #E6E6E6;
+        }
+
+        .binance-modal .binance-modal-dialog-scrollable .binance-modal-header .binance-btn-close {
+            font-size: 20px;
+            font-weight: bold;
+            line-height: 1;
+            color: #000;
+            opacity: .22;
+            appearance: none;
+            padding: 0 1px;
+            cursor: pointer;
+            background: transparent;
+            border: 0;
+            margin-left: 12px;
+        }
+
+        .binance-modal .binance-modal-dialog-scrollable .binance-modal-footer {
+            padding: 15px;
+            text-align: right;
+            border-top: 1px solid #E6E6E6;
+        }
+
+        .binance-modal .binance-modal-dialog-scrollable .binance-modal-footer,
+        .binance-modal .binance-modal-dialog-scrollable .binance-modal-header {
+            background-color: #fff !important;
+            flex-shrink: 0;
+        }
+
+        .binance-modal .binance-modal-title {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 400;
+        }
+
+        .binance-modal .binance-steps {
+            display: flex;
+            align-items: center;
+            margin-top: 32px;
+        }
+
+        .binance-modal .binance-step {
+            flex: 1 0 auto;
+            text-align: center;
+            position: relative;
+            display: flex;
+        }
+
+        .binance-modal .binance-step-wrap {
             position: relative;
             display: flex;
             flex-direction: column;
             align-items: center;
+            flex: 1;
+            margin-top: -12px;
         }
 
-        .step-circle {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            transition: all 0.3s ease;
+        .binance-modal .binance-step .binance-step-line {
+            flex: 1;
+            height: 1px;
         }
 
-        .step-item.active .step-circle {
-            background-color: #0d6efd !important;
-            color: white;
-            box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.15);
+        .binance-modal .binance-step.start .binance-step-line.before {
+            background: linear-gradient(to right, white, #337AB7) !important;
         }
 
-        .step-label {
-            font-weight: 500;
-            color: #6c757d;
-            transition: all 0.3s ease;
+        .binance-modal .binance-step.start .binance-step-line.after {
+            flex: 0.2;
+            background: #337AB7 !important;
         }
 
-        .step-item.active .step-label {
-            color: #0d6efd;
-            font-weight: 600;
+        .binance-modal .binance-step.end .binance-step-line.after {
+            background: linear-gradient(to left, white, #337AB7) !important;
         }
 
-        /* Step Line */
-        .step-line {
-            position: relative;
-            height: 2px;
-            background-color: #e9ecef;
-            margin-top: 20px;
+        .binance-modal .binance-step.end .binance-step-line.before {
+            flex: 0.2;
+            background: #337AB7 !important;
         }
 
-        .step-line .line {
-            height: 100%;
-            background-color: #e9ecef;
-            transition: background-color 0.3s ease;
-        }
-
-        .step-line .line.active {
-            background-color: #0d6efd;
-        }
-
-        /* Modal Header */
-        .modal-header.bg-gradient {
-            background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%);
-        }
-
-        .symbol {
+        .binance-modal .binance-step-num {
+            font-weight: 700;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
+            background-color: #ADADAD !important;
+            color: #fff;
+            position: relative;
         }
 
-        .symbol-45px {
-            width: 45px;
-            height: 45px;
+        .binance-modal .binance-step-wrap::after,
+        .binance-modal .binance-step-wrap::before {
+            content: "";
+            position: absolute;
+            top: 12px;
+            height: 1px;
+            background: #337AB7 !important;
         }
 
-        .symbol-label {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            height: 100%;
+        .binance-modal .binance-step-wrap::before {
+            left: 0;
+            width: 35%;
         }
 
-        .bg-light-primary {
-            background-color: rgba(13, 110, 253, 0.1);
+        .binance-modal .binance-step-wrap::after {
+            right: 0;
+            width: 35%;
         }
 
-        .bg-light-info {
-            background-color: rgba(13, 202, 240, 0.1);
+        .binance-modal .binance-step-num.active {
+            background-color: #337AB7 !important;
         }
 
-        /* Amount Display Card */
-        .card.bg-light-primary {
-            border: 1px solid rgba(13, 110, 253, 0.2);
-        }
-
-        /* QR Code Container */
-        .bg-light {
-            background-color: #f8f9fa;
-        }
-
-        .rounded-3 {
-            border-radius: 0.5rem;
-        }
-
-        /* Input Group */
-        .input-group .btn-outline-primary {
-            border-color: #0d6efd;
-            color: #0d6efd;
-        }
-
-        .input-group .btn-outline-primary:hover {
-            background-color: #0d6efd;
-            color: white;
-        }
-
-        /* Alert Styling */
-        .alert {
-            border-radius: 0.5rem;
-            padding: 1rem;
-        }
-
-        .alert-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .alert-text {
-            flex: 1;
-        }
-
-        .alert-danger {
-            background-color: rgba(220, 53, 69, 0.1);
-            border-color: rgba(220, 53, 69, 0.2);
-            color: #721c24;
-        }
-
-        .alert-success {
-            background-color: rgba(40, 167, 69, 0.1);
-            border-color: rgba(40, 167, 69, 0.2);
-            color: #155724;
-        }
-
-        .alert-info {
-            background-color: rgba(13, 202, 240, 0.1);
-            border-color: rgba(13, 202, 240, 0.2);
-            color: #0c5460;
-        }
-
-        /* Loading Spinner */
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
-        }
-
-        /* Modal Footer */
-        .modal-footer {
-            gap: 0.5rem;
-        }
-
-        .btn-lg {
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-        }
-
-        /* Responsive */
-        @media (max-width: 576px) {
-            .modal-lg {
-                max-width: 100%;
-            }
-
-            .modal-body {
-                padding: 1.5rem !important;
-            }
-
-            .step-item {
-                font-size: 0.875rem;
-            }
-
-            .step-circle {
-                width: 35px;
-                height: 35px;
-                font-size: 16px;
-            }
-
-            .fs-1 {
-                font-size: 1.75rem !important;
-            }
-
-            .btn-lg {
-                padding: 0.5rem 1rem;
-                font-size: 0.875rem;
-            }
-        }
-
-        /* Dark Mode Support */
-        [data-bs-theme="dark"] .bg-light {
-            background-color: #2d3748 !important;
-        }
-
-        [data-bs-theme="dark"] .bg-light-primary {
-            background-color: rgba(13, 110, 253, 0.2) !important;
-        }
-
-        [data-bs-theme="dark"] .bg-light-info {
-            background-color: rgba(13, 202, 240, 0.2) !important;
-        }
-
-        [data-bs-theme="dark"] .card.bg-light {
-            background-color: #2d3748 !important;
-        }
-
-        [data-bs-theme="dark"] .form-control {
-            background-color: #2d3748;
-            border-color: #4a5568;
-            color: #e2e8f0;
-        }
-
-        [data-bs-theme="dark"] .form-control:focus {
-            background-color: #2d3748;
-            border-color: #0d6efd;
-            color: #e2e8f0;
-        }
-
-        /* Animation */
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .modal-content {
-            animation: slideIn 0.3s ease-out;
-        }
-
-        /* Utility Classes */
-        .d-none {
-            display: none !important;
-        }
-
-        .text-truncate {
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .binance-modal .binance-step-label {
+            margin-top: 4px;
             white-space: nowrap;
         }
 
-        .indicator-progress {
-            display: none;
+        .binance-amount {
+            padding: 24px;
+            text-align: center;
         }
 
-        .btn:disabled .indicator-label {
-            display: none;
+        .binance-amount-value {
+            font-weight: 700;
+            font-size: 32px;
         }
 
-        .btn:disabled .indicator-progress {
-            display: inline;
+        .binance-currency-value {
+            font-weight: 500;
+            font-size: 24px;
+        }
+
+        .binance-pay-instruction,
+        .binance-verify-instruction {
+            background-color: #F2F2F2;
+            padding: 24px 16px;
+            border-radius: 4px;
+        }
+
+        .binance-pay-instruction img {
+            display: block;
+            width: 140px;
+            height: 140px;
+            object-fit: contain;
+            background: #fff;
+        }
+
+        .binance-verify-instruction img {
+            width: 183px;
+            height: 200px;
+            object-fit: contain;
+        }
+
+        .binance-pay-instruction-text,
+        .binance-verify-instruction-text {
+            margin-top: 24px;
+        }
+
+        .binance-pay-instruction-text {
+            text-align: left;
+            color: #666;
+            line-height: 1.35;
+        }
+
+        .binance-pay-instruction-text p {
+            margin: 0 0 2px;
+        }
+
+        .binance-pay-instruction-text p:last-child,
+        .binance-verify-instruction p:last-child {
+            margin-bottom: 0;
+        }
+
+        .binance-amount-uuid {
+            margin-top: 24px;
+            margin-bottom: 16px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            background-color: #F2F2F2;
+            border-radius: 4px;
+        }
+
+        .binance-amount-uuid .amount-currency,
+        .binance-amount-uuid .uuid {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .binance-amount-uuid .amount-currency .amount-label,
+        .binance-amount-uuid .uuid .uuid-label {
+            font-size: 10px !important;
+            color: #767676 !important;
+            margin-bottom: 4px;
+        }
+
+        .binance-amount-uuid .amount-currency .amount-block .binance-amount-value,
+        .binance-amount-uuid .amount-currency .amount-block .binance-currency-value {
+            font-size: 14px !important;
+            word-break: break-all;
+            font-weight: 400 !important;
+        }
+
+        .binance-amount-uuid .uuid .uuid-block {
+            font-size: 14px !important;
+        }
+
+        .binance-amount-uuid .uuid .binance-uuid-value-copy {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 0;
+            outline: none;
+            border: none;
+            box-shadow: none;
+            color: #337AB7;
+        }
+
+        .binance-modal .binance-btn {
+            display: inline-block;
+            padding: 6px 12px;
+            margin-bottom: 0;
+            font-size: 14px;
+            font-weight: normal;
+            line-height: 1.42857143;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: middle;
+            touch-action: manipulation;
+            cursor: pointer;
+            user-select: none;
+            background-image: none;
+            border: 1px solid transparent;
+            border-radius: 4px;
+        }
+
+        .binance-modal .binance-btn.disabled {
+            pointer-events: none;
+            box-shadow: none;
+            opacity: 0.65;
+        }
+
+        .binance-modal .binance-btn-block {
+            display: block;
+            width: 100%;
+        }
+
+        .binance-modal .binance-btn-primary {
+            color: #fff;
+            background-color: #337ab7;
+            border-color: #2e6da4;
+        }
+
+        .binance-modal .binance-btn-primary:hover {
+            background-color: #286090;
+            border-color: #204d74;
+        }
+
+        .binance-modal .binance-btn-default {
+            color: #333;
+            background-color: #fff;
+            border-color: #ccc;
+        }
+
+        .binance-modal .binance-btn-default:hover {
+            color: #333;
+            border-color: #8c8c8c;
+        }
+
+        .binance-modal .binance-input-group>.binance-input-group-btn {
+            padding: 0 !important;
+            width: 1%;
+            white-space: nowrap;
+            vertical-align: middle;
+            position: relative;
+            font-size: 0;
+            display: table-cell;
+        }
+
+        .binance-modal .binance-input-group-btn:last-child>.binance-btn {
+            z-index: 2;
+            margin-left: -1px;
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+        .binance-modal .binance-form-group {
+            margin-bottom: 15px;
+        }
+
+        .binance-modal .binance-form-group .binance-input-group {
+            position: relative;
+            display: table;
+            border-collapse: separate;
+        }
+
+        .binance-modal label {
+            display: inline-block;
+            max-width: 100%;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .binance-modal .binance-form-control {
+            display: block;
+            width: 100%;
+            height: 34px;
+            padding: 6px 12px;
+            font-size: 14px;
+            line-height: 1.42857143;
+            color: #555;
+            background-color: #fff;
+            background-image: none;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075);
+            transition: border-color ease-in-out .15s, box-shadow ease-in-out .15s;
+        }
+
+        .binance-modal .binance-form-control:focus {
+            border-color: #66afe9;
+            outline: 0;
+            box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075), 0 0 8px rgba(102, 175, 233, .6);
+        }
+
+        .binance-modal .binance-form-control:read-only {
+            background-color: #eee;
+            opacity: 1;
+        }
+
+        .binance-modal .binance-input-group .binance-form-control {
+            position: relative;
+            z-index: 2;
+            float: left;
+            width: 100%;
+            margin-bottom: 0;
+            display: table-cell;
+        }
+
+        .binance-input-group .binance-form-control:first-child {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        @media (min-width: 768px) {
+            .binance-modal .binance-modal-dialog {
+                width: 460px;
+                margin: 20px auto;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .binance-modal .binance-modal-dialog {
+                width: calc(100% - 24px);
+                margin: 12px auto;
+            }
+
+            .binance-modal .binance-modal-title {
+                font-size: 20px;
+            }
+
+            .binance-modal .binance-step-label {
+                font-size: 12px;
+            }
         }
     </style>
 
     <script>
-        showFullScreenLoader('Loading...', 'body');
-    </script>
-    <script>
-        (function initDatePicker() {
-            if (window.jQuery?.fn?.daterangepicker && window.moment) {
-                jQuery(function($) {
-                    const $dateInput = $('#ipt-date');
-                    if (!$dateInput.length) return;
-
-                    // Ẩn toàn bộ rows ngay từ đầu, chờ filter xong mới show
-                    $('#table-history-fund tbody tr').hide();
-
-                    $dateInput.daterangepicker({
-                        autoUpdateInput: false,
-                        drops: 'down',
-                        opens: 'right',
-                        showDropdowns: true,
-                        startDate: moment().startOf('month'),
-                        endDate: moment().endOf('month'),
-                        locale: {!! json_encode([
-                            'format' => 'YYYY/MM/DD',
-                            'separator' => ' - ',
-                            'applyLabel' => $langData['addfunds.button_Apply'] ?? 'Apply',
-                            'cancelLabel' => $langData['addfunds.button_Cancel'] ?? 'Cancel',
-                            'customRangeLabel' => $langData['addfunds.Custom range'] ?? 'Custom range',
-                            'daysOfWeek' => $langData['addfunds.days_of_week'] ?? ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
-                            'monthNames' => $langData['addfunds.month_names'] ?? [
-                                'January',
-                                'February',
-                                'March',
-                                'April',
-                                'May',
-                                'June',
-                                'July',
-                                'August',
-                                'September',
-                                'October',
-                                'November',
-                                'December',
-                            ],
-                            'firstDay' => 1,
-                        ]) !!},
-                        ranges: {
-                            '{{ $langData['addfunds.Today'] ?? 'Today' }}': [moment(),
-                                moment()
-                            ],
-                            '{{ $langData['addfunds.Yesterday'] ?? 'Yesterday' }}': [moment()
-                                .subtract(1, 'days'), moment().subtract(1, 'days')
-                            ],
-                            '{{ $langData['addfunds.Last 7 days'] ?? 'Last 7 days' }}': [moment()
-                                .subtract(6, 'days'), moment()
-                            ],
-                            '{{ $langData['addfunds.Last 30 days'] ?? 'Last 30 days' }}': [moment()
-                                .subtract(29, 'days'), moment()
-                            ],
-                            '{{ $langData['addfunds.This month'] ?? 'This month' }}': [moment()
-                                .startOf('month'), moment().endOf('month')
-                            ],
-                            '{{ $langData['addfunds.Last month'] ?? 'Last month' }}': [moment()
-                                .subtract(1, 'month').startOf('month'), moment().subtract(1,
-                                    'month').endOf('month')
-                            ]
-                        }
-                    });
-
-                    $dateInput.on('apply.daterangepicker', function(ev, picker) {
-                        $(this).val(picker.startDate.format('YYYY/MM/DD') + ' - ' + picker.endDate
-                            .format('YYYY/MM/DD'));
-                        filterTable($(this).val());
-                    });
-
-                    $dateInput.on('cancel.daterangepicker', function() {
-                        $(this).val('');
-                        filterTable('');
-                    });
-
-                    @if (request('start') && request('end'))
-                        $dateInput.val('{{ request('start') }} - {{ request('end') }}');
-                    @else
-                        $dateInput.val(moment().startOf('month').format('YYYY/MM/DD') + ' - ' + moment().endOf(
-                            'month').format('YYYY/MM/DD'));
-                    @endif
-
-                    function filterTable(val, onDone) {
-                        var $tbody = $('#transactions-tbody');
-                        var $rows = $tbody.find('tr:not(.row-empty):not(.row-filter-empty)');
-                        $tbody.find('.row-filter-empty').remove();
-
-                        if (!val) {
-                            $rows.show();
-                            onDone && onDone();
-                            return;
-                        }
-
-                        var parts = val.split(' - ');
-                        var start = parts[0] ? moment(parts[0], 'YYYY/MM/DD') : null;
-                        var end = parts[1] ? moment(parts[1], 'YYYY/MM/DD') : null;
-                        var visibleCount = 0;
-
-                        $rows.each(function() {
-                            var dateStr = $(this).attr('data-date') || $(this).find('td:eq(2)').text()
-                                .trim();
-                            var rowDate = moment(dateStr, 'YYYY-MM-DD HH:mm:ss');
-                            var show = rowDate.isValid() &&
-                                (!start || rowDate.isSameOrAfter(start, 'day')) &&
-                                (!end || rowDate.isSameOrBefore(end, 'day'));
-                            $(this).toggle(show);
-                            if (show) visibleCount++;
-                        });
-
-                        if (visibleCount === 0) {
-                            var emptyText = (typeof window.language === 'function') ?
-                                (window.language('addfunds.no_transactions') || 'Chưa có giao dịch nào') :
-                                'Chưa có giao dịch nào';
-                            $tbody.append(
-                                '<tr class="row-filter-empty"><td colspan="4" class="text-center text-muted py-8">' +
-                                '<i class="ki-outline ki-inbox fs-3x d-block mb-2"></i>' +
-                                '<span>' + emptyText + '</span></td></tr>'
-                            );
-                        }
-
-                        onDone && onDone();
-                    }
-
-                    // Vào trang: filter theo tháng hiện tại rồi mới ẩn loader
-                    filterTable($dateInput.val(), function() {
-                        $('#transactions-tbody').show();
-                        hideFullScreenLoader();
-                    });
-                });
-            } else {
-                setTimeout(initDatePicker, 100);
-            }
-        })();
-
-        // Binance Modal Step Management (from theme-6)
         document.addEventListener('DOMContentLoaded', function() {
-            const binanceModal = $('#modal-description');
+            const methodSelect = document.getElementById('method');
+            const amountInput = document.getElementById('amount');
+            const binanceModal = $('#binance-qr-modal');
             const binancePrimaryBtn = document.getElementById('binance-primary-btn');
+
             let currentBinanceStep = 1;
 
-            // Binance steps
-            if (binancePrimaryBtn) {
-                binancePrimaryBtn.addEventListener('click', function() {
-                    if (currentBinanceStep === 1) {
-                        currentBinanceStep = 2;
-                        $('#binance-top-step1').addClass('hidden');
-                        $('#binance-top-step2').removeClass('hidden');
-                        $('#step-1').removeClass('active');
-                        $('#step-2').addClass('active');
-                        this.textContent = 'Verify payment';
-                    } else {
-                        const orderId = document.getElementById('binance-order-id').value.trim();
-                        if (!orderId) return alert('Please enter Order ID');
-                        this.disabled = true;
-                        fetch(
-                                `/cron/binance/transactions?orderId=${orderId}&amount=${document.querySelector('.binance-amount-value').textContent}&user_id={{ Auth::user()->id ?? 'null' }}`
-                            )
-                            .then(r => r.json())
-                            .then(res => {
-                                this.disabled = false;
+            binanceModal.modal({
+                show: false
+            });
+            binanceModal.modal('hide');
 
-                                const successAlert = document.querySelector('.binance-alert-success');
-                                const dangerAlert = document.querySelector('.binance-alert-danger');
+            document.addEventListener('click', function(e) {
+                const btn = e.target.closest('#payButton, .payment-action-btn');
+                if (!btn) return;
 
-                                if (res.success) {
-                                    // Hiển thị thông báo success
-                                    if (successAlert) {
-                                        successAlert.querySelector('.content').textContent = res
-                                            .message || 'Payment verified successfully!';
-                                        successAlert.classList.remove('hidden');
-                                    }
-                                    if (dangerAlert) {
-                                        dangerAlert.classList.add('hidden');
-                                    }
+                let amount, type, data = {};
 
-                                    // Reload sau 2 giây
-                                    setTimeout(() => {
-                                        location.reload();
-                                    }, 2000);
-                                } else {
-                                    // Hiển thị thông báo lỗi
-                                    if (dangerAlert) {
-                                        dangerAlert.querySelector('.content').textContent = res
-                                            .message ||
-                                            'Transaction not found. Check if the Order ID is correct.';
-                                        dangerAlert.classList.remove('hidden');
-                                    }
-                                    if (successAlert) {
-                                        successAlert.classList.add('hidden');
-                                    }
+                if (btn.id === 'payButton') {
+                    amount = parseFloat(amountInput.value);
+                    if (isNaN(amount) || amount <= 0) return alert('Vui lòng nhập số tiền hợp lệ');
+                    const opt = methodSelect.selectedOptions[0];
+                    if (!opt) return;
+                    type = opt.dataset.type;
+                    data = {
+                        binance_id: opt.dataset.binanceId || '228223025',
+                        qr_image: opt.dataset.qrImage || opt.dataset.image
+                    };
+                } else {
+                    amount = btn.dataset.amount;
+                    type = btn.dataset.paymentType;
+                    data = JSON.parse(btn.dataset.paymentData || '{}');
+                }
+
+                amount = parseFloat(amount);
+                if (!Number.isFinite(amount) || amount <= 0) {
+                    return alert('Vui lòng nhập số tiền hợp lệ');
+                }
+
+                if (type === 'bank_vn' || type === 'bank') {
+                    const randomNum = Math.floor(100000 + Math.random() * 900000);
+                    window.location.href = `/addfunds/${randomNum}?amount=${amount}`;
+                    return;
+                }
+
+                if (type === 'binance') {
+                    currentBinanceStep = 1;
+                    document.querySelectorAll('.binance-amount-value').forEach(el => el.textContent =
+                        amount);
+                    document.getElementById('binance-uuid-input').value = data.binance_id;
+                    document.getElementById('binance-uuid-value').textContent = data.binance_id;
+                    document.getElementById('binance-qr-code-image').src = data.qr_image;
+                    binanceModal.attr('aria-hidden', 'false');
+                    $('#binance-top-step1').removeClass('hidden');
+                    $('#binance-top-step2').addClass('hidden');
+                    $('#step-1').addClass('active');
+                    $('#step-2').removeClass('active');
+                    binancePrimaryBtn.textContent = 'Confirm payment';
+                    binanceModal.modal('show');
+                }
+            });
+
+            binanceModal.on('hidden.bs.modal', function() {
+                binanceModal.attr('aria-hidden', 'true');
+            });
+
+            binancePrimaryBtn.addEventListener('click', function() {
+                if (currentBinanceStep === 1) {
+                    currentBinanceStep = 2;
+                    $('#binance-top-step1').addClass('hidden');
+                    $('#binance-top-step2').removeClass('hidden');
+                    $('#step-1').removeClass('active');
+                    $('#step-2').addClass('active');
+                    this.textContent = 'Verify payment';
+                } else {
+                    const orderId = document.getElementById('binance-order-id').value.trim();
+                    if (!orderId) return alert('Vui lòng nhập Order ID');
+                    this.disabled = true;
+                    fetch(
+                            `/cron/binance/transactions?orderId=${orderId}&amount=${document.querySelector('.binance-amount-value').textContent}&user_id={{ Auth::user()->id ?? 'null' }}`
+                        )
+                        .then(res => res.json())
+                        .then(res => {
+                            this.disabled = false;
+
+                            const successAlert = document.querySelector('.binance-alert-success');
+                            const dangerAlert = document.querySelector('.binance-alert-danger');
+
+                            if (res.success) {
+                                // Hiển thị thông báo success
+                                if (successAlert) {
+                                    successAlert.querySelector('.content').textContent = res.message ||
+                                        'Xác minh thành công!';
+                                    successAlert.classList.remove('hidden');
                                 }
-                            })
-                            .catch((err) => {
-                                this.disabled = false;
-
-                                const dangerAlert = document.querySelector('.binance-alert-danger');
                                 if (dangerAlert) {
-                                    dangerAlert.querySelector('.content').textContent =
-                                        'Network error. Please try again.';
+                                    dangerAlert.classList.add('hidden');
+                                }
+
+                                // Reload sau 2 giây
+                                setTimeout(() => {
+                                    location.reload();
+                                }, 2000);
+                            } else {
+                                // Hiển thị thông báo lỗi
+                                if (dangerAlert) {
+                                    dangerAlert.querySelector('.content').textContent = res.message ||
+                                        'Không tìm thấy giao dịch. Kiểm tra lại Order ID.';
                                     dangerAlert.classList.remove('hidden');
                                 }
-                            });
-                    }
-                });
-            }
-
-            // Copy to clipboard
-            document.addEventListener('click', function(e) {
-                const btn = e.target.closest('[data-for-clip]');
-                if (!btn) return;
-                const target = document.getElementById(btn.dataset.forClip);
-                const val = target.value || target.textContent;
-                navigator.clipboard.writeText(val);
-                const old = btn.innerText;
-                btn.innerText = 'Copied!';
-                setTimeout(() => btn.innerText = old, 2000);
-            });
-        });
-
-        // Binance Modal Handler - Theme 4 Style
-        window._addfunds = window._addfunds || {};
-        window._addfunds.binance = {
-            openModal: function(data) {
-                // Reset modal state
-                let currentStep = 1;
-
-                // Reset UI
-                $('#binance-step-1').removeClass('d-none');
-                $('#binance-step-2').addClass('d-none');
-                $('#step-1-item').addClass('active');
-                $('#step-2-item').removeClass('active');
-                $('#step-line').removeClass('active');
-                $('#binance-alert-error').addClass('d-none');
-                $('#binance-alert-success').addClass('d-none');
-                $('#binance-loading').addClass('d-none');
-                $('#binance-primary-btn').prop('disabled', false);
-                $('#binance-order-id').val('');
-
-                // Populate modal with data
-                $('#binance-amount-display').text(data.amount);
-                $('#binance-amount-display-2').text(data.amount);
-                $('#binance-currency-display').text(data.currency || 'USDT');
-                $('#binance-currency-display-2').text(data.currency || 'USDT');
-
-                // Set Binance ID (UUID)
-                $('#binance-uuid-input').val(data.binance_id || '');
-                $('#binance-uuid-value-display').text(data.binance_id || '');
-
-                // Generate QR code URL
-                const qrUrl =
-                    `https://api.binance.com/api/v3/qrcode?amount=${data.amount}&currency=${data.currency || 'USDT'}&uuid=${data.binance_id || ''}`;
-                $('#binance-qr-code-image').attr('src', qrUrl);
-
-                // Store current step in modal
-                $('#modal-binance-pay').data('currentStep', 1);
-                $('#modal-binance-pay').data('binanceData', data);
-
-                // Show modal
-                const modal = new bootstrap.Modal(document.getElementById('modal-binance-pay'));
-                modal.show();
-            }
-        };
-
-        // Binance Modal Button Handler
-        document.addEventListener('DOMContentLoaded', function() {
-            const binancePrimaryBtn = document.getElementById('binance-primary-btn');
-
-            if (binancePrimaryBtn) {
-                binancePrimaryBtn.addEventListener('click', function() {
-                    const modal = document.getElementById('modal-binance-pay');
-                    let currentStep = $(modal).data('currentStep') || 1;
-
-                    if (currentStep === 1) {
-                        // Move to step 2
-                        currentStep = 2;
-                        $(modal).data('currentStep', 2);
-
-                        $('#binance-step-1').addClass('d-none');
-                        $('#binance-step-2').removeClass('d-none');
-                        $('#step-1-item').removeClass('active');
-                        $('#step-2-item').addClass('active');
-                        $('#step-line').addClass('active');
-
-                        this.innerHTML = '<span class="indicator-label">Xác minh thanh toán</span>';
-                    } else {
-                        // Verify payment
-                        const orderId = document.getElementById('binance-order-id').value.trim();
-                        const amount = document.getElementById('binance-amount-display').textContent;
-
-                        if (!orderId) {
-                            showBinanceError('Vui lòng nhập Order ID');
-                            return;
-                        }
-
-                        // Show loading
-                        this.disabled = true;
-                        $('#binance-loading').removeClass('d-none');
-
-                        fetch(
-                                `/cron/binance/transactions?orderId=${orderId}&amount=${amount}&user_id={{ Auth::user()->id ?? 'null' }}`
-                            )
-                            .then(r => r.json())
-                            .then(res => {
-                                this.disabled = false;
-                                $('#binance-loading').addClass('d-none');
-
-                                if (res.success) {
-                                    showBinanceSuccess('Thanh toán đã được xác minh!');
-                                    setTimeout(() => {
-                                        location.reload();
-                                    }, 1500);
-                                } else {
-                                    showBinanceError(res.message || 'Giao dịch không tìm thấy');
+                                if (successAlert) {
+                                    successAlert.classList.add('hidden');
                                 }
-                            })
-                            .catch(err => {
-                                this.disabled = false;
-                                $('#binance-loading').addClass('d-none');
-                                showBinanceError('Lỗi kết nối');
-                            });
-                    }
-                });
-            }
+                            }
+                        }).catch((err) => {
+                            this.disabled = false;
 
-            // Copy to clipboard
+                            const dangerAlert = document.querySelector('.binance-alert-danger');
+                            if (dangerAlert) {
+                                dangerAlert.querySelector('.content').textContent =
+                                    'Lỗi mạng. Vui lòng thử lại.';
+                                dangerAlert.classList.remove('hidden');
+                            }
+                        });
+                }
+            });
+
             document.addEventListener('click', function(e) {
                 const btn = e.target.closest('[data-for-clip]');
-                if (!btn) return;
-
-                const targetId = btn.dataset.forClip;
-                const target = document.getElementById(targetId);
-                const val = target.value || target.textContent;
-
-                navigator.clipboard.writeText(val).then(() => {
-                    const originalText = btn.innerHTML;
-                    btn.innerHTML =
-                        '<i class="ki-outline ki-check fs-2"></i><span class="ms-2">Đã sao chép!</span>';
-                    setTimeout(() => {
-                        btn.innerHTML = originalText;
-                    }, 2000);
-                });
+                if (btn) {
+                    const target = document.getElementById(btn.dataset.forClip);
+                    const val = target.value || target.textContent;
+                    navigator.clipboard.writeText(val);
+                    const oldText = btn.innerText;
+                    btn.innerText = 'Copied!';
+                    setTimeout(() => btn.innerText = oldText, 2000);
+                }
             });
         });
-
-        // Show error message
-        function showBinanceError(message) {
-            $('#binance-error-text').text(message);
-            $('#binance-alert-error').removeClass('d-none');
-            $('#binance-alert-success').addClass('d-none');
-        }
-
-        // Show success message
-        function showBinanceSuccess(message) {
-            $('#binance-success-text').text(message);
-            $('#binance-alert-success').removeClass('d-none');
-            $('#binance-alert-error').addClass('d-none');
-        }
-
-        // Invoice handler - Open invoice in new tab
-        function invoice(paymentId) {
-            if (!paymentId) {
-                console.error('Payment ID is required');
-                return;
-            }
-            window.open(`/addfunds/invoice/${paymentId}`, '_blank');
-        }
     </script>
-@endpush
+
+    <style>
+        /* Transaction history bonus */
+        .tx-bonus-badge {
+            display: inline-block;
+            margin-left: 6px;
+            font-size: .72em;
+            font-weight: 600;
+            color: #28a745;
+            background: rgba(40, 167, 69, .1);
+            padding: 1px 7px;
+            border-radius: 20px;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+
+        .tx-bonus-amount {
+            display: block;
+            font-size: .82em;
+            color: #28a745;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        /* Bonus tiers panel */
+        #bonus-panel {
+            margin-bottom: 16px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            background: rgba(40, 167, 69, .05);
+            border: 1px solid rgba(40, 167, 69, .2);
+        }
+
+        #bonus-panel .bp-title {
+            font-size: .82em;
+            font-weight: 600;
+            color: #28a745;
+            margin-bottom: 8px;
+        }
+
+        #bonus-tiers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .bonus-tier {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 5px 12px;
+            border-radius: 6px;
+            background: rgba(40, 167, 69, .1);
+            border: 1px solid rgba(40, 167, 69, .2);
+            font-size: .78em;
+            line-height: 1.5;
+        }
+
+        .bonus-tier__percent {
+            font-weight: 700;
+            color: #28a745;
+            font-size: 1.05em;
+        }
+
+        .bonus-tier__min {
+            color: #666;
+            white-space: nowrap;
+        }
+    </style>
+
+    <script>
+        (function() {
+            const sel = document.getElementById('method');
+            const panel = document.getElementById('bonus-panel');
+            const tiers = document.getElementById('bonus-tiers');
+            if (!sel || !panel || !tiers) return;
+
+            function render(opt) {
+                let data = [];
+                try {
+                    data = JSON.parse(opt?.dataset?.bonus || '[]');
+                } catch (e) {}
+                data = data.filter(t => t && t.percent > 0);
+                if (!data.length) {
+                    panel.style.display = 'none';
+                    return;
+                }
+                const cur = opt?.dataset?.currency || '';
+                tiers.innerHTML = data.map(t =>
+                    `<div class="bonus-tier">
+                        <span class="bonus-tier__percent">+${t.percent}%</span>
+                        <span class="bonus-tier__min">≥ ${Number(t.min).toLocaleString()} ${cur}</span>
+                    </div>`
+                ).join('');
+                panel.style.display = 'block';
+            }
+
+            render(sel.selectedOptions[0]);
+            sel.addEventListener('change', () => render(sel.selectedOptions[0]));
+            $(sel).on('select2:select', () => render(sel.selectedOptions[0]));
+        })();
+    </script>
+@endsection

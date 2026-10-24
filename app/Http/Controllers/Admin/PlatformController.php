@@ -10,6 +10,12 @@ class PlatformController extends Controller
 {
     public function index(Request $request)
     {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'in:active,inactive'],
+            'sort_by' => ['nullable', 'in:position,created_at,id,name,status'],
+            'sort_order' => ['nullable', 'in:asc,desc'],
+        ]);
         // Handle reorder action (for drag-and-drop)
         if ($request->isMethod('put') && $request->has('action') && $request->input('action') === 'reorder') {
             return $this->handleReorder($request);
@@ -24,21 +30,21 @@ class PlatformController extends Controller
         $query = Platform::where('domain', $request->getHost())->withCount('categories');
 
         // Search functionality
-        if ($request->filled('search')) {
-            $search = $request->search;
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
             $query->where(function($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%");
             });
         }
 
         // Filter by status
-        if ($request->filled('status')) {
-            $query->where('status', $request->status === 'active');
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status'] === 'active');
         }
 
         // Sort by position first, then by created_at
-        $sortBy = $request->get('sort_by', 'position');
-        $sortOrder = $request->get('sort_order', 'asc');
+        $sortBy = $filters['sort_by'] ?? 'position';
+        $sortOrder = $filters['sort_order'] ?? 'asc';
         $query->orderBy($sortBy, $sortOrder);
 
         $platforms = $query->get();
@@ -72,7 +78,7 @@ class PlatformController extends Controller
             }
 
             return response()->json([
-                'success' => 'Update Successfully'
+                'success' => adminMessage('update')
             ]);
         } catch (\Exception $e) {
             \Log::error('Reorder failed', ['error' => $e->getMessage()]);
@@ -333,7 +339,7 @@ class PlatformController extends Controller
                     'success' => true,
                     'platform' => $platform->fresh(),
                     'updated_fields' => array_keys($updateData ?? []),
-                    'message' => 'Update Successfully'
+                    'message' => adminMessage('update')
                 ]);
             }
 

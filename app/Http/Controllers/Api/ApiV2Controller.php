@@ -2,78 +2,26 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Client\DataController;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductOrder;
 use App\Models\Service;
 use App\Models\User; 
 use App\Smm\Smm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 use Exception;
 
 class ApiV2Controller extends Controller
 {
-    /**
-     * Helper: Validate user API key
-     */
-    private function validateUser(string $apiKey): ?User
-    {
-        $user = User::where('api_key', $apiKey)->first();
-        return ($user && $user->is_active) ? $user : null;
-    }
-
-    /**
-     * Helper: Check required fields
-     */
-    private function checkRequired(Request $request, array $fields): ?JsonResponse
-    {
-        foreach ($fields as $field) {
-            if (!$request->has($field)) {
-                return response()->json(['error' => 'Incorrect request'], 200);
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Helper: Parse multilingual field
-     */
-    private function parseField($value, string $default = 'Unknown'): string
-    {
-        if (is_string($value)) {
-            $decoded = json_decode($value, true);
-            return $decoded['en'] ?? $value;
-        }
-        return is_array($value) ? ($value['en'] ?? $default) : $default;
-    }
-
-    /**
-     * Helper: Get user rate by level
-     */
-    private function getUserRate(User $user, Service $service): float
-    {
-        return match ($user->level) {
-            'distributor' => $service->rate_distributor ?? $service->rate_agent ?? $service->rate_retail,
-            'agent' => $service->rate_agent ?? $service->rate_retail,
-            default => $service->rate_retail,
-        };
-    }
-
-    /**
-     * Get user balance
-     */
     public function balance(Request $request): JsonResponse
     {
         try {
-            $check = $this->checkRequired($request, ['api_key']);
-            if ($check)
-                return $check;
-
-            $user = $this->validateUser($request->api_key);
-            if (!$user) {
-                return response()->json(['error' => 'Invalid API key'], 200);
-            }
+            $user = $request->user();
 
             return response()->json([
                 'balance' => (float) $user->balance,
@@ -84,31 +32,24 @@ class ApiV2Controller extends Controller
         }
     }
 
-    /**
-     * Get services list
-     */
     public function services(Request $request): JsonResponse
     {
         try {
-            $check = $this->checkRequired($request, ['api_key']);
-            if ($check)
-                return $check;
-
-            $user = $this->validateUser($request->api_key);
-            if (!$user) {
-                return response()->json(['error' => 'Invalid API key'], 200);
-            }
+            $user = $request->user();
 
             $services = Service::with('category')
                 ->where('status', true)
+                ->where(function ($query) {
+                    $query->where('hidden_api', false)->orWhereNull('hidden_api');
+                })
                 ->ordered()
                 ->get()
                 ->map(fn(Service $service) => [
                     'service' => (int) $service->id,
-                    'name' => $this->parseField($service->name),
+                    'name' => $service->getName('en'),
                     'type' => $service->type_service ?: 'Default',
-                    'category' => $this->parseField($service->category?->name, 'General'),
-                    'rate' => number_format($this->getUserRate($user, $service), 4, '.', ''),
+                    'category' => $service->category?->getName('en') ?: 'General',
+                    'rate' => number_format(getUserServiceRate($user, $service), 4, '.', ''),
                     'min' => (int) $service->min,
                     'max' => (int) $service->max,
                     'refill' => (bool) $service->refill,
@@ -128,111 +69,33 @@ class ApiV2Controller extends Controller
     public function create(Request $request): JsonResponse
     {
         try {
-            $check = $this->checkRequired($request, ['api_key', 'service']);
-            if ($check)
-                return $check;
-
-            $user = $this->validateUser($request->api_key);
-            if (!$user) {
-                return response()->json(['error' => 'Invalid or inactive account'], 200);
+            if (!$request->filled('service')) {
+                return response()->json(['error' => 'Incorrect request'], 200);
             }
 
-            // Get service to determine type
-            $service = Service::find($request->service);
-            if (!$service) {
-                return response()->json(['error' => 'Service not found'], 200);
+            $user = $request->user();
+
+            $orderRequest = new Request($request->all());
+            $orderRequest->merge(['comments' => $request->input('comments', $request->input('comment'))]);
+            $orderRequest->setUserResolver(fn () => $user);
+
+            // DataController reads Auth::user(), while API authentication is
+            // resolved from the request. Temporarily bind the API user only
+            // for this operation and restore the previous guard user after it.
+            $guard = Auth::guard();
+            $previousUser = $guard->user();
+            $guard->setUser($user);
+
+            try {
+                $result = app(DataController::class)
+                    ->createOrder($orderRequest)
+                    ->getData(true);
+            } finally {
+                $guard->setUser($previousUser);
             }
-
-            $serviceType = $service->type_service ?? 'Default';
-
-            // Validate required fields based on service type
-            $requiredFields = ['api_key', 'service'];
-
-            switch ($serviceType) {
-                case 'Custom Comments':
-                    $requiredFields = array_merge($requiredFields, ['link', 'comments']);
-                    break;
-                case 'Package':
-                    $requiredFields = array_merge($requiredFields, ['link']);
-                    break;
-                case 'Subscriptions':
-                    $requiredFields = array_merge($requiredFields, ['username', 'min', 'max', 'delay']);
-                    break;
-                case 'Default':
-                default:
-                    $requiredFields = array_merge($requiredFields, ['link', 'quantity']);
-                    break;
-            }
-
-            $check = $this->checkRequired($request, $requiredFields);
-            if ($check)
-                return $check;
-
-            // Authenticate as the API user
-            auth()->setUser($user);
-
-            // Build request data for DataController
-            $requestData = [
-                'service' => $request->service,
-                'link' => $request->link,
-                'quantity' => $request->quantity,
-                'runs' => $request->runs,
-                'interval' => $request->interval,
-                'delay' => $request->delay,
-                'check' => $request->check,
-                // Handle 'comments' field from API (map to 'comments' for DataController)
-                'comments' => $request->comments ?? $request->comment,
-                'username' => $request->username,
-                'keywords' => $request->keywords,
-                'hashtag' => $request->hashtag,
-                'hashtags' => $request->hashtags,
-                'usernames' => $request->usernames,
-                'mediaUrl' => $request->mediaUrl,
-                'posts' => $request->posts,
-                'old_posts' => $request->old_posts,
-                'min' => $request->min,
-                'max' => $request->max,
-                'country' => $request->country,
-                'device' => $request->device,
-                'type_of_traffic' => $request->type_of_traffic,
-                'google_keyword' => $request->google_keyword,
-                'referring_url' => $request->referring_url,
-                'expiry' => $request->expiry,
-                'reactType' => $request->reactType,
-            ];
-
-            // Create a new request for DataController with API data
-            $orderRequest = new Request($requestData);
-            $orderRequest->setUserResolver(function () use ($user) {
-                return $user;
-            });
-
-            // Call DataController's createOrder method
-            $dataController = new \App\Http\Controllers\Client\DataController();
-            $response = $dataController->createOrder($orderRequest);
-
-            // Get the response data
-            $responseData = $response->getData(true);
-
-            // Check if order was created successfully
-            if (isset($responseData['success']) && $responseData['success'] && isset($responseData['order_id'])) {
-                // Return simple format: {"order": order_id}
-                return response()->json([
-                    'order' => (int) $responseData['order_id']
-                ], 200);
-            }
-
-            // If there's an error, return it
-            if (isset($responseData['message'])) {
-                return response()->json([
-                    'error' => $responseData['message']
-                ], 200);
-            }
-
-            // Fallback error
-            return response()->json([
-                'error' => 'An error occurred while creating the order'
-            ], 200);
+            return ($result['success'] ?? false) && isset($result['order_id'])
+                ? response()->json(['order' => (int) $result['order_id']], 200)
+                : response()->json(['error' => $result['message'] ?? 'Incorrect request'], 200);
         } catch (Exception $e) {
             Log::error('API create order error: ' . $e->getMessage());
             return response()->json([
@@ -247,6 +110,11 @@ class ApiV2Controller extends Controller
     public function status(Request $request): JsonResponse
     {
         try {
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['error' => 'Incorrect request'], 200);
+            }
+
             // Support both 'order' and 'order_id' parameter names
             $orderId = $request->input('order') ?? $request->input('order_id');
 
@@ -254,14 +122,6 @@ class ApiV2Controller extends Controller
                 return response()->json(['error' => 'Incorrect request'], 200);
             }
 
-            $check = $this->checkRequired($request, ['api_key']);
-            if ($check)
-                return $check;
-
-            $user = $this->validateUser($request->api_key);
-            if (!$user) {
-                return response()->json(['error' => 'Invalid API key'], 200);
-            }
 
             // Check if this is a provider request (has api_url)
             if ($request->has('api_url')) {
@@ -332,13 +192,9 @@ class ApiV2Controller extends Controller
     public function multiStatus(Request $request): JsonResponse
     {
         try {
-            $check = $this->checkRequired($request, ['api_key']);
-            if ($check)
-                return $check;
-
-            $user = $this->validateUser($request->api_key);
+            $user = $request->user();
             if (!$user) {
-                return response()->json(['error' => 'Invalid API key'], 200);
+                return response()->json(['error' => 'Incorrect request'], 200);
             }
 
             // Support both 'orders' (comma-separated string) and 'order_ids' (array)
@@ -438,6 +294,11 @@ class ApiV2Controller extends Controller
     public function refill(Request $request): JsonResponse
     {
         try {
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['error' => 'Incorrect request'], 200);
+            }
+
             // Support both 'order' and 'order_id' parameter names
             $orderId = $request->input('order') ?? $request->input('order_id');
 
@@ -445,14 +306,6 @@ class ApiV2Controller extends Controller
                 return response()->json(['error' => 'Incorrect request'], 200);
             }
 
-            $check = $this->checkRequired($request, ['api_key']);
-            if ($check)
-                return $check;
-
-            $user = $this->validateUser($request->api_key);
-            if (!$user) {
-                return response()->json(['error' => 'Invalid API key'], 200);
-            }
 
             // Check if this is a provider request (has api_url)
             if ($request->has('api_url')) {
@@ -532,13 +385,9 @@ class ApiV2Controller extends Controller
     public function multiRefill(Request $request): JsonResponse
     {
         try {
-            $check = $this->checkRequired($request, ['api_key']);
-            if ($check)
-                return $check;
-
-            $user = $this->validateUser($request->api_key);
+            $user = $request->user();
             if (!$user) {
-                return response()->json(['error' => 'Invalid API key'], 200);
+                return response()->json(['error' => 'Incorrect request'], 200);
             }
 
             // Support both 'orders' (comma-separated string) and 'order_ids' (array)
@@ -666,13 +515,9 @@ class ApiV2Controller extends Controller
     public function cancel(Request $request): JsonResponse
     {
         try {
-            $check = $this->checkRequired($request, ['api_key']);
-            if ($check)
-                return $check;
-
-            $user = $this->validateUser($request->api_key);
+            $user = $request->user();
             if (!$user) {
-                return response()->json(['error' => 'Invalid API key'], 200);
+                return response()->json(['error' => 'Incorrect request'], 200);
             }
 
             // Parse order IDs - support both 'order' (single) and 'orders' (multiple)
@@ -810,31 +655,188 @@ class ApiV2Controller extends Controller
         }
     }
 
+    /** List products available on this domain. */
+    public function products(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $products = Product::where('domain', getDomain())
+            ->where('status', '!=', 'Inactive')
+            ->with('category')
+            ->orderBy('position')
+            ->get()
+            ->map(fn (Product $product) => [
+                'product' => $product->id,
+                'name' => $product->name,
+                'require' => $product->process_type ?: '',
+                'rate' => getUserProductRate($user, $product),
+                'min' => (int) $product->min,
+                'max' => (int) $product->max,
+                'category' => $product->category?->name ?? '',
+                'status' => $product->status,
+                'type' => $product->type === 'Api' ? 'Auto' : 'Service',
+            ]);
+
+        return response()->json($products, 200);
+    }
+
+    /** Create a product order using the same flow as the client order form. */
+    public function addProductOrder(Request $request): JsonResponse
+    {
+        if (!$request->filled('product') ||
+            !filter_var($request->product, FILTER_VALIDATE_INT) ||
+            ($request->has('quantity') &&
+                (!filter_var($request->quantity, FILTER_VALIDATE_INT) || (int) $request->quantity < 1))) {
+            return response()->json(['error' => 'Incorrect request'], 200);
+        }
+
+        $user = $request->user();
+
+        $product = Product::where('domain', getDomain())->where('status', 'In stock')->find($request->product);
+        if (!$product) {
+            return response()->json(['error' => 'Product not available'], 200);
+        }
+
+        // The client order flow handles balance deduction and transaction creation.
+        $orderRequest = new Request([
+            'quantity' => (int) ($request->input('quantity') ?: 1),
+            'require' => $request->input('require'),
+        ]);
+        $orderRequest->setUserResolver(fn () => $user);
+
+        $guard = Auth::guard();
+        $previousUser = $guard->user();
+        $guard->setUser($user);
+
+        try {
+            $response = app(DataController::class)
+                ->createOrderProduct($orderRequest, $product->id);
+            $data = $response->getData(true);
+
+            if (($data['status'] ?? null) === 'success' && !blank($request->input('require'))) {
+                ProductOrder::where('id', $data['order_id'])
+                    ->where('user_id', $user->id)
+                    ->update(['note' => (string) $request->input('require')]);
+            }
+
+            return ($data['status'] ?? null) === 'success' && isset($data['order_id'])
+                ? response()->json(['order' => (int) $data['order_id']], 200)
+                : response()->json(['error' => $data['message'] ?? 'Unable to create product order'], 200);
+        } catch (\Throwable $e) {
+            Log::error('API product order error: ' . $e->getMessage());
+            return response()->json(['error' => 'Unable to create product order'], 200);
+        } finally {
+            $guard->setUser($previousUser);
+        }
+    }
+
+    /** Get one or multiple product orders belonging to the API user. */
+    public function productOrderStatus(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($request->has('orders')) {
+            $ids = is_array($request->orders)
+                ? $request->orders
+                : explode(',', (string) $request->orders);
+            $ids = array_slice(array_filter(array_map('trim', $ids)), 0, 100);
+            if (!$ids || count(array_filter($ids, fn ($id) => !ctype_digit((string) $id))) > 0) {
+                return response()->json(['error' => 'Incorrect request'], 200);
+            }
+
+            $orders = ProductOrder::where('user_id', $user->id)->where('domain', getDomain())
+                ->whereIn('id', $ids)->get()->keyBy('id');
+            $results = [];
+            foreach ($ids as $id) {
+                $order = $orders->get($id);
+                $results[(string) $id] = $order
+                    ? ['charge' => (float) $order->charge, 'status' => $order->status,
+                        'result' => $order->note ?? '']
+                    : ['error' => 'Incorrect order ID'];
+            }
+
+            return response()->json($results, 200);
+        }
+
+        if (!$request->filled('order') || !ctype_digit((string) $request->order)) {
+            return response()->json(['error' => 'Incorrect request'], 200);
+        }
+
+        $order = ProductOrder::where('user_id', $user->id)->where('domain', getDomain())
+            ->find($request->order);
+        return $order
+            ? response()->json(['charge' => (float) $order->charge, 'status' => $order->status,
+                'result' => $order->note ?? ''], 200)
+            : response()->json(['error' => 'Incorrect order ID'], 200);
+    }
+
+    /** Retrieve the delivered result of a product order. */
+    public function resultProduct(Request $request): JsonResponse
+    {
+        if (!ctype_digit((string) $request->order)) {
+            return response()->json(['error' => 'Incorrect request'], 200);
+        }
+
+        $user = $request->user();
+
+        $order = ProductOrder::where('user_id', $user->id)->where('domain', getDomain())
+            ->find($request->order);
+        if (!$order) {
+            return response()->json(['error' => 'Incorrect order ID'], 200);
+        }
+
+        $result = json_decode((string) $order->note, true);
+        return response()->json(['result' => is_array($result) ? $result :
+            ($order->note ? [(string) $order->note] : [])], 200);
+    }
+
     /**
      * Handle old API format (action-based)
      */
     public function handleAction(Request $request): JsonResponse
     {
         try {
-            $check = $this->checkRequired($request, ['key', 'action']);
-            if ($check)
-                return $check;
+            if (!$request->filled(['action', 'key']) && !$request->filled(['action', 'api_key'])) {
+                return response()->json(['error' => 'Incorrect request'], 200);
+            }
 
-            $user = $this->validateUser($request->key);
+            // Authenticate once for every action dispatched through this
+            // endpoint, then forward the authenticated user to the action.
+            $key = $request->input('key', $request->input('api_key'));
+            $user = User::where('api_key', $key)
+                ->where('is_active', true)
+                ->first();
+
             if (!$user) {
                 return response()->json(['error' => 'Incorrect request'], 200);
             }
 
+            $request->merge(['api_key' => $key]);
+            $request->attributes->set('api_user', $user);
+            $request->setUserResolver(fn () => $user);
+
             return match ($request->action) {
                 'balance' => response()->json([
                     'balance' => (float) $user->balance,
-                    'currency' => 'USD'
+                    'currency' => 'USD',
                 ], 200),
-                'services' => $this->services(new Request(['api_key' => $request->key])),
-                'add' => $this->create($request->merge(['api_key' => $request->key])),
-                'status' => $this->handleStatusAction($request),
-                'cancel' => $this->handleCancelAction($request),
-                'refill' => $this->handleRefillAction($request),
+                'services' => $this->services($request),
+                'products' => $this->products($request),
+                'add_product_order' => $this->addProductOrder($request),
+                'product_order_status' => $this->productOrderStatus($request),
+                'result_product' => $this->resultProduct($request),
+                'add' => $this->create($request),
+                'status' => $request->has('orders') || $request->has('order_ids')
+                    ? $this->multiStatus($request)
+                    : ($request->has('order')
+                        ? $this->status($request)
+                        : response()->json(['error' => 'Incorrect request'], 200)),
+                'cancel', 'multi_cancel' => $this->cancel($request),
+                'refill', 'multi_refill' => $request->has('orders')
+                    ? $this->multiRefill($request)
+                    : ($request->has('order')
+                        ? $this->refill($request)
+                        : response()->json(['error' => 'Incorrect request'], 200)),
                 default => response()->json(['error' => 'Incorrect request'], 200),
             };
         } catch (Exception $e) {
@@ -842,57 +844,4 @@ class ApiV2Controller extends Controller
         }
     }
 
-    /**
-     * Handle status action - route to single or multi status
-     */
-    private function handleStatusAction(Request $request): JsonResponse
-    {
-        // Check if this is a multi-status request
-        if ($request->has('orders') || $request->has('order_ids')) {
-            return $this->multiStatus($request->merge(['api_key' => $request->key]));
-        }
-
-        // Single status request
-        if ($request->has('order')) {
-            return $this->status($request->merge(['api_key' => $request->key, 'order' => $request->order]));
-        }
-
-        return response()->json(['error' => 'Incorrect request'], 200);
-    }
-
-    /**
-     * Handle cancel action - route to single or multi cancel
-     */
-    private function handleCancelAction(Request $request): JsonResponse
-    {
-        // Check if this is a multi-cancel request
-        if ($request->has('orders')) {
-            return $this->cancel($request->merge(['api_key' => $request->key]));
-        }
-
-        // Single cancel request
-        if ($request->has('order')) {
-            return $this->cancel($request->merge(['api_key' => $request->key, 'order' => $request->order]));
-        }
-
-        return response()->json(['error' => 'Incorrect request'], 200);
-    }
-
-    /**
-     * Handle refill action - route to single or multi refill
-     */
-    private function handleRefillAction(Request $request): JsonResponse
-    {
-        // Check if this is a multi-refill request
-        if ($request->has('orders')) {
-            return $this->multiRefill($request->merge(['api_key' => $request->key]));
-        }
-
-        // Single refill request
-        if ($request->has('order')) {
-            return $this->refill($request->merge(['api_key' => $request->key, 'order' => $request->order]));
-        }
-
-        return response()->json(['error' => 'Incorrect request'], 200);
-    }
 }

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\ChildPanel;
 use App\Models\User;
 use App\Library\CloudflareCustom;
+use App\Library\CpanelCustom;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\JsonResponse;
@@ -17,29 +19,109 @@ class ChildPanelController extends Controller
      */
     public function index(Request $request): View
     {
+        $currentDomain = strtolower(trim(getDomain()));
+        $filters = $request->validate([
+            'status' => ['nullable', 'in:pending,completed,suspended'],
+            'domain' => ['nullable', 'string', 'max:255'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
         $query = ChildPanel::with('user')
+            // A parent domain must only see the child panels it owns.
+            ->whereRaw('LOWER(domain) = ?', [$currentDomain])
             ->orderBy('created_at', 'desc');
 
         // Filter by status
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
         }
 
         // Filter by domain
-        if ($request->filled('domain')) {
-            $query->where('domain_panel', 'like', '%' . $request->domain . '%');
+        if (!empty($filters['domain'])) {
+            $domainFilter = strtolower(trim($filters['domain']));
+            $query->where(function ($domainQuery) use ($domainFilter): void {
+                $domainQuery
+                    ->whereRaw('LOWER(domain_panel) LIKE ?', ['%' . $domainFilter . '%'])
+                    ->orWhereRaw('LOWER(domain) LIKE ?', ['%' . $domainFilter . '%']);
+            });
         }
 
         // Filter by user
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+        if (isset($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
         }
 
-        $childPanels = $query->paginate(15);
+        $childPanels = $query->paginate($filters['per_page'] ?? 15)->withQueryString();
         $statuses = ['pending', 'completed', 'suspended'];
         $users = User::select('id', 'name', 'email')->orderBy('name')->get();
 
-        return view('admin.child-panels.index', compact('childPanels', 'statuses', 'users'));
+        $accessPages = [
+            'orders' => 'Đơn hàng dịch vụ',
+            'product_orders' => 'Đơn hàng sản phẩm',
+            'refill_services' => 'Bảo hành dịch vụ',
+            'refill_products' => 'Bảo hành sản phẩm',
+            'cancel_services' => 'Hủy dịch vụ',
+            'accounts' => 'Tài khoản khách hàng',
+            'services' => 'Dịch vụ',
+            'categories' => 'Danh mục dịch vụ',
+            'products' => 'Sản phẩm',
+            'providers' => 'Nhà cung cấp',
+            'payments' => 'Thanh toán',
+            'messages' => 'Tin nhắn',
+            'tickets' => 'Phiếu hỗ trợ',
+            'news' => 'Thông báo',
+            'coupons' => 'Mã giảm giá',
+            'reports' => 'Báo cáo',
+            'analytics' => 'Phân tích',
+            'affiliates' => 'Tiếp thị liên kết',
+            'api' => 'API',
+            'settings' => 'Cài đặt',
+            'service_sync_logs' => 'Nhật ký đồng bộ dịch vụ',
+            'activity' => 'Nhật ký hoạt động',
+            'backup' => 'Sao lưu',
+            'child-panels' => 'Quản lý website con',
+        ];
+
+        // Pages introduced by the reworked navbar (see t.html).
+        $accessPages['ticket_statistics_by_service'] = 'Ticket statistics by service';
+        $accessPages['api_v2'] = 'API v2';
+        $childNavbarPages = [
+            'orders', 'refill_services', 'cancel_services', 'accounts',
+            'services', 'categories', 'payments', 'coupons', 'messages',
+            'tickets', 'news', 'ticket_statistics_by_service', 'settings',
+            'analytics', 'reports', 'affiliates', 'api', 'api_v2', 'backup',
+        ];
+        $childPanelAccessPages = array_intersect_key($accessPages, array_flip($childNavbarPages));
+        // Render every available page in the modal so ALL and Child panel are
+        // visibly different selections. The restricted set is applied by the
+        // Child panel quick option in admin.js and by the middleware.
+        // Keep the full list in the modal so the two quick options are visibly
+        // different; the restricted list above is used for the default child
+        // package and by the JavaScript quick option.
+
+        $childPanels->getCollection()->transform(function (ChildPanel $panel) use ($currentDomain, $childPanelAccessPages): ChildPanel {
+            $access = $panel->access;
+            $accessList = is_string($access) ? json_decode($access, true) : $access;
+            // The model default is "child". Treat it as the standard child
+            // admin area instead of trying to decode it as JSON.
+            if ($access === 'child') {
+                $accessList = array_keys($childPanelAccessPages);
+            }
+            $panel->access_list = is_array($accessList) ? $accessList : [];
+            $panel->is_access_all = $access === 'all' || $accessList === ['all'];
+            $panel->panel_domain = strtolower(trim((string) $panel->domain_panel));
+            $panel->parent_domain = strtolower(trim((string) $panel->domain));
+            $panel->is_current_domain = $panel->parent_domain !== '' && $panel->parent_domain === $currentDomain;
+            $panel->status_color = match ($panel->status) {
+                'completed' => 'success',
+                'suspended' => 'danger',
+                default => 'warning',
+            };
+
+            return $panel;
+        });
+
+        return view('admin.child_panels.index', compact('childPanels', 'statuses', 'users', 'accessPages', 'currentDomain'));
     }
 
     /**
@@ -47,6 +129,7 @@ class ChildPanelController extends Controller
      */
     public function show(ChildPanel $childPanel): View
     {
+        abort_if(strtolower(trim((string) $childPanel->domain)) !== strtolower(trim(getDomain())), 404);
         $childPanel->load('user');
         $settings = $childPanel->settings ?? [];
 
@@ -58,6 +141,7 @@ class ChildPanelController extends Controller
      */
     public function updateStatus(Request $request, ChildPanel $childPanel): JsonResponse
     {
+        abort_if(strtolower(trim((string) $childPanel->domain)) !== strtolower(trim(getDomain())), 404);
         $request->validate([
             'status' => 'required|in:pending,completed,suspended'
         ]);
@@ -66,8 +150,93 @@ class ChildPanelController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Child panel status updated successfully',
+            'message' => adminMessage('status'),
             'status' => $childPanel->status
+        ]);
+    }
+
+
+    public function update(Request $request, ChildPanel $childPanel): JsonResponse
+    {
+        abort_if(strtolower(trim((string) $childPanel->domain)) !== strtolower(trim(getDomain())), 404);
+        $data = $request->validate([
+            'domain_panel' => ['nullable', 'string', 'max:255'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'price' => ['nullable', 'numeric', 'min:0'],
+            'status' => ['nullable', 'in:pending,completed,suspended'],
+            'expires_at' => ['nullable', 'date'],
+        ]);
+
+        if (array_key_exists('domain_panel', $data)) {
+            $domain = strtolower(trim((string) $data['domain_panel']));
+            $data['domain_panel'] = $domain;
+        }
+
+        if (!empty($data['expires_at'])) {
+            $data['expires_at'] = Carbon::parse($data['expires_at']);
+        }
+
+        $childPanel->update($data);
+
+        return response()->json([
+            'success' => true,
+            'message' => adminMessage('update'),
+            'panel' => $childPanel->fresh()->load('user'),
+        ]);
+    }
+
+    public function updateFromRequest(Request $request): JsonResponse
+    {
+        return $this->update($request, $this->findFromRequest($request));
+    }
+
+    public function updateStatusFromRequest(Request $request): JsonResponse
+    {
+        return $this->updateStatus($request, $this->findFromRequest($request));
+    }
+
+    public function updateAccessFromRequest(Request $request): JsonResponse
+    {
+        return $this->updateAccess($request, $this->findFromRequest($request));
+    }
+
+    public function destroyFromRequest(Request $request): JsonResponse
+    {
+        return $this->destroy($request, $this->findFromRequest($request));
+    }
+
+    public function findFromRequest(Request $request): ChildPanel
+    {
+        return ChildPanel::whereRaw('LOWER(domain) = ?', [strtolower(trim(getDomain()))])
+            ->findOrFail((int) $request->input('id'));
+    }
+
+    /** Update the admin pages available to a child panel. */
+    public function updateAccess(Request $request, ChildPanel $childPanel): JsonResponse
+    {
+        abort_if(strtolower(trim((string) $childPanel->domain)) !== strtolower(trim(getDomain())), 404);
+        $data = $request->validate([
+            'access' => ['required'],
+            'access.*' => ['string', 'max:80'],
+        ]);
+
+        $access = $data['access'];
+        if ($access === 'all' || (is_array($access) && in_array('all', $access, true))) {
+            $access = 'all';
+        } else {
+            $access = array_values(array_unique(array_filter(
+                is_array($access) ? $access : [$access],
+                static fn ($page) => is_string($page) && $page !== 'all'
+            )));
+            $access = json_encode($access, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        }
+
+        $childPanel->update(['access' => $access]);
+
+        return response()->json([
+            'success' => true,
+            'message' => adminMessage('update'),
+            'access' => $access,
         ]);
     }
 
@@ -76,11 +245,12 @@ class ChildPanelController extends Controller
      */
     public function approve(ChildPanel $childPanel): JsonResponse
     {
+        abort_if(strtolower(trim((string) $childPanel->domain)) !== strtolower(trim(getDomain())), 404);
         $childPanel->update(['status' => 'completed']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Child panel approved successfully'
+            'message' => adminMessage('status')
         ]);
     }
 
@@ -89,11 +259,12 @@ class ChildPanelController extends Controller
      */
     public function suspend(ChildPanel $childPanel): JsonResponse
     {
+        abort_if(strtolower(trim((string) $childPanel->domain)) !== strtolower(trim(getDomain())), 404);
         $childPanel->update(['status' => 'suspended']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Child panel suspended successfully'
+            'message' => adminMessage('status')
         ]);
     }
 
@@ -102,13 +273,14 @@ class ChildPanelController extends Controller
      */
     public function destroy(Request $request, ChildPanel $childPanel): JsonResponse
     {
+        abort_if(strtolower(trim((string) $childPanel->domain)) !== strtolower(trim(getDomain())), 404);
         try {
             $zoneId = $request->input('zone_id');
             $domainName = $childPanel->domain_panel;
             
             // Initialize Cloudflare and cPanel
             $cloudflare = new CloudflareCustom();
-            $cpanel = new \App\Library\CpanelCustom();
+            $cpanel = new CpanelCustom();
             
             // Check if Cloudflare is configured
             $cfConfigStatus = $cloudflare->getConfigStatus();
@@ -141,10 +313,6 @@ class ChildPanelController extends Controller
                 }
                 
                 $zoneId = $findResult['zone_id'];
-                \Log::info('Found Cloudflare zone for domain', [
-                    'domain' => $domainName,
-                    'zone_id' => $zoneId
-                ]);
             }
             
             // Delete from Cloudflare if zone_id exists
@@ -173,15 +341,6 @@ class ChildPanelController extends Controller
                     ], 400);
                 }
                 
-                \Log::info('Successfully deleted domain from Cloudflare', [
-                    'domain' => $domainName,
-                    'zone_id' => $zoneId
-                ]);
-            } else {
-                \Log::warning('Child panel deletion without Cloudflare zone_id', [
-                    'panel_id' => $childPanel->id,
-                    'domain' => $domainName ?? 'unknown'
-                ]);
             }
             
             // Delete from cPanel
@@ -199,14 +358,6 @@ class ChildPanelController extends Controller
                     ], 400);
                 }
                 
-                \Log::info('Successfully deleted domain from cPanel', [
-                    'domain' => $domainName,
-                    'result' => $cpResult
-                ]);
-            } else {
-                \Log::warning('Child panel deletion without domain name', [
-                    'panel_id' => $childPanel->id
-                ]);
             }
             
             // Delete child panel from database only after successful Cloudflare and cPanel deletion
@@ -214,15 +365,9 @@ class ChildPanelController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Child panel and domain deleted successfully from Cloudflare and cPanel'
+                'message' => adminMessage('delete')
             ]);
-        } catch (\Exception $e) {
-            \Log::error('Error deleting child panel', [
-                'panel_id' => $childPanel->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error deleting child panel: ' . $e->getMessage(),
@@ -241,10 +386,10 @@ class ChildPanelController extends Controller
                 'domain' => 'required|string|regex:/^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/'
             ]);
 
-            $domain = $request->input('domain');
+            $domain = strtolower(trim((string) $request->input('domain')));
             
             // Initialize cPanel
-            $cpanel = new \App\Library\CpanelCustom();
+            $cpanel = new CpanelCustom();
             
             // Check if cPanel is configured
             $configStatus = $cpanel->getConfigStatus();
@@ -269,14 +414,9 @@ class ChildPanelController extends Controller
                 ], 400);
             }
             
-            \Log::info('Successfully created domain in cPanel', [
-                'domain' => $domain,
-                'result' => $cpanelResult
-            ]);
-
             return response()->json([
                 'success' => true,
-                'message' => 'Domain panel created successfully in cPanel',
+                'message' => adminMessage('add'),
                 'data' => [
                     'domain' => $domain,
                     'status' => 'created'
@@ -287,13 +427,7 @@ class ChildPanelController extends Controller
                 'success' => false,
                 'message' => 'Invalid domain format: ' . implode(', ', $e->errors()['domain'] ?? ['Unknown error'])
             ], 422);
-        } catch (\Exception $e) {
-            \Log::error('Error creating domain panel', [
-                'domain' => $request->input('domain'),
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error creating domain panel: ' . $e->getMessage(),
@@ -307,6 +441,7 @@ class ChildPanelController extends Controller
      */
     public function getSettings(ChildPanel $childPanel): JsonResponse
     {
+        abort_if(strtolower(trim((string) $childPanel->domain)) !== strtolower(trim(getDomain())), 404);
         return response()->json([
             'success' => true,
             'settings' => $childPanel->settings ?? []
@@ -318,6 +453,7 @@ class ChildPanelController extends Controller
      */
     public function updateSettings(Request $request, ChildPanel $childPanel): JsonResponse
     {
+        abort_if(strtolower(trim((string) $childPanel->domain)) !== strtolower(trim(getDomain())), 404);
         $settings = $childPanel->settings ?? [];
         $settings = array_merge($settings, $request->all());
         
@@ -325,7 +461,7 @@ class ChildPanelController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Settings updated successfully',
+            'message' => adminMessage('update'),
             'settings' => $childPanel->settings
         ]);
     }

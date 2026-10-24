@@ -9,6 +9,8 @@ use App\Models\Service;
 use App\Models\ApiProvider;
 use App\Models\PaymentMethod;
 use App\Models\User;
+use App\Models\Product;
+use App\Models\ProductOrder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -22,6 +24,7 @@ class ReportController extends Controller
         $years       = [$currentYear + 1, $currentYear, $currentYear - 1]; //hiển thị năm trước ,nằm hiện tại + 1
 
         $services = Service::select('id', 'name')
+            ->where('domain', getDomain())
             ->where('status', true)
             ->orderBy('id')
             ->get()
@@ -30,8 +33,9 @@ class ReportController extends Controller
                 'name' => $s->id . ' - ' . (is_array($s->name) ? ($s->name['en'] ?? reset($s->name)) : $s->name),
             ]);
 
-        $providers      = ApiProvider::select('id', 'name')->where('status', true)->orderBy('name')->get();
-        $paymentMethods = PaymentMethod::select('id', 'name')->where('status', true)->orderBy('name')->get();
+        $providers      = ApiProvider::select('id', 'name')->where('domain', getDomain())->where('status', true)->orderBy('name')->get();
+        $paymentMethods = PaymentMethod::select('id', 'name')->where('domain', getDomain())->where('status', true)->orderBy('name')->get();
+        $products = Product::select('id', 'name')->where('domain', getDomain())->where('status', true)->orderBy('id')->get();
 
         // Raw payments — filter theo domain
         $rawPayments = Payment::select(
@@ -96,8 +100,8 @@ class ReportController extends Controller
             ->where('domain', getDomain())
             ->pluck('username', 'id');
 
-        return view('adminpanel.reports.index', compact(
-            'years', 'services', 'providers', 'paymentMethods',
+        return view('admin.reports.index', compact(
+            'years', 'services', 'providers', 'paymentMethods', 'products',
             'rawPayments', 'rawOrders', 'methodNames', 'serviceNames', 'userNames',
             'currentYear'
         ));
@@ -106,6 +110,123 @@ class ReportController extends Controller
     public function analytics()
     {
         return view('admin.reports.analytics');
+    }
+
+    public function reports(Request $request)
+    {
+        $data = $request->validate([
+            'year' => ['required', 'integer', 'min:2020', 'max:2100'],
+            'type' => ['nullable', 'integer', 'between:0,3'],
+            'method' => ['nullable'],
+            'order_type' => ['nullable', 'integer', 'between:0,3'],
+            'order_status' => ['nullable', 'array'],
+            'order_status.*' => ['string'],
+            'provider' => ['nullable'],
+            'account' => ['nullable', 'integer'],
+            'service' => ['nullable', 'array'],
+            'service.*' => ['integer'],
+            'product' => ['nullable', 'array'],
+            'product.*' => ['integer'],
+        ]);
+
+        $type = (int) ($data['type'] ?? 0);
+        if ($type === 0) {
+            $query = Payment::query()
+                ->where('domain', getDomain())
+                ->whereYear('created_at', $data['year'])
+                ->whereRaw('LOWER(status) = ?', ['completed']);
+
+            if (!empty($data['method']) && (string) $data['method'] !== '0') {
+                $query->where('payment_method_id', $data['method']);
+            }
+            if (!empty($data['account'])) {
+                $query->where('user_id', $data['account']);
+            }
+
+            return response()->json($query
+                ->selectRaw('MONTH(created_at) as month, DAY(created_at) as day, SUM(total_amount) as total')
+                ->groupByRaw('MONTH(created_at), DAY(created_at)')
+                ->orderBy('month')->orderBy('day')->get());
+        }
+
+        if ($type === 3) {
+            $query = ProductOrder::query()
+                ->where('product_orders.domain', getDomain())
+                ->whereYear('product_orders.created_at', $data['year']);
+            if (!empty($data['account'])) $query->where('product_orders.user_id', $data['account']);
+            if (!empty($data['order_status'])) $query->whereIn('product_orders.status', $data['order_status']);
+            if (!empty($data['product'])) $query->whereIn('product_orders.product_id', $data['product']);
+            if (!empty($data['provider'])) {
+                $query->join('products', 'products.id', '=', 'product_orders.product_id')
+                    ->where('products.api_provider_id', $data['provider']);
+            }
+            $metric = match ((int) ($data['order_type'] ?? 0)) {
+                1 => 'COUNT(*)', 2 => 'SUM(product_orders.quantity)',
+                3 => 'SUM(product_orders.charge - product_orders.amount)',
+                default => 'SUM(product_orders.charge)',
+            };
+
+            return response()->json($query
+                ->selectRaw("MONTH(product_orders.created_at) as month, DAY(product_orders.created_at) as day, {$metric} as total")
+                ->groupByRaw('MONTH(product_orders.created_at), DAY(product_orders.created_at)')
+                ->orderBy('month')->orderBy('day')->get());
+        }
+
+        $query = Order::query()
+            ->where('orders.domain', getDomain())
+            ->whereYear('orders.created_at', $data['year']);
+
+        if (!empty($data['account'])) {
+            $query->where('orders.user_id', $data['account']);
+        }
+        if (!empty($data['provider']) && (string) $data['provider'] !== '0') {
+            $query->where('orders.provider_id', $data['provider']);
+        }
+        if (!empty($data['order_status'])) {
+            $query->whereIn('orders.status', $data['order_status']);
+        }
+        if (!empty($data['service'])) {
+            $query->whereIn('orders.service_id', $data['service']);
+        }
+
+        $metric = match ((int) ($data['order_type'] ?? 0)) {
+            1 => 'COUNT(*)',
+            2 => 'SUM(orders.quantity)',
+            3 => 'SUM(orders.charge - (COALESCE(services.rate_original, 0) * orders.quantity / 1000))',
+            default => 'SUM(orders.charge)',
+        };
+
+        if ((int) ($data['order_type'] ?? 0) === 3) {
+            $query->leftJoin('services', 'services.id', '=', 'orders.service_id');
+        }
+
+        return response()->json($query
+            ->selectRaw("MONTH(orders.created_at) as month, DAY(orders.created_at) as day, {$metric} as total")
+            ->groupByRaw('MONTH(orders.created_at), DAY(orders.created_at)')
+            ->orderBy('month')->orderBy('day')->get());
+    }
+
+    public function paymentReports(Request $request)
+    {
+        $data = $request->validate([
+            'month' => ['required', 'integer', 'between:1,12'],
+            'year' => ['required', 'integer', 'min:2020', 'max:2100'],
+        ]);
+
+        $base = Payment::query()->where('payments.domain', getDomain())
+            ->whereYear('payments.created_at', $data['year'])
+            ->whereMonth('payments.created_at', $data['month'])
+            ->whereRaw('LOWER(payments.status) = ?', ['completed']);
+
+        $byType = (clone $base)
+            ->leftJoin('payment_methods', 'payment_methods.id', '=', 'payments.payment_method_id')
+            ->selectRaw("COALESCE(payment_methods.name, 'Other') as name, SUM(payments.total_amount) as total")
+            ->groupBy('payment_methods.id', 'payment_methods.name')->get();
+        $byDay = (clone $base)
+            ->selectRaw('DAY(payments.created_at) as day, SUM(payments.total_amount) as total')
+            ->groupByRaw('DAY(payments.created_at)')->orderBy('day')->get();
+
+        return response()->json(['type' => $byType, 'day' => $byDay]);
     }
 
     public function export()

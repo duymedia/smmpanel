@@ -1,286 +1,279 @@
-@extends('clients.theme-default.layouts.app')
-
-@section('title', __('orders.title'))
+﻿@extends('clients.theme-default.layouts.app')
+@section('title', 'Orders')
 
 @section('content')
-    <!-- Main variables *content* -->
-    <div id="block_40">
-        <div class="block-bg"></div>
-        <div class="container-fluid">
-            <div class="orders-history ">
-                <!-- Error Alert Message -->
-                <div class="alert alert-dismissible mb-3 alert-danger" role="alert" id="js-order-alert-error"
-                    style="display: none;">
-                    <button type="button" class="close" data-hide="alert" aria-label="Close">
-                        <span aria-hidden="true">×</span>
-                    </button>
-                    <div class="text"></div>
-                </div>
+    <style>
+        .table-orders td {
+            line-height: 1.5;
+        }
 
-                <div class="row">
-                    <div class="col">
-                        <div class="orders-history__margin-tab">
-                            <div class="component_status_tabs">
-                                <div class="">
-                                    <ul class="nav nav-pills tab">
-                                        <li class="nav-item">
-                                            <a class="nav-link {{ !request('status') || request('status') === 'all' ? 'active' : '' }}"
-                                                href="/orders">{{ __('orders.all') ?? 'All' }}</a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {{ request('status') === 'pending' ? 'active' : '' }}"
-                                                href="/orders?status=pending">{{ __('orders.pending') }}</a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {{ request('status') === 'inprogress' ? 'active' : '' }}"
-                                                href="/orders?status=inprogress">{{ __('orders.processing') }}</a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {{ request('status') === 'completed' ? 'active' : '' }}"
-                                                href="/orders?status=completed">{{ __('orders.completed') }}</a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {{ request('status') === 'partial' ? 'active' : '' }}"
-                                                href="/orders?status=partial">{{ __('orders.partial') }}</a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {{ request('status') === 'processing' ? 'active' : '' }}"
-                                                href="/orders?status=processing">{{ __('orders.processing') }}</a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link {{ request('status') === 'canceled' ? 'active' : '' }}"
-                                                href="/orders?status=canceled">{{ __('orders.canceled') }}</a>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
+        .wrap {
+            word-break: break-all;
+            overflow-wrap: anywhere;
+        }
+
+        #table-orders td:nth-child(2) {
+            max-width: 260px;
+            min-width: 120px;
+        }
+    </style>
+    <div class="content flex-column-fluid" id="kt_content">
+        @include('clients.theme-default.layouts.toolbar', [
+            'title' => 'Orders',
+            'langKey' => 'menu::My orders',
+        ])
+
+        <div class="post" id="kt_post">
+            {{-- Filter bar --}}
+            <div class="card mb-4">
+                <div class="card-body py-3 px-4">
+                    <div class="row g-2 align-items-center">
+                        {{-- Status: navigate to /orders/{status} --}}
+                        <div class="col-12 col-md-2">
+                            <select id="sl-status" class="form-select form-select-sm form-select-solid"
+                                onchange="_orders.on.change.status(this.value)" data-kt-select2="true"
+                                data-control="select2" data-hide-search="true">
+                                <option value="" data-url="{{ route('clients.orders.index') }}"
+                                    data-lang="status::All">All status</option>
+                                @foreach ($orderStatusOptions as $statusOption)
+                                    <option value="{{ $statusOption['value'] }}"
+                                        data-lang="status::{{ $statusOption['label'] }}"
+                                        {{ request()->segment(2) === $statusOption['value'] ? 'selected' : '' }}>
+                                        {{ $statusOption['label'] }}
+                                    </option>
+                                @endforeach
+                            </select>
                         </div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-12">
-                        <div class="orders-history__margin-search component_card">
-                            <div class="card">
-                                <div class="component_form_group component_button_search">
-                                    <div class="">
-                                        <form action="/orders" method="get" id="history-search">
-                                            <div class="input-group">
-                                                <input type="text" name="search" class="form-control"
-                                                    value="{{ request('search') }}" placeholder="Search">
-                                                <div class="input-group-append">
-                                                    <button class="btn btn-big-secondary" type="submit">
-                                                        <span class="fas fa-search"></span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </form>
+
+                        {{-- Date range --}}
+                        <div class="col-12 col-md-3">
+                            <div class="input-group input-group-sm input-group-solid">
+                                <span class="input-group-text">
+                                    <div class="form-check form-check-custom form-check-sm">
+                                        <input id="cb-date" class="form-check-input w-15px h-15px cb-date" type="checkbox"
+                                            {{ request('start') || request('end') ? 'checked' : '' }}>
                                     </div>
-                                </div>
+                                </span>
+                                <input type="text" id="ipt-date" class="form-control ipt-date" readonly
+                                    value="{{ request('start') && request('end') ? request('start') . ' - ' . request('end') : '' }}"
+                                    placeholder="{{ now()->format('Y/m/01') }} - {{ now()->format('Y/m/d') }}">
                             </div>
                         </div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col">
-                        <div class="orders-history__margin-table">
-                            <div class="table-bg component_table ">
-                                <div class="table-wr table-responsive">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>{{ __('orders.order_id') }}</th>
-                                                <th>{{ __('orders.created_at') }}</th>
-                                                <th>{{ __('orders.link') }}</th>
-                                                <th>{{ __('newOrder.charge') }}</th>
-                                                <th class="nowrap">{{ __('orders.start_count') }}</th>
-                                                <th>{{ __('orders.quantity') }}</th>
-                                                <th>{{ __('orders.service') }}</th>
-                                                <th>{{ __('orders.status') }}</th>
-                                                <th>{{ __('orders.remains') }}</th>
-                                                <th>&nbsp;</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @forelse($orders as $order)
-                                                <tr>
-                                                    <td data-label="{{ __('orders.order_id') }}">{{ $order->id }}</td>
-                                                    <td data-label="{{ __('orders.created_at') }}">
-                                                        <span
-                                                            class="nowrap">{{ $order->created_at->format('Y-m-d') }}</span>
-                                                        <span
-                                                            class="nowrap">{{ $order->created_at->format('H:i:s') }}</span>
-                                                    </td>
-                                                    <td data-label="{{ __('orders.link') }}" class="table-link">
-                                                        <a href="/anon.ws?r={{ urlencode($order->link) }}" target="_blank"
-                                                            title="{{ $order->link }}">
-                                                            {{ Str::limit($order->link, 50) }}
-                                                        </a>
-                                                        @if ($order->comment && $order->comment !== '1')
-                                                            <a href="#" data-toggle="modal" data-target="#order-details-{{ $order->id }}" title="View additional data">
-                                                                <i class="far fa-file-alt"></i>
-                                                            </a>
-                                                            <div class="modal fade" tabindex="-1" id="order-details-{{ $order->id }}" aria-hidden="true">
-                                                                <div class="modal-dialog" role="document">
-                                                                    <div class="modal-content">
-                                                                        <div class="modal-body">
-                                                                            <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                                                                                <i class="fas fa-times"></i>
-                                                                            </button>
-                                                                            <div>
-                                                                                <h3>{{ __('orders.additional_data') ?? 'Additional data' }}</h3>
-                                                                            </div>
-                                                                            <div>
-                                                                                <div class="form-group">
-                                                                                    <label for="details-{{ $order->id }}">{{ __('orders.comments') ?? 'Comments' }}</label>
-                                                                                    <textarea id="details-{{ $order->id }}" class="form-control" rows="5" disabled="">{{ $order->comment }}</textarea>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        @endif
-                                                    </td>
-                                                    <td data-label="{{ __('newOrder.charge') }}">
-                                                        {{ $order->charge_display }}
-                                                    </td>
-                                                    <td data-label="{{ __('orders.start_count') }}" class="nowrap">
-                                                        {{ $order->start_count ?? '' }}</td>
-                                                    <td data-label="{{ __('orders.quantity') }}">{{ $order->quantity }}</td>
-                                                    <td data-label="{{ __('orders.service') }}" class="table-service">
-                                                        {{ $order->service_id }} — {{ $order->service_name }}
-                                                    </td>
-                                                    <td data-label="{{ __('orders.status') }}" nowrap="">
-                                                        {{ getOrderStatusText($order->status) }}
-                                                        @if(in_array($order->status, ['canceled', 'cancelled']))
-                                                            <i class="fas fa-comment-alt-lines"
-                                                                data-toggle="tooltip" data-placement="top"
-                                                                title="This order has been canceled and refunded."></i>
-                                                        @endif
-                                                    </td>
-                                                    <td data-label="{{ __('orders.remains') }}">{{ $order->remains }}</td>
-                                                    <td data-label="" class="orders-history-actions" nowrap="nowrap">
-                                                        @if ($order->refill == 1 && $order->status === 'completed')
-                                                            <div class="d-inline-block component_button_refill">
-                                                                <div class="">
-                                                                    <button class="btn btn-actions order-action-btn"
-                                                                        data-href="{{ route('clients.orders.refill', $order->id) }}"
-                                                                        data-action="refill" title="Refill this order">
-                                                                        Refill
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        @endif
-                                                        @if ($order->cancel == 1 && !in_array($order->status, ['canceled', 'completed', 'partial']))
-                                                            <div class="d-inline-block component_button_cancel">
-                                                                <div class="">
-                                                                    <button class="btn btn-actions order-action-btn"
-                                                                        data-href="{{ route('clients.orders.cancel', $order->id) }}"
-                                                                        data-action="cancel" title="Cancel this order">
-                                                                        Cancel
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        @endif
-                                                    </td>
-                                                </tr>
-                                            @empty
-                                                <tr>
-                                                    <td colspan="10" class="text-center py-4">
-                                                        <p class="text-muted">No orders found</p>
-                                                    </td>
-                                                </tr>
-                                            @endforelse
-                                        </tbody>
-                                    </table>
-                                </div>
+
+                        {{-- Search type --}}
+                        <div class="col-12 col-md-2">
+                            <select id="sl-type" class="form-select form-select-sm form-select-solid"
+                                data-kt-select2="true" data-control="select2" data-hide-search="true">
+                                <option value="0" data-lang="Search type">Search type</option>
+                                <option value="1" data-lang="Order ID"
+                                    {{ request('type') === '1' ? 'selected' : '' }}>Order ID</option>
+                                <option value="2" data-lang="Link"
+                                    {{ request('type') === '2' ? 'selected' : '' }}>Link</option>
+                                <option value="3" data-lang="Service ID"
+                                    {{ request('type') === '3' ? 'selected' : '' }}>Service ID</option>
+                            </select>
+                        </div>
+
+                        {{-- Keyword + Search --}}
+                        <div class="col-12 col-md-4">
+                            <div class="input-group input-group-sm input-group-solid">
+                                <input type="text" id="ipt-keyword" class="form-control" placeholder="Keyword"
+                                    data-page="/services" data-lang="Keyword" value="{{ request('keyword') }}">
+                                <button type="button" class="btn btn-primary btn-sm" id="btn-search"
+                                    onclick="_orders.on.click.search()" data-lang="button::Search">Search</button>
                             </div>
                         </div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-5">
-                        <nav class="component_pagination">
-                            <div class="">
-                                {{ $orders->links('pagination::bootstrap-4') }}
-                            </div>
-                        </nav>
+                        <div class="col-12 col-md-1">
+                            <button type="button" class="btn btn-sm btn-info w-100" onclick="_orders.on.click.export()"
+                                data-lang="Export">Export</button>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <div class="text-end mb-2">
+                <a class="text-muted fst-italic fs-8 text-hover-primary" href="/orders_old">
+                    * <span data-lang="Access older data">Access older data</span>
+                </a>
+            </div>
+
+            {{-- Orders list --}}
+            <div class="card card-orders border-0 shadow-sm">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table
+                            class="table table-striped table-orders table-row-bordered table-row-gray-200 gs-3 gy-2 gx-2 fs-7 mb-0"
+                            id="table-orders">
+                            <tbody>
+                                {{-- Bulk action header --}}
+                                <tr>
+                                    <th colspan="10">
+                                        <div class="form-check form-check-custom form-check-sm">
+                                            <input class="form-check-input h-15px w-15px cb-all" type="checkbox"
+                                                onchange="_orders.on.change.cbselectallOrder(this.checked)">
+                                            <label class="ms-3 fs-7 count-selected"></label>
+                                            <button class="btn btn-primary btn-sm px-2 py-1 ms-4 btn-action" type="button"
+                                                onclick="_orders.on.click.bulkAction('Copy ID')" style="display:none"
+                                                data-lang="Copy ID">Copy ID</button>
+                                            <button class="btn btn-info btn-sm px-2 py-1 ms-2 btn-action" type="button"
+                                                onclick="_orders.on.click.bulkAction('Refill')"
+                                                style="display:none" data-lang="Refill">Refill</button>
+                                        </div>
+                                    </th>
+                                </tr>
+
+                                @forelse ($orders as $order)
+                                    <tr class="bg-lighten">
+                                        <td width="1" class="text-nowrap ps-3">
+                                            <div class="form-check form-check-custom form-check-sm">
+                                                <input class="form-check-input h-15px w-15px cb-select" type="checkbox"
+                                                    onchange="_orders.on.change.cbselectOrder(this.checked)"
+                                                    value="{{ $order->id }}">
+                                                <span class="ms-2 fw-bolder ls-1">{{ $order->id }}</span>
+                                            </div>
+                                            <p class="m-0 fw-bolder {{ $order->status_class }}">
+                                                <span class="text-uppercase"
+                                                    data-lang="status::{{ $order->display_status }}">{{ $order->display_status }}</span>
+                                            </p>
+                                            <p class="m-0 fs-8 text-gray-500">{{ $order->created_at }}</p>
+                                            <p class="m-0 fs-8 text-gray-500">{{ $order->updated_at }}</p>
+                                            @if (serviceOn($config, 'service_allow_report'))
+                                                <button class="btn btn-danger hover-scale fs-9 px-2 py-0 mt-1"
+                                                    onclick="_orders.on.click.showModalReport({{ $order->id }})"
+                                                    data-lang="Report">Report</button>
+                                            @endif
+                                        </td>
+
+                                        <td>
+                                            <div class="d-flex flex-column">
+                                                <p class="m-0 text-gray-700">
+                                                    @if ($order->service_icon_url)
+                                                        <img src="{{ $order->service_icon_url }}" alt=""
+                                                            class="w-20px h-20px rounded-1 me-1"
+                                                            style="object-fit:cover;vertical-align:middle">
+                                                    @elseif ($order->service_icon_class)
+                                                        <i class="{{ $order->service_icon_class }} me-1"></i>
+                                                    @else
+                                                        <i class="fa-solid fa-star text-warning me-1 fs-9"></i>
+                                                    @endif
+                                                    <span class="text-gray-900 fw-bold">{{ $order->service_id }}</span>
+                                                    @if ($order->has_service_name)
+                                                        <span class="text-muted ms-1">| {{ $order->service_name }}</span>
+                                                    @endif
+                                                </p>
+                                                <p class="m-0 fs-7 fst-italic">
+                                                    <a class="text-gray-500 text-hover-primary" target="_blank"
+                                                        href="{{ $order->link }}">{{ $order->link }}</a>
+                                                </p>
+                                            </div>
+                                        </td>
+
+
+                                        <td width="1">
+                                            <p class="m-0 fw-bold text-nowrap">
+                                                <span class="text-gray-600 fw-normal fs-8"
+                                                    data-lang="Charge">Charge</span>:
+                                                <a href="/cashflow?id={{ $order->id }}">
+                                                    <span class="text-primary">{{ $order->charge_display }}</span>
+                                                </a>
+                                            </p>
+                                            <p class="m-0 fw-bold text-nowrap">
+                                                <span class="text-gray-600 fw-normal fs-8"
+                                                    data-lang="Quantity">Quantity</span>:
+                                                {{ $order->quantity_display }}
+                                            </p>
+                                            <p class="m-0 fw-bold text-nowrap">
+                                                <span class="text-gray-600 fw-normal fs-8"
+                                                    data-lang="Start count">Start
+                                                    count</span>: {{ $order->start_count ?? 0 }}
+                                            </p>
+                                            <p class="m-0 fw-bold text-nowrap">
+                                                <span class="text-gray-600 fw-normal fs-8"
+                                                    data-lang="Remains">Remains</span>: {{ $order->remains ?? 0 }}
+                                            </p>
+                                        </td>
+
+                                        <td width="1">
+                                            <div class="d-flex align-items-end flex-column text-nowrap">
+                                                <div class="mb-auto d-flex flex-column">
+                                                    @if ($order->refill == 1 && $order->status === 'completed')
+                                                        <button
+                                                            class="btn btn-info hover-scale fs-8 px-3 py-0 order-action-btn"
+                                                            onclick="_orders.on.click.refill({{ $order->id }})"
+                                                            data-lang="Request refill">Request
+                                                            refill</button>
+                                                    @endif
+                                                    @if ($order->cancel == 1 && $order->cancel_status !== 'pending' && !in_array($order->status, ['canceled', 'completed', 'partial']))
+                                                        <button
+                                                            class="btn btn-warning hover-scale fs-8 px-3 py-0 mt-1 order-action-btn"
+                                                            onclick="_orders.on.click.requestCancel({{ $order->id }})"
+                                                            data-lang="Request cancel">Request cancel</button>
+                                                    @endif
+                                                    <a target="_blank"
+                                                        class="btn btn-primary hover-scale fs-8 px-3 py-0 mt-1"
+                                                        href="/new?service={{ $order->service_id }}"
+                                                        data-lang="Reorder">Reorder</a>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted py-5">
+                                            <i class="bi bi-inbox fs-2x d-block mb-2"></i>
+                                            <span data-lang="No orders found">No orders found</span>
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {{-- Pagination --}}
+                    @if ($orders->hasPages())
+                        <div class="d-flex justify-content-center py-4">
+                            {{ $orders->links() }}
+                        </div>
+                    @endif
+                </div>
+            </div>
         </div>
+    </div>
 
-        <script>
-            const alertErrorDiv = document.getElementById('js-order-alert-error');
+    <div class="modal fade" tabindex="-1" id="modal-ticket-order">
+        <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+            <div class="modal-content">
+                <div class="modal-header py-3">
+                    <h5 class="modal-title" data-lang="Report Order">Report Order</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-5">
+                        <label class="required form-label" data-lang="Order ID">Order ID</label>
+                        <input type="text" class="form-control ipt-order-id" disabled>
+                    </div>
+                    <div class="mb-5">
+                        <label class="required form-label" data-lang="Request">Request</label>
+                        <select class="form-select form-select-solid sl-request" data-kt-select2="true"
+                            data-control="select2" data-hide-search="true"
+                            data-dropdown-parent="#modal-ticket-order">
+                            <option value="0" data-lang="Please choose">Please choose</option>
+                            <option value="1" data-lang="Cancel">Cancel</option>
+                            <option value="2" data-lang="Refill">Refill</option>
+                            <option value="3" data-lang="Speed up">Speed up</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-icon w-100"
+                        onclick="_orders.on.click.report(document.querySelector('.ipt-order-id').value, document.querySelector('.sl-request').value)"
+                        data-lang="button::Request">Request</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-            document.querySelectorAll('.order-action-btn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    e.preventDefault();
+    <script>var CURRENT_PATH = 'orders';</script>
+@endsection
 
-                    const action = this.dataset.action;
-                    const href = this.dataset.href;
-                    const td = this.closest('td');
-                    const btn = this;
-
-                    // Disable button during request
-                    btn.disabled = true;
-                    btn.style.opacity = '0.6';
-
-                    fetch(href)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === 'success') {
-                                // Replace button with text using class
-                                td.innerHTML =
-                                    `<span class="orders-history-actions-text">${data.btn_text}</span>`;
-                            } else {
-                                // Show error alert
-                                const errorMsg = data.message || 'An error occurred';
-                                showErrorAlert(errorMsg);
-
-                                btn.disabled = false;
-                                btn.style.opacity = '1';
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            showErrorAlert('An error occurred while processing your request');
-
-                            btn.disabled = false;
-                            btn.style.opacity = '1';
-                        });
-                });
-            });
-
-            /**
-             * Show error alert message
-             */
-            function showErrorAlert(message) {
-                if (alertErrorDiv) {
-                    const textDiv = alertErrorDiv.querySelector('.text');
-                    if (textDiv) {
-                        textDiv.innerHTML = message;
-                    }
-
-                    alertErrorDiv.style.display = 'block';
-
-                    // Scroll to alert
-                    alertErrorDiv.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center'
-                    });
-                }
-            }
-
-            // Handle close button clicks
-            document.addEventListener('click', function(e) {
-                if (e.target.matches('.close[data-hide="alert"]') || e.target.closest(
-                        '.close[data-hide="alert"]')) {
-                    const alertDiv = e.target.closest('.alert');
-                    if (alertDiv) {
-                        alertDiv.style.display = 'none';
-                    }
-                }
-            });
-        </script>
-    @endsection
+@push('scripts')
+    <script>_orders.init();</script>
+@endpush

@@ -17,6 +17,8 @@ return new class extends Migration
             $table->foreignId('platform_id')->constrained('platforms')->onDelete('cascade');
             $table->json('name');
             $table->string('image')->nullable();
+            // 0: default/list view, 1: table view
+            $table->unsignedTinyInteger('display')->default(0);
             $table->integer('position')->default(0);
             $table->boolean('status')->default(true);
             $table->timestamps();

@@ -226,7 +226,7 @@
                                             <div class="d-flex">
                                                 <div class="w-100">
                                                     <input type="text" class="form-control" id="api_key"
-                                                        value="{{ Auth::user()->api_key }}" readonly=""
+                                                        value="{{ str_repeat('*', strlen((string) Auth::user()->api_key)) }}" readonly=""
                                                         data-original-title="" title="">
                                                 </div>
                                                 <div class="account-button-right">
@@ -319,8 +319,9 @@
                 .then(data => {
                     if (data.success) {
                         if (formId === 'apiKeyForm') {
-                            document.getElementById('api_key').value = data.api_key;
-                            showAlert('API key has been generated:<br>' + data.api_key, 'success', alertContainerId);
+                            const key = String(data.api_key || '');
+                            document.getElementById('api_key').value = '*'.repeat(key.length);
+                            showAlert('API key has been generated:<br>' + key, 'success', alertContainerId);
                         } else {
                             showAlert('Changes saved successfully', 'success', alertContainerId);
                         }

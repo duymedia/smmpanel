@@ -13,21 +13,34 @@ class ActivityLogController extends Controller
      */
     public function index(Request $request)
     {
-        $query = ActivityLog::with('user')->orderBy('id', 'desc');
+        $filters = $request->validate([
+            'type' => ['nullable', 'string', 'max:100'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'search' => ['nullable', 'string', 'max:100'],
+            'date' => ['nullable', 'date'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        // Select only the columns used by the activity page to avoid loading
+        // potentially large metadata columns for every row.
+        $query = ActivityLog::query()
+            ->select(['id', 'user_id', 'type', 'activity', 'created_at'])
+            ->with('user:id,name,email,username')
+            ->orderByDesc('id');
 
         // Filter by specific type
-        if ($request->filled('type')) {
-            $query->where('type', $request->type);
+        if (!empty($filters['type'])) {
+            $query->where('type', $filters['type']);
         }
 
         // Filter by user
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+        if (isset($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
         }
 
         // Search functionality
-        if ($request->filled('search')) {
-            $search = $request->search;
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
             $query->where(function($q) use ($search) {
                 $q->where('activity->ip_address', 'like', "%{$search}%")
                   ->orWhere('activity->user_agent', 'like', "%{$search}%")
@@ -40,11 +53,11 @@ class ActivityLogController extends Controller
         }
 
         // Filter by date
-        if ($request->filled('date')) {
-            $query->whereDate('created_at', $request->date);
+        if (!empty($filters['date'])) {
+            $query->whereDate('created_at', $filters['date']);
         }
 
-        $logs = $query->paginate(50)->withQueryString();
+        $logs = $query->paginate($filters['per_page'] ?? 50)->withQueryString();
 
         return view('admin.activity.index', compact('logs'));
     }

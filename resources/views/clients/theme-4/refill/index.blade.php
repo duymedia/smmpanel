@@ -1,145 +1,161 @@
 @extends('clients.theme-4.layouts.app')
-@section('title', 'Refill')
+
+@section('title', __('refill.title'))
 
 @section('content')
     @php
         $currentStatus = request()->route('status') ?? request('status', '');
     @endphp
-    <div class="content flex-column-fluid" id="kt_content">
-        @include('clients.theme-4.layouts.toolbar', ['title' => 'Refill', 'langKey' => 'refill.title'])
-        <div class="post" id="kt_post">
-
-            <div class="card mb-5">
-                <div class="card-body p-3">
-                    <form method="GET" action="#" id="form-filter">
-                        <div class="row g-5">
-                            <div class="col-lg-3 col-6">
-                                <select id="sl-status" class="form-select form-select-sm form-select-solid">
-                                    <option value=""           {{ $currentStatus === '' ? 'selected' : '' }} data-lang="orders.all_status">All status</option>
-                                    <option value="pending"    {{ $currentStatus === 'pending'    ? 'selected' : '' }} data-lang="status::pending">Pending</option>
-                                    <option value="inprogress" {{ $currentStatus === 'inprogress' ? 'selected' : '' }} data-lang="status::in_progress">In progress</option>
-                                    <option value="completed"  {{ $currentStatus === 'completed'  ? 'selected' : '' }} data-lang="status::completed">Completed</option>
-                                    <option value="rejected"   {{ $currentStatus === 'rejected'   ? 'selected' : '' }} data-lang="status::rejected">Rejected</option>
-                                </select>
-                            </div>
-                            <div class="col-lg-3 col-6">
-                                <select id="sl-type" class="form-select form-select-sm form-select-solid">
-                                    <option value="0" {{ request('type', '0') == '0' ? 'selected' : '' }} data-lang="refill.search_type">Search type</option>
-                                    <option value="1" {{ request('type') == '1' ? 'selected' : '' }} data-lang="refill.refill_id_type">Refill ID</option>
-                                    <option value="2" {{ request('type') == '2' ? 'selected' : '' }} data-lang="refill.order_id_type">Order ID</option>
-                                </select>
-                            </div>
-                            <div class="col-lg-6 col-12">
-                                <div class="input-group input-group-sm input-group-solid">
-                                    <input type="text" id="ipt-keyword" class="form-control"
-                                        placeholder="Keyword" data-lang="refill.keyword"
-                                        value="{{ request('keyword', request('search')) }}">
-                                    <button type="submit" class="btn btn-sm btn-primary" data-lang="button::search">Search</button>
+    <!-- Main variables *content* -->
+    <div id="block_72">
+        <div class="block-bg"></div>
+        <div class="container-fluid">
+            <div class="refill ">
+                <div class="row">
+                    <div class="col">
+                        <div class="refill__margin-tab">
+                            <div class="component_status_tabs">
+                                <div class="">
+                                    <ul class="nav nav-pills tab">
+                                        <li class="nav-item">
+                                            <a class="nav-link {{ $currentStatus === '' || $currentStatus === 'all' ? 'active' : '' }}"
+                                                href="/refill">{{ __('common.all') ?? 'All' }}</a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {{ $currentStatus === 'pending' ? 'active' : '' }}"
+                                                href="/refill/pending">{{ __('refill.pending') }}</a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {{ $currentStatus === 'inprogress' ? 'active' : '' }}"
+                                                href="/refill/inprogress">{{ __('refill.inprogress') }}</a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {{ $currentStatus === 'completed' ? 'active' : '' }}"
+                                                href="/refill/completed">{{ __('refill.completed') }}</a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {{ $currentStatus === 'rejected' ? 'active' : '' }}"
+                                                href="/refill/rejected">{{ __('refill.rejected') }}</a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {{ $currentStatus === 'error' ? 'active' : '' }}"
+                                                href="/refill/error">{{ __('refill.error') }}</a>
+                                        </li>
+                                    </ul>
                                 </div>
                             </div>
                         </div>
-                    </form>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table align-middle table-row-dashed fs-7 gy-3 gs-10">
-                            <thead class="text-start text-muted bg-light fw-bold fs-7 text-uppercase gs-0">
-                                <tr>
-                                    <th data-lang="refill.refill_id">Refill ID</th>
-                                    <th data-lang="refill.order_id">Order ID</th>
-                                    <th data-lang="refill.service">Service</th>
-                                    <th data-lang="refill.link">Link</th>
-                                    <th data-lang="refill.created">Created</th>
-                                    <th data-lang="refill.status">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse ($refills as $refill)
-                                    @php
-                                        $serviceName = $refill->service->name ?? 'N/A';
-                                        if (is_array($serviceName)) {
-                                            $lang = auth()->user()->lang ?? 'en';
-                                            $serviceName = $serviceName[$lang] ?? ($serviceName['en'] ?? reset($serviceName) ?? 'N/A');
-                                        }
-                                        $statusClass = match($refill->refill_status ?? 'pending') {
-                                            'completed'  => 'badge-light-success',
-                                            'rejected'   => 'badge-light-danger',
-                                            'inprogress' => 'badge-light-warning',
-                                            default      => 'badge-light-primary',
-                                        };
-                                    @endphp
-                                    <tr>
-                                        <td class="ls-1">{{ $refill->id }}</td>
-                                        <td class="ls-1 fw-bold">
-                                            <a href="/orders?search={{ $refill->orders_api }}" class="text-gray-800 text-hover-primary">
-                                                {{ $refill->orders_api }}
-                                            </a>
-                                        </td>
-                                        <td class="text-gray-700">{{ $refill->service_id }} — {{ $serviceName }}</td>
-                                        <td class="mw-150px">
-                                            @if ($refill->link)
-                                                <a href="{{ $refill->link }}" target="_blank"
-                                                    class="text-gray-600 text-hover-primary text-truncate d-block mw-150px"
-                                                    title="{{ $refill->link }}">{{ Str::limit($refill->link, 35) }}</a>
-                                            @else —
-                                            @endif
-                                        </td>
-                                        <td class="text-muted">{{ $refill->created_at->format('d/m/Y H:i') }}</td>
-                                        <td>
-                                            <span class="badge {{ $statusClass }} fs-8 fw-bold"
-                                                data-lang="status::{{ $refill->refill_status ?? 'pending' }}">
-                                                {{ ucfirst($refill->refill_status ?? 'pending') }}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="6" class="text-center text-muted py-10" data-lang="refill.no_refills_found">
-                                            No refill found.
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
                     </div>
-                    @if ($refills->hasPages())
-                        <div class="px-5 py-4">
-                            {{ $refills->appends(request()->query())->links('pagination::bootstrap-4') }}
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="refill__margin-search component_card">
+                            <div class="card">
+                                <div class="component_form_group component_button_search">
+                                    <div class="">
+                                        <form action="#" method="get" id="history-search">
+                                            <div class="input-group">
+                                                <input type="text" name="search" id="refill-search-input" class="form-control"
+                                                    value="{{ request('search') }}"
+                                                    placeholder="{{ __('refill.search_placeholder') }}">
+                                                <div class="input-group-append">
+                                                    <button class="btn btn-big-secondary" type="submit">
+                                                        <span class="fas fa-search"></span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                        <script>
+                                        document.getElementById('history-search').addEventListener('submit', function(e) {
+                                            e.preventDefault();
+                                            var s = document.getElementById('refill-search-input').value;
+                                            var base = '{{ $currentStatus ? '/refill/'.$currentStatus : '/refill' }}';
+                                            window.location.href = base + (s ? '?search=' + encodeURIComponent(s) : '');
+                                        });
+                                        </script>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    @endif
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col">
+                        <div class="refill__margin-table">
+                            <div class="table-bg component_table ">
+                                <div class="table-wr table-responsive">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>{{ __('refill.id') }}</th>
+                                                <th>{{ __('refill.date') }}</th>
+                                                <th>{{ __('refill.order_id') }}</th>
+                                                <th>{{ __('refill.link') }}</th>
+                                                <th>{{ __('refill.service') }}</th>
+                                                <th>{{ __('refill.status') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @forelse($refills as $refill)
+                                                <tr>
+                                                    <td data-label="{{ __('refill.id') }}">{{ $refill->id }}</td>
+                                                    <td data-label="{{ __('refill.date') }}">
+                                                        <span
+                                                            class="nowrap">{{ $refill->created_at->format('Y-m-d') }}</span>
+                                                        <span
+                                                            class="nowrap">{{ $refill->created_at->format('H:i:s') }}</span>
+                                                    </td>
+                                                    <td data-label="{{ __('refill.order_id') }}" class="table-link">
+                                                        <a
+                                                            href="/orders?search={{ $refill->orders_api }}">{{ $refill->orders_api }}</a>
+                                                    </td>
+                                                    <td data-label="{{ __('refill.link') }}" class="table-link">
+                                                        <a href="/anon.ws?r={{ urlencode($refill->link) }}" target="_blank"
+                                                            title="{{ $refill->link }}">
+                                                            {{ Str::limit($refill->link, 50) }}
+                                                        </a>
+                                                    </td>
+                                                    <td data-label="{{ __('refill.service') }}" class="table-service">
+                                                        @php
+                                                            $serviceName = $refill->service->name ?? 'N/A';
+                                                            $userLang = auth()->user()->lang ?? 'en';
+
+                                                            // Service name is cast to json in model, so it's already an array
+                                                            if (is_array($serviceName)) {
+                                                                $serviceName = $serviceName[$userLang] ?? (($serviceName['en'] ?? '') ?? reset($serviceName) ?? 'N/A');
+                                                            }
+                                                            $serviceName = (string) $serviceName;
+                                                        @endphp
+                                                        {{ $refill->service_id }} — {{ $serviceName }}
+                                                    </td>
+                                                    <td data-label="{{ __('refill.status') }}">
+                                                        {{ ucfirst($refill->refill_status ?? 'pending') }}</td>
+                                                </tr>
+                                            @empty
+                                                <tr>
+                                                    <td colspan="6" class="text-center py-4">
+                                                        <p class="text-muted">{{ __('refill.no_refills_found') }}</p>
+                                                    </td>
+                                                </tr>
+                                            @endforelse
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-5">
+                        <nav class="component_pagination">
+                            <div class="">
+                                {{ $refills->links('pagination::bootstrap-4') }}
+                            </div>
+                        </nav>
+                    </div>
                 </div>
             </div>
-
         </div>
     </div>
+
 @endsection
-
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    var CURRENT_STATUS = '{{ $currentStatus }}';
-    var s2opts = { escapeMarkup: function(m){return m;}, minimumResultsForSearch: -1, width: '100%' };
-
-    function navigate(status) {
-        var keyword = document.getElementById('ipt-keyword').value.trim();
-        var type    = $('#sl-type').val();
-        var base    = status ? '/refill/' + status : '/refill';
-        var qs      = [];
-        if (type && type !== '0') qs.push('type=' + type);
-        if (keyword) qs.push('keyword=' + encodeURIComponent(keyword));
-        window.location.href = base + (qs.length ? '?' + qs.join('&') : '');
-    }
-
-    $('#sl-status').select2(s2opts).on('change', function () { navigate($(this).val()); });
-    $('#sl-type').select2(s2opts);
-
-    document.getElementById('form-filter').addEventListener('submit', function (e) {
-        e.preventDefault();
-        navigate(CURRENT_STATUS);
-    });
-});
-</script>
-@endpush

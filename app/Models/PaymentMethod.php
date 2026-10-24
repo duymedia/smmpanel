@@ -9,6 +9,23 @@ use Illuminate\Support\Facades\Cache;
 
 class PaymentMethod extends Model
 {
+    public static function templates(): array
+    {
+        return [
+            ['legacy_id' => 0, 'code' => 'manual', 'name' => 'MANUAL', 'icon' => 'https://i.imgur.com/FAwHOz9.png', 'currency' => 'USD'],
+            ['legacy_id' => 33, 'code' => 'binance_fpayaz', 'name' => 'FPayAZ - Binance - USDT', 'icon' => 'https://i.imgur.com/iBEGgng.png', 'currency' => 'USD'],
+            ['legacy_id' => 23, 'code' => 'sieuthicode_acb', 'name' => 'SIEUTHICODE - ACB', 'icon' => 'https://i.imgur.com/P7EFing.png', 'currency' => 'VND'],
+            ['legacy_id' => 24, 'code' => 'sieuthicode_vietcombank', 'name' => 'SIEUTHICODE - Vietcombank', 'icon' => 'https://i.imgur.com/Fz183j7.png', 'currency' => 'VND'],
+            ['legacy_id' => 25, 'code' => 'sieuthicode_mbbank', 'name' => 'SIEUTHICODE - MBBank', 'icon' => 'https://i.imgur.com/zVEduxd.png', 'currency' => 'VND'],
+            ['legacy_id' => 38, 'code' => 'sieuthicode_bidv', 'name' => 'SIEUTHICODE - BIDV', 'icon' => 'https://i.imgur.com/znVQVCm.png', 'currency' => 'VND'],
+        ];
+    }
+
+    public static function template(int $legacyId): array
+    {
+        return collect(static::templates())->firstWhere('legacy_id', $legacyId) ?? static::templates()[0];
+    }
+
     // Payment method types
     const TYPE_BANK_VN = 'bank_vn';
     const TYPE_BINANCE = 'binance';

@@ -18,11 +18,16 @@
         <link rel="icon" type="image/png" href="{{ $config->favicon }}">
         <link rel="apple-touch-icon" href="{{ $config->favicon }}">
     @endif
-    <link rel="stylesheet" type="text/css" href="https://storage.perfectcdn.com/global/qi2w4eotlr7z5sa9.css">
-    <link rel="stylesheet" type="text/css" href="https://storage.perfectcdn.com/hx1lyd/mdo8pos315ygpcmz.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
-        integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
-        crossorigin="anonymous" referrerpolicy="no-referrer">
+     <link href="{{ asset('storage.perfectcdn.com/theme-6/js/99gttjw1i1l6jmws.js') }}" rel="preload" as="script">
+<link href="{{ asset('storage.perfectcdn.com/theme-6/js/qoy6usyny80ul09k.js') }}" rel="preload" as="script">
+<link href="{{ asset('storage.perfectcdn.com/theme-6/js/ap5ifcinp3jk13sr.js') }}" rel="preload" as="script">
+@if(!empty($settings['google_client_id']))
+        <link href="https://accounts.google.com/gsi/client" rel="preload" as="script">
+    @endif
+<link href="{{ asset('storage.perfectcdn.com/theme-6/js/f7lw81wrmhzxhpb3.js') }}" rel="preload" as="script">
+
+      <link rel="stylesheet" type="text/css" href="{{ asset('storage.perfectcdn.com/theme-6/css/ojd5wm8q8es3jjdb.css') }}">
+      <link rel="stylesheet" type="text/css" href="{{ asset('storage.perfectcdn.com/theme-6/css/wsz57ycp89410z6e.css') }}">
     <script>window.modules = {};</script>
 </head>
 <body class="body body-public">
@@ -125,10 +130,10 @@
     </div>
 </div>
 
-<script type="text/javascript" src="https://storage.perfectcdn.com/global/niz1noemjyzfu7f9.js"></script>
+<script type="text/javascript" src="{{ asset('storage.perfectcdn.com/theme-6/js/99gttjw1i1l6jmws.js') }}"></script>
 <script type="text/javascript" src="https://storage.perfectcdn.com/global/hecwkrtjf5h4271l.js"></script>
-<script type="text/javascript" src="https://storage.perfectcdn.com/global/9slt7wawt5z76g0n.js"></script>
-<script type="text/javascript" src="https://storage.perfectcdn.com/global/zapdpw5dch3izybt.js"></script>
+<script type="text/javascript" src="{{ asset('storage.perfectcdn.com/theme-6/js/ap5ifcinp3jk13sr.js') }}"></script>
+<script type="text/javascript" src="{{ asset('storage.perfectcdn.com/theme-6/js/f7lw81wrmhzxhpb3.js') }}"></script>
 <script type="text/javascript">
     window.modules.layouts = <?php echo json_encode(['theme_id' => 23, 'auth' => 0, 'live' => true, 'csrftoken' => csrf_token()]); ?>;
 </script>

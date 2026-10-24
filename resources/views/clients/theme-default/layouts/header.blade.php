@@ -1,62 +1,92 @@
-<!DOCTYPE html>
-<html id="theme_{{ $config->default_interface }}" lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+﻿<!--begin::Header-->
+<div id="kt_header" class="header align-items-stretch">
+    <div class="container-xxl d-flex align-items-stretch justify-content-between">
+        <!--begin::Brand-->
+        <div class="d-flex align-items-center flex-grow-1 flex-lg-grow-0 w-lg-225px me-5">
+            <div class="btn btn-icon btn-active-icon-primary ms-n2 me-2 d-flex d-lg-none" id="kt_aside_toggle">
+                <i class="ki-duotone ki-abstract-14 fs-1"><span class="path1"></span><span class="path2"></span></i>
+            </div>
+            <a href="/new">
+                <img alt="Logo" src="{{ !empty($config->logo) ? $config->logo : asset('assets/media/logo.png') }}" class="d-none d-lg-inline h-30px theme-light-show">
+                <img alt="Logo" src="{{ !empty($config->logo) ? $config->logo : asset('assets/media/logo.png') }}" class="d-none d-lg-inline h-30px theme-dark-show">
+                <img alt="Logo" src="{{ !empty($config->logo) ? $config->logo : asset('assets/media/logo.png') }}" class="d-lg-none h-30px">
+            </a>
+        </div>
+        <!--end::Brand-->
+        <div class="d-flex align-items-stretch justify-content-between flex-lg-grow-1">
+            <div class="d-flex align-items-stretch" id="kt_header_nav">
+                <div class="header-menu align-items-stretch" data-kt-drawer="true" data-kt-drawer-name="header-menu"
+                    data-kt-drawer-activate="{default: true, lg: false}" data-kt-drawer-overlay="true"
+                    data-kt-drawer-width="{default:'200px', '300px': '250px'}" data-kt-drawer-direction="end"
+                    data-kt-drawer-toggle="#kt_header_menu_mobile_toggle" data-kt-swapper="true"
+                    data-kt-swapper-mode="prepend" data-kt-swapper-parent="{default: '#kt_body', lg: '#kt_header_nav'}">
+                </div>
+            </div>
+            <div class="d-flex align-items-stretch flex-shrink-0">
+                <div class="d-flex align-items-center ms-lg-5" id="kt_header_user_menu_toggle">
+                    <div class="btn btn-flex align-items-center bg-hover-white bg-hover-opacity-10 py-2 ps-2 pe-2 me-n2"
+                        data-kt-menu-trigger="{default: 'click', lg: 'hover'}" data-kt-menu-attach="parent"
+                        data-kt-menu-placement="bottom-end">
+                        @if(auth()->user())
+                            <div class="d-none d-md-flex flex-column align-items-end justify-content-center me-2 me-md-4">
+                                <span class="fs-8 fw-bold lh-1 ls-1 mb-1">{{ auth()->user()->username }}</span>
+                                <span class="opacity-75 fs-8 fw-semibold lh-1"
+                                    data-lang="{{ $roleMeta['key'] }}">{{ $roleMeta['text'] }}</span>
+                            </div>
+                            <div class="symbol symbol-30px symbol-md-40px">
+                                <img src="https://cdn.whoispanel.com/dashboard/5/media/avatars/300-1.jpg"
+                                    alt="{{ auth()->user()->username }}">
+                            </div>
+                        @endif
+                    </div>
+                    @if(auth()->user())
+                        <div class="menu menu-sub menu-sub-dropdown menu-column menu-rounded menu-gray-800 menu-state-bg menu-state-color fw-semibold py-4 fs-6 w-275px"
+                            data-kt-menu="true">
+                            <div class="menu-item px-3">
+                                <div class="menu-content d-flex align-items-center px-3">
+                                    <div class="symbol symbol-50px me-5">
+                                        <img alt="{{ auth()->user()->username }}"
+                                            src="https://cdn.whoispanel.com/dashboard/5/media/avatars/300-1.jpg">
+                                    </div>
+                                    <div class="d-flex flex-column">
+                                        <div class="fw-bold d-flex align-items-center fs-5">
+                                            {{ auth()->user()->username }}
+                                            <span class="badge {{ $roleMeta['badge'] }} fw-bold fs-8 px-2 py-1 ms-2"
+                                                data-lang="{{ $roleMeta['key'] }}">{{ $roleMeta['text'] }}</span>
+                                        </div>
+                                        <span class="fw-semibold text-muted fs-7">{{ auth()->user()->email }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="separator my-2"></div>
+                            <div class="menu-item px-5">
+                                <a href="/settings" class="menu-link px-5" data-lang="menu::Settings">Settings</a>
+                            </div>
+                            <div class="menu-item px-5">
+                                <a href="/affiliates" class="menu-link px-5" data-lang="menu::Affiliate">Affiliate</a>
+                            </div>
+                            <div class="menu-item px-5">
+                                <a href="/childpanel" class="menu-link px-5" data-lang="menu::Child Panel">Child Panel</a>
+                            </div>
+                            <div class="menu-item px-5">
+                                <a href="/apidoc" class="menu-link px-5" data-lang="menu::API Documentation">API
+                                    Documentation</a>
+                            </div>
+                            <div class="separator my-2"></div>
+                            <div class="menu-item px-5">
+                                <a href="/signout" class="menu-link px-5" data-lang="menu::Sign out">Sign out</a>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!--end::Header-->
+<div id="kt_content_container" class="d-flex flex-column-fluid align-items-stretch container-xxl">
+    @include('clients.theme-default.layouts.aside')
+    <div class="wrapper d-flex flex-column flex-row-fluid mt-5 mt-lg-10" id="kt_wrapper">
+        @yield('content')
 
-<head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>@yield('title', 'New Order')</title>
-    <meta name="keywords" content="{{ $config->keywords ?? '' }}">
-    <meta name="description" content="{{ $config->description ?? '' }}">
-    <meta name="google-site-verification" content="">
-    <meta name="format-detection" content="telephone=no">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <link rel="shortcut icon" type="image/ico" href="{{ $config->favicon }}">
-    <link rel="icon" type="image/png" sizes="192x192" href="{{ $config->favicon }}">
-    <link rel="icon" type="image/png" sizes="512x512" href="{{ $config->favicon }}">
-    <link rel="icon" type="image/png" sizes="32x32" href="{{ $config->favicon }}">
-    <link rel="icon" type="image/png" sizes="16x16" href="{{ $config->favicon }}">
-    <link rel="apple-touch-icon" href="{{ $config->favicon }}">
 
-    {{-- Font Awesome 5 Pro — đã có sẵn trong style.css --}}
-    <link rel="stylesheet" href="{{ asset('global/style.css') }}">
-    
-    <!-- Google tag (gtag.js) -->
-    <script async="" src="https://www.googletagmanager.com/gtag/js?id=G-9C3MMH8F4T"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-
-        function gtag() {
-            dataLayer.push(arguments);
-        }
-        gtag('js', new Date());
-
-        gtag('config', 'G-9C3MMH8F4T');
-    </script>
-
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Draggable Translate Button</title>
-    <script type="text/javascript">
-        function googleTranslateElementInit() {
-            new google.translate.TranslateElement({
-                pageLanguage: 'auto'
-            }, 'google_translate_element');
-        }
-    </script>
-
-</head>
-
-<body class="body {{ auth()->check() ? 'body-internal' : 'body-public' }}" style="position: relative; min-height: 100%; top: 0px;">
-    <meta name="heleket" content="93b13156">
-    <script type="text/javascript" src="{{ asset('global/wxsqj274j2fljwqh.js') }}"></script>
-    <script type="text/javascript" src="{{ asset('global/ueokzc34y7ofrqqg.js') }}"></script>
-    <script type="text/javascript" src="{{ asset('global/nfjxywl5k0s161d5.js') }}"></script>
-    <script type="text/javascript" src="{{ asset('global/element.js') }}"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css">
-
-    <link rel="stylesheet" type="text/css" href="{{ asset('global/iuos9mpiak6cw8rt.css') }}">
-
-    <script>
-        window.modules = {};
-    </script>

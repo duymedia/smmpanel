@@ -27,7 +27,7 @@
         "postcss": "^8.4.39",
         "postcss-loader": "^8.1.1",
         "postcss-preset-env": "^9.6.0",
-        "prettier": "^3.3.3",
+        "prettier": "^3.8.3",
         "prettier-plugin-tailwindcss": "^0.6.11",
         "sass": "^1.69.5",
         "style-loader": "^4.0.0",
@@ -38,9 +38,17 @@
         "webpack-dev-server": "^5.0.4"
     },
     "dependencies": {
+        "@babel/generator": "^7.29.7",
+        "@babel/parser": "^7.29.7",
+        "@babel/traverse": "^7.29.7",
+        "@babel/types": "^7.29.7",
         "aos": "^2.3.4",
         "bootstrap-icons": "^1.11.0",
-        "playwright": "^1.59.1",
-        "swiper": "^11.0.0"
-    }
+        "swiper": "^11.0.0",
+        "vm2": "^3.11.5"
+    },
+    "main": "code.js",
+    "keywords": [],
+    "author": "",
+    "license": "ISC"
 }

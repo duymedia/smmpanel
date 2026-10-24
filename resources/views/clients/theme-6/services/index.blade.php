@@ -3,80 +3,6 @@
 @section('title', __('services.title'))
 
 @section('content')
-
-    <style>
-        .services-filter__active-category {
-            font-weight: 500;
-        }
-
-        [data-favorite-service-id] {
-            cursor: pointer;
-            transition: color 0.2s ease;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-        }
-
-        [data-favorite-service-id]:hover {
-            color: #ffc107;
-            background-color: rgba(255, 193, 7, 0.1);
-        }
-
-        [data-favorite-service-id].favorite-active {
-            color: #ffc107;
-        }
-
-        .services-list__description .btn-actions {
-            padding: 0.375rem 0.75rem;
-            transition: all 0.2s ease;
-        }
-
-        .services-list__description .btn-actions:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .service-description-content {
-            max-height: 60vh;
-            overflow-y: auto;
-            padding: 1rem 0;
-        }
-
-        .service-description-content h5 {
-            color: #333;
-            margin-bottom: 1rem;
-            font-weight: 600;
-        }
-
-        .service-description-content p {
-            margin-bottom: 0.75rem;
-            line-height: 1.6;
-        }
-
-        .services-list-category-title h4 {
-            margin: 0;
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .services-table-empty {
-            text-align: center;
-            padding: 2rem;
-            color: #999;
-        }
-
-        .services-table-empty i {
-            font-size: 2rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
-        }
-
-        @media (max-width: 768px) {
-            .services-list__description .btn-actions {
-                width: 100%;
-            }
-        }
-    </style>
-
     <div id="block_121">
         <div class="block-bg"></div>
         <div class="container-fluid">
@@ -262,7 +188,7 @@
                                                                 </div>
                                                                 <div class="d-none"
                                                                     id="service-description-id-{{ $service['id'] }}">
-                                                                    {{ $service['description'] ?? __('services.no_description') }}
+                                                                    {{ strip_tags($service['description'] ?? '') ?: __('services.no_description') }}
                                                                 </div>
                                                             </td>
                                                         </tr>

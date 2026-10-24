@@ -1,0 +1,234 @@
+<div class="wrapper  wrapper-sidebar-navbar ">
+    <div id="block_52" class="component_private_navbar">
+        <span class="component_private_navbar ">
+            <div class="component-navbar-private__wrapper component_private_sidebar ">
+                <div
+                    class="sidebar-block__top component-navbar component-navbar__navbar-private editor__component-wrapper ">
+                    <div>
+                        <nav class="navbar navbar-expand-lg navbar-light">
+                            <div class="navbar-private__header">
+                                <div class="sidebar-block__top-brand">
+                                    <div class="component-navbar-logo">
+                                        <a href="{{ route('clients.new') }}"
+                                            style="background-image: url({{ $config?->logo ?? '' }})">
+                                            @if ($config?->logo)
+                                                <img src="{{ $config->logo }}" alt="{{ $config->title ?? 'Logo' }}"
+                                                    class="sidebar-block__top-logo"
+                                                    title="{{ $config->title ?? 'Logo' }}">
+                                            @else
+                                                <span class="navbar-logo-text">{{ $config->title ?? 'Panel' }}</span>
+                                            @endif
+                                        </a>
+                                    </div>
+                                </div>
+                                <button class="navbar-toggler" type="button" data-toggle="collapse"
+                                    data-target="#navbar-collapse-52" aria-controls="navbar-collapse-52"
+                                    aria-expanded="false" aria-label="Toggle navigation">
+                                    <span class="navbar-burger">
+                                        <span class="navbar-burger-line"></span>
+                                    </span>
+                                </button>
+                            </div>
+                            <div class="collapse navbar-collapse" id="navbar-collapse-52">
+                                <div class="component-navbar-collapse-divider"></div>
+                                <div class="d-flex component-navbar-collapse">
+                                    <ul class="navbar-nav navbar-nav-sidebar-menu">
+                                        @auth
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.new') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.new') }}">{{ __('menu.New order') }}</a>
+                                        </li>
+                                        @endauth
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.services.*') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.services.index') }}">{{ __('menu.Services') }}</a>
+                                        </li>
+                                        @auth
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.orders.index', 'clients.orders.show') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.orders.index') }}">{{ __('menu.Service orders') }}</a>
+                                        </li>
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.refill.*') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.refill.refill') }}">{{ __('menu.Refill') }}</a>
+                                        </li>
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.addfunds.*') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.addfunds.index') }}">{{ __('menu.Add funds') }}</a>
+                                        </li>
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.orders.refunds') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.orders.refunds') }}">{{ __('refunds.title') }}</a>
+                                        </li>
+                                        @endauth
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.api.*') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.api.index') }}">{{ __('menu.API') }}</a>
+                                        </li>
+                                        @auth
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.affiliates.*') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.affiliates.index') }}">{{ __('menu.Affiliate') }}</a>
+                                        </li>
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.childpanel.*') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.childpanel.index') }}">{{ __('menu.Child Panel') }}</a>
+                                        </li>
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.tickets.*') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.tickets.index') }}">
+                                                {{ __('menu.Support') }}
+                                                @if(($pendingTicketsCount ?? 0) > 0)
+                                                    <span class="badge badge-warning">{{ $pendingTicketsCount }}</span>
+                                                @endif
+                                            </a>
+                                        </li>
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.massorder.*') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.massorder.index') }}">{{ __('menu.Mass order') }}</a>
+                                        </li>
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private {{ request()->routeIs('clients.cooperate.*') ? 'component-navbar-nav-link-active__navbar-private' : '' }}"
+                                                href="{{ route('clients.cooperate.index') }}">
+                                                <span class="component-navbar-nav-link-icon"><span class="fas fa-badge-dollar"></span></span>
+                                                {{ __('menu.Affiliate') }}
+                                            </a>
+                                        </li>
+                                        @endauth
+                                    </ul>
+                                    @auth
+                                    <ul class="navbar-nav navbar-nav-currencies">
+                                        <div class="balance-dropdown-container component_balance_dropdown">
+                                            <div class="balance-dropdown">
+                                                <div class="balance-dropdown__name balance-dropdown__toggle"
+                                                    data-toggle="dropdown" data-hover="dropdown" aria-expanded="false"
+                                                    id="balance-display">{{ $formattedBalance }}</div>
+                                                <ul class="balance-dropdown__container dropdown-menu" id="currencies-list">
+                                                    @foreach ($currencies as $currency)
+                                                        <li class="balance-dropdown__item">
+                                                            <a href="#"
+                                                                class="balance-dropdown__link currencies-item {{ $userCurrency->code == $currency->code ? 'active' : '' }}"
+                                                                data-currency-code="{{ $currency->code }}"
+                                                                data-currency-symbol="{{ $currency->symbol }}"
+                                                                data-currency-name="{{ $currency->name }}"
+                                                                data-symbol-position="{{ $currency->symbol_position }}"
+                                                                data-exchange-rate="{{ $currency->exchange_rate }}">
+                                                                {{ $currency->code }} {{ $currency->symbol }}
+                                                            </a>
+                                                        </li>
+                                                    @endforeach
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </ul>
+                                    <ul class="navbar-nav">
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private"
+                                                href="/account">{{ __('menu.Account') }}</a>
+                                        </li>
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private"
+                                                href="{{ route('logout') }}">{{ __('menu.Sign out') }}</a>
+                                        </li>
+                                    </ul>
+                                    @else
+                                    <ul class="navbar-nav">
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private"
+                                                href="{{ route('login') }}" data-lang="menu::Sign in">{{ __('menu.Sign in') }}</a>
+                                        </li>
+                                        <li class="nav-item component-navbar-nav-item component-navbar-private-nav-item">
+                                            <a class="component-navbar-nav-link component-navbar-nav-link__navbar-private"
+                                                href="{{ route('signup') }}" data-lang="menu::Sign up">{{ __('menu.Sign up') }}</a>
+                                        </li>
+                                    </ul>
+                                    @endauth
+                                </div>
+                            </div>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </span>
+        <span class="component_private_sidebar ">
+            <div class="component-sidebar_wrapper">
+                <div
+                    class="sidebar-block__left component-sidebar component-sidebar-with-navbar component_private_navbar editor__component-wrapper">
+                    <div class="component-sidebar__menu">
+                        <div class="component-sidebar__menu-logo">
+                            <a href="{{ route('clients.new') }}" class="component-navbar-logo"
+                                style="background-image: url({{ $config?->logo ?? '' }})">
+                                @if ($config?->logo)
+                                    <img src="{{ $config->logo }}" alt="{{ $config->title ?? 'Logo' }}"
+                                        class="sidebar-logo-img" style="max-width: 100%; height: auto;">
+                                @else
+                                    <span class="sidebar-logo-text">{{ $config->title ?? 'Panel' }}</span>
+                                @endif
+                            </a>
+                        </div>
+                        <ul class="sidebar-block__left-menu editor__component-wrapper">
+                            @auth
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.new') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.new') }}">{{ __('menu.New order') }}</a>
+                            </li>
+                            @endauth
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.services.*') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.services.index') }}">{{ __('menu.Services') }}</a>
+                            </li>
+                            @auth
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.orders.index', 'clients.orders.show') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.orders.index') }}">{{ __('menu.Service orders') }}</a>
+                            </li>
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.refill.*') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.refill.refill') }}">{{ __('menu.Refill') }}</a>
+                            </li>
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.addfunds.*') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.addfunds.index') }}">{{ __('menu.Add funds') }}</a>
+                            </li>
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.orders.refunds') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.orders.refunds') }}">{{ __('refunds.title') }}</a>
+                            </li>
+                            @endauth
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.api.*') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.api.index') }}">{{ __('menu.API') }}</a>
+                            </li>
+                            @auth
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.affiliates.*') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.affiliates.index') }}">{{ __('menu.Affiliate') }}</a>
+                            </li>
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.childpanel.*') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.childpanel.index') }}">{{ __('menu.Child Panel') }}</a>
+                            </li>
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.tickets.*') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.tickets.index') }}">
+                                    {{ __('menu.Support') }}
+                                    @if(($pendingTicketsCount ?? 0) > 0)
+                                        <span class="badge badge-warning">{{ $pendingTicketsCount }}</span>
+                                    @endif
+                                </a>
+                            </li>
+                            <li class="component-sidebar__menu-item {{ request()->routeIs('clients.massorder.*') ? 'component-sidebar__menu-item-active' : '' }}">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('clients.massorder.index') }}">{{ __('menu.Mass order') }}</a>
+                            </li>
+                            @else
+                            <li class="component-sidebar__menu-item">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('login') }}">{{ __('menu.Sign in') }}</a>
+                            </li>
+                            <li class="component-sidebar__menu-item">
+                                <a class="component-sidebar__menu-item-link" href="{{ route('signup') }}">{{ __('menu.Sign up') }}</a>
+                            </li>
+                            @endauth
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </span>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            initCurrencySwitcher(
+                '{{ route('clients.account.update-currency') }}',
+                '{{ csrf_token() }}'
+            );
+        });
+    </script>

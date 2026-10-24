@@ -4,13 +4,14 @@
 
 @section('content')
     <div id="block_107">
-        <div class="block-bg"></div>
-        <div class="container-fluid">
-            <div class="new_order-block ">
-                <div class="row new-order-form">
-                    <div class="col-lg-8">
-                        <div class="component_form_group component_card component_radio_button component_platforms">
-                            <div class="card ">
+    <div class="block-bg"></div>
+    <div class="container-fluid">
+        <div class="new_order-block ">
+            <div class="row new-order-form">
+                <div class="col-lg-8">
+                    <div class="component_form_group component_card component_radio_button component_platforms">
+                        <div class="card ">
+                        
                                 <form action="{{ route('clients.orders.store') }}" method="post" id="order-form">
                                     @csrf
                                     {{-- Alert error --}}
@@ -90,7 +91,7 @@
                                                                 $dataIcon =
                                                                     '<img src="' .
                                                                     e($img) .
-                                                                    '" style="width:16px;height:16px;object-fit:contain;">';
+                                                                    '" style="width:16px;height:16px;object-fit:contain;" alt="">';
                                                             } else {
                                                                 $dataIcon = '<span class="' . e($img) . '"></span>';
                                                             }
@@ -125,8 +126,9 @@
                                             </div>
                                         </div>
 
-                                        {{-- Description --}}
-                                        <div class="form-group fields component_service_description"
+                                        </div>
+                                        {{-- Service description --}}
+                                        <div class="form-group fields hidden component_service_description"
                                             id="service_description">
                                             <label for="service_description"
                                                 class="control-label">{{ __('newOrder.description') }}</label>
@@ -510,7 +512,7 @@
                                             </div>
                                         </div>
 
-                                        <div class="form-group">
+                                        <div class="form-group mt-3">
                                             <label for="charge"
                                                 class="control-label">{{ __('newOrder.charge') }}</label>
                                             <input type="text" class="form-control" id="charge" value=""
@@ -536,13 +538,41 @@
         .hidden {
             display: none !important;
         }
+
+        .new-order-form .component_button_forms .form-group {
+            margin-bottom: 1rem;
+        }
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const allCategories = @json($data['categories']);
             const allServices = @json($data['services']);
             const selectedService = @json($data['selectedService']);
+            const serviceCurrencyCode = @json(strtoupper((string) (auth()->user()?->currency ?? 'USD')));
             let currentServiceRate = 0;
+
+            function parseServiceRate(value) {
+                let amount = String(value ?? '').replace(/[^\d.,-]/g, '');
+                if (amount.includes(',')) {
+                    amount = amount.replace(/\./g, '').replace(',', '.');
+                } else if (/^-?\d{1,3}(?:\.\d{3})+$/.test(amount)) {
+                    amount = amount.replace(/\./g, '');
+                }
+                return parseFloat(amount) || 0;
+            }
+
+            function formatVndRate(value) {
+                if (serviceCurrencyCode !== 'VND') return value;
+                return parseServiceRate(value).toLocaleString('vi-VN', {
+                    maximumFractionDigits: 6
+                }) + ' VND';
+            }
+
+            if (serviceCurrencyCode === 'VND') {
+                allServices.forEach(svc => {
+                    svc.rate_formatted = formatVndRate(svc.rate_formatted);
+                });
+            }
 
             const categorySelect = document.getElementById('orderform-category');
             const serviceSelect = document.getElementById('orderform-service');
@@ -573,7 +603,7 @@
                     favOpt.value = FAVORITES_CATEGORY_ID;
                     favOpt.textContent = FAV_LABEL;
                     favOpt.setAttribute('data-fav', '1');
-                    favOpt.setAttribute('data-icon', "<span class='fas fa-star' style='color:#ffc107;'></span>");
+                    favOpt.setAttribute('data-icon', "<span class='fas fa-star'></span>");
                     categorySelect.insertBefore(favOpt, categorySelect.firstChild);
                 }
                 // Nếu không có ?service= → selected favorites
@@ -583,8 +613,15 @@
             }
 
             // ── Helpers ───────────────────────────────────────────────────────────────
+            function plainDescription(value) {
+                if (!value) return '';
+                const container = document.createElement('div');
+                container.innerHTML = String(value).replace(/<br\s*\/?>/gi, '\n');
+                return (container.textContent || container.innerText || '').trim();
+            }
+
             function setServiceDataAttrs(opt, svc) {
-                ['id', 'name', 'title', 'description', 'min', 'max', 'rate_formatted',
+                ['id', 'name', 'title', 'description', 'desc', 'min', 'max', 'rate_formatted',
                     'average_time', 'type_service', 'refill', 'cancel', 'dripfeed', 'category_id'
                 ]
                 .forEach(k => {
@@ -624,7 +661,7 @@
                     if (cat.image) {
                         const icon = cat.image.match(/^https?:\/\/|^\/|\./) ?
                             '<img src="' + cat.image +
-                            '" style="width:16px;height:16px;object-fit:contain;">' :
+                            '" style="width:16px;height:16px;object-fit:contain;" alt="">' :
                             '<span class="' + cat.image + '"></span>';
                         opt.setAttribute('data-icon', icon);
                     }
@@ -658,7 +695,7 @@
                     rate: opt.getAttribute('data-rate-formatted'),
                     min: opt.getAttribute('data-min'),
                     max: opt.getAttribute('data-max'),
-                    description: opt.getAttribute('data-description') || '',
+                    description: opt.getAttribute('data-description') || opt.getAttribute('data-desc') || '',
                     average_time: opt.getAttribute('data-average-time') || '',
                     type_service: opt.getAttribute('data-type-service') || 'Default'
                 });
@@ -682,8 +719,11 @@
 
             // ── Apply service info ─────────────────────────────────────────────────────
             function applyServiceInfo(data) {
+                const serviceSummary = document.getElementById('service-summary-name');
+                if (serviceSummary) serviceSummary.textContent = data.name || '—';
+
                 const rateStr = data.rate || '';
-                currentServiceRate = parseFloat(rateStr.replace(/[^0-9.-]/g, '')) || 0;
+                currentServiceRate = parseServiceRate(rateStr);
                 const symMatch = rateStr.match(/[^\d\s.,\-]+/);
                 window.currentCurrencySymbol = symMatch ? symMatch[0] : '';
                 window.symbolPosition = rateStr.indexOf(window.currentCurrencySymbol) === 0 ? 'before' : 'after';
@@ -691,8 +731,10 @@
                 const descBox = document.getElementById('service_description');
                 const descText = document.querySelector('#service_description .panel-description');
                 if (descText) {
-                    descText.innerHTML = data.description ? data.description.replace(/\n/g, '<br>') : '<br>';
-                    descBox.classList.toggle('hidden', !data.description);
+                    const description = plainDescription(data.description);
+                    descText.textContent = description;
+                    descText.style.whiteSpace = 'pre-line';
+                    descBox.classList.toggle('hidden', !description);
                 }
 
                 const minMax = document.querySelector('#order_quantity .min-max');
@@ -931,6 +973,31 @@
             const searchList = document.getElementById('search-results-list');
             const clearBtn = document.getElementById('search-clear-btn');
             let searchTimeout;
+            function escapeRateHtml(value) {
+                return String(value).replace(/[&<>"']/g, char => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                })[char]);
+            }
+
+            function serviceRateMarkup(rate) {
+                const value = String(rate ?? '');
+                if (serviceCurrencyCode !== 'VND') {
+                    return escapeRateHtml(value);
+                }
+
+                const currencyCode = 'VND';
+                const amount = value.endsWith(currencyCode)
+                    ? value.slice(0, -currencyCode.length).trim()
+                    : value;
+
+                return '<strong class="fw-bold text-primary">' + escapeRateHtml(amount) +
+                    '</strong> <small class="fw-bold text-primary" style="font-size:10px;vertical-align:super;">' +
+                    currencyCode + '</small>';
+            }
 
             if (searchInput) {
                 searchInput.addEventListener('input', function() {
@@ -977,7 +1044,7 @@
                             '<span class="select2-selection__id badge badge-secondary badge-pill rounded-pill"><span>' +
                             hl(String(svc.id)) + '</span></span> ' +
                             '<span class="select2-selection__text"><span>' + hl(svc.name) + '</span>' +
-                            ' <span>- ' + svc.rate_formatted + '</span></span></a>';
+                            ' <span>- ' + serviceRateMarkup(svc.rate_formatted) + '</span></span></a>';
                         li.addEventListener('mousedown', e => {
                             e.preventDefault();
                             selectSearchResult(svc);

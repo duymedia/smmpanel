@@ -3,975 +3,888 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Models\ActivityLog;
+use App\Models\Affiliate;
+use App\Models\Currency;
 use App\Models\Payment;
 use App\Models\PaymentMethod;
-use App\Models\ActivityLog;
-use App\Models\Transaction;
-use App\Models\Currency;
-use App\Models\CustomRate;
+use App\Models\User;
 use App\Models\UserCustomRate;
+use App\Models\Transaction;
 use App\Models\Service;
-use App\Models\Affiliate;
-use App\Models\Config;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class AccountController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     * Handles search, filter, and bulk operations
-     */
-    public function index(Request $request)
+    public const ROLE_RETAIL      = User::ROLE_RETAIL;
+    public const ROLE_ADMIN       = User::ROLE_ADMIN;
+    public const ROLE_CHILD_PANEL = User::ROLE_AGENT;
+    public const ROLE_RESELLER    = User::ROLE_DISTRIBUTOR;
+    public const ROLE_STAFF       = User::ROLE_STAFF;
+
+    public const ORDER_COLUMNS = [
+        'account_id'         => 'users.id',
+        'account_last_login' => 'users.updated_at',
+        'account_fund'       => 'users.balance',
+    ];
+
+    public const CACHE_TTL = 3600;
+    public const MAX_PAGE_SIZE = 200;
+
+    public function index(): View
     {
-        // Handle bulk operations
-        if ($request->has('bulk_action') && $request->has('user_ids')) {
-            return $this->handleBulkAction($request);
-        }
+        $domain = getDomain();
+        $cacheKey = "account_stats_{$domain}";
+        $stats = Cache::remember($cacheKey, self::CACHE_TTL, fn () => $this->buildStatistics($domain));
 
-        // Build query with search and filters
-        $query = User::where('domain', $request->getHost());
+        // The accounts table is rendered client-side by the _accounts DataTable
+        // (admin.js -> Admin-Account-listAccount). The summary cards on this page
+        // are populated from the cached statistics instead.
+        $totalDeposit = (float) ($stats['total_deposit'] ?? 0);
+        $totalBonus = (float) ($stats['total_bonus'] ?? 0);
 
-        // Search functionality
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q
-                    ->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('username', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
-            });
-        }
-
-        // Filter by status
-        if ($request->filled('status')) {
-            $query->where('is_active', $request->status === 'active');
-        }
-
-        // Filter by role
-        if ($request->filled('role')) {
-            $query->where('role', $request->role);
-        }
-
-        // Filter by level
-        if ($request->filled('level')) {
-            $query->where('level', $request->level);
-        }
-
-        // Sort
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
-        $query->orderBy($sortBy, $sortOrder);
-
-        // Select only needed columns for better performance
-        $users = $query
-            ->select('id', 'name', 'email', 'username', 'phone', 'is_active', 'role', 'level', 'balance', 'created_at')
-            ->paginate(15);
-
-        // Load bonus amount for each user
-        if (class_exists('App\Models\Transaction')) {
-            foreach ($users as $user) {
-                $user->bonus_amount = Transaction::where('user_id', $user->id)
-                    ->where('type', 'bonus')
-                    ->sum('amount');
-            }
-        }
-
-        // Calculate total deposit and bonus from payments table
-        $totalDeposit = 0;
-        $totalBonus = 0;
-
-        try {
-            if (class_exists('App\Models\Payment')) {
-                // Get total deposit amount from payments table where status is completed
-                $totalDeposit = Payment::where('status', 'completed')->sum('amount');
-                // Get total bonus amount from payments table where status is completed
-                $totalBonus = Payment::where('status', 'completed')->sum('bonus_amount');
-            }
-        } catch (\Exception $e) {
-            // If payment table doesn't exist, use default values
-            $totalDeposit = 0;
-            $totalBonus = 0;
-        }
-
-        return $request->expectsJson()
-            ? response()->json(['success' => true, 'data' => $users])
-            : view('adminpanel.accounts.index', compact('users', 'totalDeposit', 'totalBonus'));
+        return view('admin.accounts.index', compact('stats', 'totalDeposit', 'totalBonus'));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function show(string $username): View|RedirectResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'username' => 'nullable|string|max:255|unique:users',
-            'phone' => 'nullable|string|max:20',
-            'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:user,admin',
-            'level' => 'nullable|in:retail,agent,distributor',
-            'balance' => 'nullable|numeric|min:0',
-            'is_active' => 'boolean',
-        ]);
+        // The standalone profile page has been removed. Keep the old URL
+        // working by sending account links to the first available tab.
+        User::where('username', $username)
+            ->where('domain', getDomain())
+            ->firstOrFail();
 
-        $validated['password'] = bcrypt($validated['password']);
-        $validated['username'] = $validated['username'] ?? str_replace(' ', '_', strtolower($validated['name']));
-        $validated['is_active'] = $request->boolean('is_active');
-        $validated['domain'] = $request->getHost();
-
-        $user = User::create($validated);
-
-        return $request->expectsJson()
-            ? response()->json(['success' => true, 'message' => 'Tạo thành viên thành công!', 'user' => $user])
-            : redirect()->route('admin.users.index')->with('success', 'Tạo thành viên thành công!');
+        return redirect()->route('admin.accounts.payment', ['username' => $username]);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function payment(Request $request, $username)
+    public function payment(Request $request, string $username): View|JsonResponse
     {
-        $accounts = User::where('id', $username)->orWhere('username', $username)->firstOrFail();
+        $domain = getDomain();
+        $accounts = User::where('username', $username)
+            ->where('domain', $domain)
+            ->firstOrFail();
 
-        // Build query with filter - get payment history from payments table
-        $query = Payment::where('user_id', $accounts->id)
-            ->with('paymentMethod');
-
-        // Date range filter - use default if not provided
-        $dateFrom = $request->date_from ?? now()->startOfMonth()->format('Y/m/d');
-        $dateTo = $request->date_to ?? now()->endOfMonth()->format('Y/m/d');
-
-        $query->where('created_at', '>=', $dateFrom . ' 00:00:00');
-        $query->where('created_at', '<=', $dateTo . ' 23:59:59');
-
-        $trans = $query->latest('created_at')->paginate(10);
-
-        // If AJAX request, return JSON
-        if ($request->expectsJson()) {
-            // Return clean data instead of HTML
-            $paymentData = $trans->map(function ($pay) {
-                return [
-                    'created_at' => $pay->created_at?->format('Y-m-d H:i:s') ?? '',
-                    'amount' => $pay->amount,
-                    'amount_formatted' => formatCharge($pay->amount),
-                    'payment_method' => $pay->paymentMethod?->name ?? 'N/A',
-                    'note' => $pay->note ?? '',
-                ];
-            });
-
-            return response()->json([
-                'success' => true,
-                'data' => $paymentData,
-                'pagination' => [
-                    'current_page' => $trans->currentPage(),
-                    'last_page' => $trans->lastPage(),
-                    'total' => $trans->total(),
-                    'per_page' => $trans->perPage(),
-                ]
-            ]);
-        }
-
-        // For non-AJAX requests, don't load data initially - let JavaScript load it
-        $trans = collect();
-
-        $stats = [
-            'totalDeposit' => Payment::where('user_id', $accounts->id)
-                ->where('status', 'completed')
-                ->sum('total_amount'),
-            'totalSpent' => $accounts->transactions()->where('type', 'spent')->sum('amount') ?? 0,
-            'totalBonus' => Payment::where('user_id', $accounts->id)
-                ->where('status', 'completed')
-                ->sum('bonus_amount'),
-            'canRefund' => (float) $accounts->balance,
-        ];
-
-        $lastLogin = ActivityLog::where('user_id', $accounts->id)
-            ->where('type', 'login')
-            ->latest('created_at')
-            ->first();
-
-        // Get VND exchange rate from currency table
-        $vndRate = 25000; // Default rate
-        try {
-            // Try to get from currency table if it exists
-            if (class_exists('App\Models\Currency')) {
-                $currency = Currency::where('code', 'VND')->first();
-                if ($currency && isset($currency->exchange_rate)) {
-                    // Format rate to remove trailing zeros
-                    $vndRate = (int) $currency->exchange_rate;
-                }
-            }
-        } catch (\Exception $e) {
-            // If currency table doesn't exist or error occurs, use default
-            $vndRate = 25000;
-        }
-
-        // Store search params for view
-        $searchParams = [
-            'date_from' => $request->date_from ?? now()->startOfMonth()->format('Y/m/d'),
-            'date_to' => $request->date_to ?? now()->endOfMonth()->format('Y/m/d'),
-        ];
-
-        // Get active payment methods for dropdown and display
-        $payments = PaymentMethod::where('status', true)
+        $completedPayments = Payment::where('user_id', $accounts->id)
+            ->where('domain', $domain)
+            ->where('status', 'completed');
+        $totalDeposit = (float) (clone $completedPayments)->sum('amount');
+        $totalBonus = (float) (clone $completedPayments)->sum('bonus_amount');
+        $totalSpent = (float) $accounts->spent;
+        $currencyRates = Currency::where(function (Builder $query) use ($domain) {
+                $query->where('domain', $domain)->orWhereNull('domain');
+            })
+            ->where('status', true)
+            ->pluck('exchange_rate', 'code');
+        $vndExchangeRate = (float) ($currencyRates['VND'] ?? 1);
+        $paymentOptions = PaymentMethod::where('domain', $domain)
+            ->where('status', true)
             ->ordered()
             ->get()
-            ->map(function ($method) {
-                // Add exchange rate from Currency table if currency is VND
-                if ($method->currency === 'VND') {
-                    try {
-                        if (class_exists('App\Models\Currency')) {
-                            $currency = Currency::where('code', 'VND')->first();
-                            if ($currency && isset($currency->exchange_rate)) {
-                                $method->exchange_rate = (float) $currency->exchange_rate;
-                            } else {
-                                $method->exchange_rate = 25000; // Default rate
-                            }
-                        } else {
-                            $method->exchange_rate = 25000;
-                        }
-                    } catch (\Exception $e) {
-                        $method->exchange_rate = 25000;
-                    }
-                } else {
-                    $method->exchange_rate = 1; // Default rate for other currencies
-                }
-                return $method;
-            });
-
-        // Build payment options array for view
-        $paymentOptions = [
-            [
-                'value' => 'bonus',
-                'icon' => 'https://cdn-icons-png.flaticon.com/512/5622/5622939.png',
-                'currency' => 'USD',
-                'rate' => 1,
-                'name' => 'Bonus',
-                'lang_key' => 'Bonus'
-            ]
-        ];
-
-        // Add payment methods to options
-        foreach ($payments as $payment) {
-            $paymentOptions[] = [
-                'value' => $payment->id,
-                'icon' => $payment->image,
-                'currency' => $payment->currency,
-                'rate' => $payment->exchange_rate ?? 1,
-                'name' => $payment->name,
-                'lang_key' => $payment->name
-            ];
-        }
-
-        return view('adminpanel.accounts.payment', [
-            'accounts' => $accounts,
-            'trans' => $trans,
-            'lastLogin' => $lastLogin,
-            'searchParams' => $searchParams,
-            'vndRate' => $vndRate,
-            'payments' => $payments,
-            'paymentOptions' => $paymentOptions,
-            'totalDeposit' => $stats['totalDeposit'],
-            'totalSpent' => $stats['totalSpent'],
-            'totalBonus' => $stats['totalBonus'],
-            'canRefund' => $stats['canRefund'],
-        ]);
-    }
-
-    /**
-     * Display the specified resource (generic show)
-     */
-    public function show(Request $request, $username)
-    {
-        return $this->payment($request, $username);
-    }
-
-    /**
-     * Display custom rates for an account
-     */
-    public function customRates(Request $request, $username)
-    {
-        $account   = User::where('username', $username)->firstOrFail();
-        $lastLogin = ActivityLog::where('user_id', $account->id)->where('type', 'login')->latest('created_at')->first();
-        $services  = Service::where('status', true)->where('domain', getDomain())->get();
-
-        return view('adminpanel.accounts.customrates', compact('account', 'lastLogin', 'services'));
-    }
-
-    /**
-     * List custom rates (AJAX)
-     */
-    public function customRatesList(Request $request, $username)
-    {
-        $account = User::where('username', $username)->firstOrFail();
-
-        $rates = UserCustomRate::where('user_id', $account->id)
-            ->where('domain', getDomain())
-            ->where('service_id', '!=', -1)
-            ->with('service')
-            ->get()
-            ->map(function ($r) {
-                $name = $r->service_id == -1
-                    ? 'All active services'
-                    : ($r->service ? (is_array($r->service->name) ? ($r->service->name['en'] ?? reset($r->service->name)) : $r->service->name) : '#' . $r->service_id);
+            ->map(function (PaymentMethod $method) use ($currencyRates): array {
+                $currency = strtoupper($method->currency ?? 'USD');
 
                 return [
-                    'id'         => $r->id,
-                    'service_id' => $r->service_id,
-                    'name'       => $name,
-                    'rate'       => $r->rate,
-                    'percent'    => $r->percent,
-                    'orate'      => $r->service?->rate_retail ?? null,
+                    'value' => $method->id,
+                    'name' => $method->name,
+                    'icon' => $method->image_url,
+                    'currency' => $currency,
+                    'rate' => (float) ($currencyRates[$currency] ?? 1),
+                    'lang_key' => $method->name,
+                ];
+            });
+        $canRefund = max(0, $totalDeposit + $totalBonus - $totalSpent);
+        $lastLogin = ActivityLog::where('user_id', $accounts->id)
+            ->where('domain', $domain)
+            ->where('type', 'login')
+            ->latest('created_at')
+            ->first();
+
+        return view('admin.accounts.payment', compact(
+            'accounts',
+            'paymentOptions',
+            'vndExchangeRate',
+            'totalDeposit',
+            'totalBonus',
+            'totalSpent',
+            'canRefund',
+            'lastLogin'
+        ));
+    }
+
+    public function signInHistory(string $username): View
+    {
+        $domain = getDomain();
+        $accounts = User::where('username', $username)
+            ->where('domain', $domain)
+            ->firstOrFail();
+
+        $loginHistory = ActivityLog::where('user_id', $accounts->id)
+            ->where('domain', $domain)
+            ->where('type', 'login')
+            ->latest('created_at')
+            ->get(['activity', 'created_at'])
+            ->map(function (ActivityLog $log): array {
+                $activity = $log->activity ?? [];
+
+                if (!is_array($activity)) {
+                    $activity = json_decode($activity, true) ?: [];
+                }
+
+                return [
+                    'created_at' => $log->created_at,
+                    'ip_address' => $activity['ip_address'] ?? '—',
+                    'user_agent' => $activity['user_agent'] ?? '—',
                 ];
             });
 
-        return response()->json(['success' => true, 'data' => $rates]);
+        $lastLogin = $loginHistory->first();
+
+        return view('admin.accounts.signinhistory', compact('accounts', 'loginHistory', 'lastLogin'));
     }
 
-    /**
-     * Store / update a custom rate (AJAX)
-     */
-    public function customRatesStore(Request $request, $username)
+    public function transactions(string $username): View
     {
-        $account = User::where('username', $username)->firstOrFail();
+        $domain = getDomain();
+        $accounts = User::where('username', $username)
+            ->where('domain', $domain)
+            ->firstOrFail();
 
-        $request->validate([
-            'service_id' => 'required|integer',
-            'mode'       => 'required|in:1,2',
-            'rate'       => 'nullable|numeric|min:0',
-            'percent'    => 'nullable|numeric|min:1|max:999',
+        $lastLogin = ActivityLog::where('user_id', $accounts->id)
+            ->where('domain', $domain)
+            ->where('type', 'login')
+            ->latest('created_at')
+            ->first();
+
+        return view('admin.accounts.transactions', compact('accounts', 'lastLogin'));
+    }
+
+    public function transactionsData(Request $request): JsonResponse
+    {
+        $columns = $request->input('columns', []);
+        $columnSearch = is_array($columns) ? data_get($columns, '0.search.value') : null;
+        $userId = (int) ($request->input('account_id')
+            ?: $request->input('user_id')
+            ?: $columnSearch
+            ?: $request->input('search.value'));
+        $isOldHistory = $request->input('action') === 'Admin-Transaction-listTransactionOld';
+        $query = Transaction::where('domain', getDomain());
+        if (!$isOldHistory) {
+            $query->where('created_at', '>=', now()->subMonths(3));
+        }
+        if ($userId) $query->where('user_id', $userId);
+
+        $total = (clone $query)->count();
+        $length = min(max((int) $request->input('length', 20), 1), 100);
+        $rows = $query->latest('created_at')->skip((int) $request->input('start', 0))
+            ->take($length)->get();
+
+        return response()->json([
+            'draw' => (int) $request->input('draw', 1),
+            'recordsTotal' => $total,
+            'recordsFiltered' => $total,
+            'data' => $rows->map(function (Transaction $t): array {
+                $description = strtolower((string) $t->description);
+                $action = match (strtolower((string) $t->type)) {
+                    'order' => 'Add order',
+                    'refund', 'refund_reversal' => str_contains($description, 'canceled') || $t->amount < 0
+                        ? 'Canceled' : 'Partial',
+                    'deposit' => 'Deposit',
+                    default => ucfirst((string) $t->type),
+                };
+                return [
+                    'account_id' => $t->user_id,
+                    'id' => $t->order_id ?: $t->id,
+                    // admin.js renders the visible ID from the legacy
+                    // `order_id` column name.
+                    'order_id' => $t->order_id ?: $t->id,
+                    'type' => $t->type,
+                    'action' => $action,
+                    'change' => (float) $t->amount,
+                    'amount' => (float) $t->amount,
+                    'pm_id' => $t->payment_method,
+                    'balance' => (float) ($t->balance_after ?? 0),
+                    'created' => $t->created_at?->toIso8601String(),
+                    'created_at' => $t->created_at?->toIso8601String(),
+                ];
+            })->values(),
         ]);
+    }
 
-        $serviceId = (int) $request->service_id;
-        $domain    = getDomain();
-        $rateVal   = $request->mode == 1 ? $request->rate   : null;
-        $pctVal    = $request->mode == 2 ? $request->percent : null;
+    public function affiliates(string $username): View
+    {
+        $domain = getDomain();
+        $accounts = User::where('username', $username)
+            ->where('domain', $domain)
+            ->firstOrFail();
 
-        if ($serviceId == -1) {
-            // Apply to all active services
-            Service::where('status', true)->where('domain', $domain)->pluck('id')->each(function ($sid) use ($account, $domain, $rateVal, $pctVal) {
-                UserCustomRate::updateOrCreate(
-                    ['user_id' => $account->id, 'service_id' => $sid, 'domain' => $domain],
-                    ['rate' => $rateVal, 'percent' => $pctVal]
-                );
-            });
-            // Store -1 record as reference
-            UserCustomRate::updateOrCreate(
-                ['user_id' => $account->id, 'service_id' => -1, 'domain' => $domain],
-                ['rate' => $rateVal, 'percent' => $pctVal]
-            );
+        $lastLogin = ActivityLog::where('user_id', $accounts->id)
+            ->where('domain', $domain)
+            ->where('type', 'login')
+            ->latest('created_at')
+            ->first();
+
+        $affiliateRows = Affiliate::with('referred:id,username')
+            ->where('domain', $domain)
+            ->where('referrer_id', $accounts->id)
+            ->latest('id')
+            ->get();
+
+        $affiliateTotal = (float) $affiliateRows->sum('total_earned');
+        $affiliatePaid = (float) $affiliateRows
+            ->where('status', 'active')
+            ->sum('total_earned');
+
+        return view('admin.accounts.affiliates', compact(
+            'accounts',
+            'lastLogin',
+            'affiliateRows',
+            'affiliateTotal',
+            'affiliatePaid'
+        ));
+    }
+
+    public function customRates(string $username): View
+    {
+        $domain = getDomain();
+        $accounts = User::where('username', $username)
+            ->where('domain', $domain)
+            ->firstOrFail();
+
+        $services = Service::where('domain', $domain)
+            ->where('status', true)
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get(['id', 'name', 'rate_retail']);
+
+        $lastLogin = ActivityLog::where('user_id', $accounts->id)
+            ->where('domain', $domain)
+            ->where('type', 'login')
+            ->latest('created_at')
+            ->first();
+
+        return view('admin.accounts.customrates', compact('accounts', 'services', 'lastLogin'));
+    }
+
+    public function customRatesList(Request $request, string $username): JsonResponse
+    {
+        $account = $this->customRateAccountByUsername($username);
+
+        return response()->json($this->customRateRows($account));
+    }
+
+    public function customRatesStore(Request $request, string $username): JsonResponse
+    {
+        $account = $this->customRateAccountByUsername($username);
+
+        return $this->storeCustomRate($request, $account);
+    }
+
+    public function customRatesDestroy(Request $request, string $username): JsonResponse
+    {
+        $account = $this->customRateAccountByUsername($username);
+        $services = $request->input('services', []);
+
+        if (!is_array($services) || $services === []) {
+            UserCustomRate::where('user_id', $account->id)
+                ->where('domain', getDomain())
+                ->delete();
         } else {
-            UserCustomRate::updateOrCreate(
-                ['user_id' => $account->id, 'service_id' => $serviceId, 'domain' => $domain],
-                ['rate' => $rateVal, 'percent' => $pctVal]
-            );
+            UserCustomRate::where('user_id', $account->id)
+                ->where('domain', getDomain())
+                ->whereIn('service_id', array_map('intval', $services))
+                ->delete();
         }
 
-        return response()->json(['success' => true, 'message' => 'Custom rate created']);
+        return response()->json(['success' => $this->customRateDeletedMessage()]);
     }
 
-    /**
-     * Delete custom rate(s) (AJAX)
-     */
-    public function customRatesDestroy(Request $request, $username)
+    public function customRatesLegacy(string $method, Request $request): JsonResponse
     {
-        $account = User::where('username', $username)->firstOrFail();
+        $account = $this->customRateAccountById($request->integer('id'));
 
-        $request->validate([
-            'ids'   => 'sometimes|array',
-            'ids.*' => 'integer',
-            'all'   => 'sometimes|boolean',
+        return match ($method) {
+            'list' => response()->json($this->customRateRows($account)),
+            'add' => $this->storeCustomRate($request, $account),
+            'addAll' => $this->storeAllCustomRates($request, $account),
+            'delete' => $this->deleteCustomRates($request, $account),
+            'deleteAll' => $this->deleteAllCustomRates($account),
+            'copy' => $this->copyCustomRates($request),
+            default => response()->json(['error' => "Unsupported custom rate action: {$method}"], 404),
+        };
+    }
+
+    private function customRateAccountByUsername(string $username): User
+    {
+        return User::where('username', $username)
+            ->where('domain', getDomain())
+            ->firstOrFail();
+    }
+
+    private function customRateAccountById(int $id): User
+    {
+        return User::whereKey($id)
+            ->where('domain', getDomain())
+            ->firstOrFail();
+    }
+
+    private function customRateRows(User $account): array
+    {
+        return UserCustomRate::where('user_id', $account->id)
+            ->where('domain', getDomain())
+            ->orderBy('service_id')
+            ->get()
+            ->mapWithKeys(fn (UserCustomRate $rate) => [
+                (string) $rate->service_id => [
+                    // Legacy admin.js expects numeric values and checks `p > 0`.
+                    // Do not expose nullable database values to the page.
+                    'r' => (float) ($rate->rate ?? 0),
+                    'p' => (float) ($rate->percent ?? 0),
+                ],
+            ])
+            ->all();
+    }
+
+    private function storeCustomRate(Request $request, User $account): JsonResponse
+    {
+        $data = $request->validate([
+            'service' => ['required', 'integer', 'min:1'],
+            'rate' => ['nullable', 'numeric', 'min:0'],
+            'percent' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $query = UserCustomRate::where('user_id', $account->id)->where('domain', getDomain());
+        $service = Service::whereKey($data['service'])
+            ->where('domain', getDomain())
+            ->where('status', true)
+            ->firstOrFail();
 
-        if ($request->boolean('all')) {
-            $query->delete();
-        } elseif ($request->filled('ids')) {
-            $query->whereIn('id', $request->ids)->delete();
+        // admin.js sends 0 for the input that is hidden by the selected mode.
+        // A positive rate means fixed-price mode; otherwise use percent mode.
+        $rate = (float) ($data['rate'] ?? 0);
+        $percent = (float) ($data['percent'] ?? 0);
+
+        if ($rate > 0) {
+            $percent = null;
+        } else {
+            $rate = null;
         }
 
-        return response()->json(['success' => true, 'message' => 'Deleted custom success']);
+        UserCustomRate::updateOrCreate(
+            ['user_id' => $account->id, 'service_id' => $service->id, 'domain' => getDomain()],
+            ['rate' => $rate, 'percent' => $percent]
+        );
+
+        return response()->json(['success' => $this->customRateSuccessMessage()]);
     }
 
-    /**
-     * Display sign-in history for an account
-     */
-    public function signInHistory(Request $request, $username)
+    private function storeAllCustomRates(Request $request, User $account): JsonResponse
     {
-        $account = User::where('username', $username)->firstOrFail();
-        $lastLogin = ActivityLog::where('user_id', $account->id)
-            ->where('type', 'login')
-            ->latest('created_at')
-            ->first();
+        $data = $request->validate(['percent' => ['required', 'numeric', 'min:0']]);
 
-        // Get login history
-        $loginHistory = ActivityLog::where('user_id', $account->id)
-            ->where('type', 'login')
-            ->latest('created_at')
-            ->paginate(20)
-            ->map(function ($log) {
-                // Parse activity JSON if it's a string
-                if (is_string($log->activity)) {
-                    $log->activity = json_decode($log->activity, true);
-                }
-                return $log;
-            });
+        UserCustomRate::updateOrCreate(
+            ['user_id' => $account->id, 'service_id' => -1, 'domain' => getDomain()],
+            ['rate' => null, 'percent' => (float) $data['percent']]
+        );
 
-        return view('adminpanel.accounts.signinhistory', [
-            'account' => $account,
-            'loginHistory' => $loginHistory,
-            'lastLogin' => $lastLogin,
+        return response()->json(['success' => $this->customRateSuccessMessage()]);
+    }
+
+    private function deleteCustomRates(Request $request, User $account): JsonResponse
+    {
+        $data = $request->validate(['services' => ['required', 'array', 'min:1'], 'services.*' => ['integer']]);
+
+        UserCustomRate::where('user_id', $account->id)
+            ->where('domain', getDomain())
+            ->whereIn('service_id', $data['services'])
+            ->delete();
+
+        return response()->json(['success' => $this->customRateDeletedMessage()]);
+    }
+
+    private function deleteAllCustomRates(User $account): JsonResponse
+    {
+        UserCustomRate::where('user_id', $account->id)
+            ->where('domain', getDomain())
+            ->delete();
+
+        return response()->json(['success' => $this->customRateDeletedMessage()]);
+    }
+
+    private function copyCustomRates(Request $request): JsonResponse
+    {
+        $data = $request->validate(['from_account' => ['required'], 'to_account' => ['required']]);
+        $domain = getDomain();
+        $from = User::where('domain', $domain)
+            ->where(fn (Builder $query) => $query->whereKey($data['from_account'])->orWhere('username', $data['from_account']))
+            ->firstOrFail();
+        $to = User::where('domain', $domain)
+            ->where(fn (Builder $query) => $query->whereKey($data['to_account'])->orWhere('username', $data['to_account']))
+            ->firstOrFail();
+
+        DB::transaction(function () use ($from, $to, $domain) {
+            UserCustomRate::where('user_id', $to->id)->where('domain', $domain)->delete();
+            UserCustomRate::where('user_id', $from->id)->where('domain', $domain)->get()
+                ->each(fn (UserCustomRate $rate) => UserCustomRate::create([
+                    'user_id' => $to->id, 'service_id' => $rate->service_id,
+                    'rate' => $rate->rate, 'percent' => $rate->percent, 'domain' => $domain,
+                ]));
+        });
+
+        return response()->json(['success' => $this->customRateSuccessMessage()]);
+    }
+
+    private function customRateSuccessMessage(): string
+    {
+        return Auth::user()?->lang === 'vi'
+            ? 'Cập nhật thành công.'
+            : 'Updated successfully.';
+    }
+
+    private function customRateDeletedMessage(): string
+    {
+        return Auth::user()?->lang === 'vi'
+            ? 'Xóa thành công.'
+            : 'Deleted successfully.';
+    }
+
+    public function statsFund(Request $request): JsonResponse
+    {
+        $account = User::whereKey($request->integer('id'))
+            ->where('domain', getDomain())
+            ->firstOrFail();
+        $completedPayments = Payment::where('user_id', $account->id)
+            ->where('domain', getDomain())
+            ->where('status', 'completed');
+
+        $deposit = (float) (clone $completedPayments)->sum('amount');
+        $bonus = (float) (clone $completedPayments)->sum('bonus_amount');
+        $spent = (float) $account->spent;
+
+        return response()->json([
+            // _accounts.fn.stats() reads `current`, not `fund`.
+            'current' => (float) $account->balance,
+            'fund' => (float) $account->balance,
+            'deposit' => $deposit,
+            'bonus' => $bonus,
+            'spent' => $spent,
+            'can_refund' => max(0, $deposit + $bonus - $spent),
         ]);
     }
 
     /**
-     * Display transactions for an account
+     * Update an account from the legacy `_accounts.on.click.updateAccount()` request.
+     * Legacy role values: 0 retail, 1 admin, 4 agent, 5 distributor.
+     * Legacy status values: 0 active, 1 disabled.
      */
-    public function transactions(Request $request, $username)
+    public function updateAccount(Request $request): JsonResponse
     {
-        $account = User::where('username', $username)->firstOrFail();
-        $lastLogin = ActivityLog::where('user_id', $account->id)
-            ->where('type', 'login')
-            ->latest('created_at')
-            ->first();
-
-        // Build query with filters
-        $query = $account->transactions();
-
-        // Filter by type
-        if ($request->filled('type')) {
-            $query->where('type', $request->type);
-        }
-
-        // Filter by status
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        // Date range filter
-        if ($request->filled('date_from')) {
-            $query->where('created_at', '>=', $request->date_from . ' 00:00:00');
-        }
-
-        if ($request->filled('date_to')) {
-            $query->where('created_at', '<=', $request->date_to . ' 23:59:59');
-        }
-
-        $transactions = $query->latest('created_at')->paginate(20);
-
-        // Calculate totals
-        $totals = [
-            'deposit' => $account->transactions()->where('type', 'deposit')->sum('amount'),
-            'withdraw' => $account->transactions()->where('type', 'withdraw')->sum('amount'),
-            'spent' => $account->transactions()->where('type', 'spent')->sum('amount'),
-            'bonus' => $account->transactions()->where('type', 'bonus')->sum('amount'),
-        ];
-
-        return view('adminpanel.accounts.transactions', [
-            'account' => $account,
-            'transactions' => $transactions,
-            'totals' => $totals,
-            'lastLogin' => $lastLogin,
-        ]);
-    }
-
-    /**
-     * Display affiliates for an account
-     */
-    public function affiliates(Request $request, $username)
-    {
-        $account = User::where('username', $username)->firstOrFail();
-        $lastLogin = ActivityLog::where('user_id', $account->id)
-            ->where('type', 'login')
-            ->latest('created_at')
-            ->first();
-
-        // Get affiliates from the affiliates table where this user is the referrer
-        $affiliates = Affiliate::where('referrer_id', $account->id)
-            ->with('referred')
-            ->latest('created_at')
-            ->paginate(20);
-
-        // Calculate affiliate stats
-        $stats = [
-            'total_affiliates' => Affiliate::where('referrer_id', $account->id)->count(),
-            'active_affiliates' => Affiliate::where('referrer_id', $account->id)
-                ->where('status', 'active')
-                ->count(),
-            'total_affiliate_earnings' => Affiliate::where('referrer_id', $account->id)
-                ->sum('total_earned'),
-        ];
-
-        return view('adminpanel.accounts.affiliates', [
-            'account' => $account,
-            'affiliates' => $affiliates,
-            'stats' => $stats,
-            'lastLogin' => $lastLogin,
-        ]);
-    }
-
-    /**
-    /**
-     * Update the specified resource in storage.
-     * Handles status toggle, quick updates, bulk operations, and form updates
-     */
-    public function update(Request $request, $accounts = null)
-    {
-        // Handle bulk operations
-        if ($request->has('bulk_action') && $request->has('user_ids')) {
-            return $this->handleBulkAction($request);
-        }
-
-        // Find user by username or ID
-        $user = null;
-        if ($accounts) {
-            $user = User::where('username', $accounts)
-                ->orWhere('id', $accounts)
-                ->first();
-        }
-
-        // Handle status toggle (from status-switch component)
-        if ($request->has('toggle_status')) {
-            if (!$user) {
-                return response()->json(['success' => false, 'message' => 'Không tìm thấy thành viên!'], 404);
-            }
-
-            $status = (bool) $request->input('status', 0);
-            $entityId = $request->input('entity_id', $user->id);
-
-            // Ensure entityId is not null or empty
-            if (empty($entityId)) {
-                $entityId = $user->id;
-            }
-
-            if ($user->is_active !== $status) {
-                $user->update(['is_active' => $status]);
-                $message = $status
-                    ? "Kích hoạt thành viên ID #{$entityId} thành công!"
-                    : "Vô hiệu hóa thành viên ID #{$entityId} thành công!";
-
-                // \Log::info('User status toggled', [
-                //     'user_id' => $user->id,
-                //     'entity_id' => $entityId,
-                //     'old_status' => !$status,
-                //     'new_status' => $status
-                // ]);
-            } else {
-                $message = "Trạng thái thành viên ID #{$entityId} không thay đổi!";
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => $message,
-                'status' => $status,
-                'entity_id' => $entityId,
-                'user' => $user->fresh()
-            ]);
-        }
-
-        // Handle quick field update (from quick-edit component)
-        if ($request->has('field')) {
-            if (!$user) {
-                return response()->json(['success' => false, 'message' => 'Không tìm thấy thành viên!'], 404);
-            }
-
-            $field = $request->input('field');
-            $value = $request->input('value');
-
-            // Define allowed fields for quick update
-            $allowedFields = [
-                'is_active' => 'boolean',
-                'role' => ['user', 'admin'],
-                'level' => ['retail', 'agent', 'distributor', null],
-                'balance' => 'numeric'
-            ];
-
-            if (!array_key_exists($field, $allowedFields)) {
-                return response()->json(['success' => false, 'message' => 'Trường không được phép cập nhật!'], 400);
-            }
-
-            $oldValue = $user->{$field};
-
-            try {
-                switch ($field) {
-                    case 'is_active':
-                        $value = (bool) $value;
-                        break;
-                    case 'role':
-                        if (!in_array($value, $allowedFields[$field])) {
-                            throw new \InvalidArgumentException('Role không hợp lệ!');
-                        }
-                        break;
-                    case 'level':
-                        if ($value !== null && !in_array($value, $allowedFields[$field])) {
-                            throw new \InvalidArgumentException('Level không hợp lệ!');
-                        }
-                        break;
-                    case 'balance':
-                        $value = (float) $value;
-                        if ($value < 0) {
-                            throw new \InvalidArgumentException('Số dư không được âm!');
-                        }
-                        break;
-                }
-
-                if ($oldValue != $value) {
-                    $user->update([$field => $value]);
-
-                    // \Log::info('User field updated', [
-                    //     'user_id' => $user->id,
-                    //     'field' => $field,
-                    //     'old_value' => $oldValue,
-                    //     'new_value' => $value
-                    // ]);
-
-                    $message = 'Cập nhật thành công!';
-                } else {
-                    $message = 'Giá trị không thay đổi!';
-                }
-
-                return response()->json([
-                    'success' => true,
-                    'message' => $message,
-                    'field' => $field,
-                    'old_value' => $oldValue,
-                    'new_value' => $value,
-                    'user' => $user->fresh()
-                ]);
-            } catch (\InvalidArgumentException $e) {
-                return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
-            } catch (\Exception $e) {
-                // \Log::error('Quick update failed', [
-                //     'user_id' => $user->id,
-                //     'field' => $field,
-                //     'value' => $value,
-                //     'error' => $e->getMessage()
-                // ]);
-
-                return response()->json(['success' => false, 'message' => 'Có lỗi xảy ra khi cập nhật!'], 500);
-            }
-        }
-
-        // Handle regular form update
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Không tìm thấy thành viên!'], 404);
-        }
-
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|email|unique:users,email,' . $user->id,
-            'username' => 'sometimes|nullable|string|max:255|unique:users,username,' . $user->id,
-            'phone' => 'sometimes|nullable|string|max:20',
-            'password' => 'sometimes|nullable|string|min:8|confirmed',
-            'role' => 'sometimes|required|in:user,admin',
-            'level' => 'sometimes|nullable|in:retail,agent,distributor',
-            'balance' => 'sometimes|nullable|numeric|min:0',
-            'is_active' => 'sometimes|boolean',
-            'bonus_percent' => 'sometimes|nullable|numeric|min:0|max:100',
+            'id' => 'required|integer',
+            'username' => 'required|string|max:255',
+            'name' => 'nullable|string|max:255',
+            'name_postfix' => 'nullable|string|max:255',
+            'email' => 'required|email|max:255',
+            'phone' => 'nullable|string|max:30',
+            'password' => 'nullable|string|min:8|max:255',
+            'percent' => 'nullable|integer|min:0|max:100',
+            'role' => 'required|integer|in:0,1,4,5,6',
+            'status' => 'required|integer|in:0,1',
         ]);
 
-        // Prepare data for update - only include changed fields
-        $updateData = [];
-        $originalUser = $user->getOriginal();
+        $account = User::whereKey($validated['id'])
+            ->where('domain', getDomain())
+            ->firstOrFail();
 
-        foreach ($validated as $field => $value) {
-            if ($field === 'password') {
-                if ($request->filled('password')) {
-                    $updateData['password'] = bcrypt($value);
-                }
+        $usernameTaken = User::where('username', $validated['username'])
+            ->whereKeyNot($account->id)
+            ->exists();
+        $emailTaken = User::where('email', $validated['email'])
+            ->whereKeyNot($account->id)
+            ->exists();
+
+        if ($usernameTaken) {
+            return response()->json(['error' => 'Tên tài khoản đã được sử dụng.'], 200);
+        }
+
+        if ($emailTaken) {
+            return response()->json(['error' => 'Email đã được sử dụng.'], 200);
+        }
+
+        $name = trim(implode(' ', array_filter([
+            $validated['name'] ?? null,
+            $validated['name_postfix'] ?? null,
+        ], fn ($value) => filled($value))));
+
+        $attributes = [
+            'username' => $validated['username'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'] ?: null,
+            'percent_bonus' => (int) ($validated['percent'] ?? 0),
+            'role' => (int) $validated['role'],
+            'is_active' => (int) $validated['status'] === 0,
+        ];
+
+        if ($name !== '') {
+            $attributes['name'] = $name;
+        }
+
+        if (filled($validated['password'] ?? null)) {
+            $attributes['password'] = Hash::make($validated['password']);
+        }
+
+        $account->update($attributes);
+
+        return response()->json(['success' => adminMessage('update')]);
+    }
+
+    public function addFunds(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'id' => 'required|integer',
+            'pm_id' => 'required|integer',
+            'amount' => 'required|numeric|gt:0',
+            'details' => 'nullable|string|max:2000',
+        ]);
+
+        $domain = getDomain();
+        $account = User::whereKey($validated['id'])->where('domain', $domain)->firstOrFail();
+        $paymentMethod = PaymentMethod::whereKey($validated['pm_id'])
+            ->where('domain', $domain)
+            ->where('status', true)
+            ->firstOrFail();
+        $amount = round((float) $validated['amount'], 8);
+        $bonus = $this->calculatePaymentMethodBonus($amount, $paymentMethod->bonus);
+        $totalAmount = round($amount + $bonus['amount'], 8);
+
+        DB::transaction(function () use ($account, $paymentMethod, $amount, $bonus, $totalAmount, $validated, $domain) {
+            Payment::create([
+                'user_id' => $account->id,
+                'payment_method_id' => $paymentMethod->id,
+                'transaction_id' => 'ADMIN-' . now()->format('YmdHis') . '-' . strtoupper(str()->random(8)),
+                'amount' => $amount,
+                'bonus_amount' => $bonus['amount'],
+                'total_amount' => $totalAmount,
+                'currency' => $paymentMethod->currency ?? 'USD',
+                'exchange_rate' => 1,
+                'status' => 'completed',
+                'note' => $validated['details'] ?: 'Admin add funds',
+                'payment_info' => [
+                    'source' => 'admin',
+                    'bonus_percent' => $bonus['percent'],
+                ],
+                'domain' => $domain,
+            ]);
+
+            $account->increment('balance', $totalAmount);
+        });
+
+        return response()->json([
+            'success' => adminMessage('add'),
+            'amount' => $amount,
+            'bonus_amount' => $bonus['amount'],
+            'total_amount' => $totalAmount,
+        ]);
+    }
+
+    private function calculatePaymentMethodBonus(float $amount, mixed $bonusData): array
+    {
+        if (is_string($bonusData)) {
+            $bonusData = json_decode($bonusData, true);
+        }
+
+        if (!is_array($bonusData)) {
+            return ['amount' => 0.0, 'percent' => 0.0];
+        }
+
+        $percent = collect($bonusData)
+            ->map(function ($tier): array {
+                return [
+                    'min' => (float) ($tier['min'] ?? $tier['quantity'] ?? $tier['q'] ?? 0),
+                    'percent' => (float) ($tier['percent'] ?? $tier['p'] ?? 0),
+                ];
+            })
+            ->filter(fn (array $tier) => $tier['min'] > 0 && $tier['percent'] > 0 && $tier['percent'] <= 100)
+            ->sortBy('min')
+            ->filter(fn (array $tier) => $amount >= $tier['min'])
+            ->last()['percent'] ?? 0.0;
+
+        return [
+            'amount' => round($amount * $percent / 100, 8),
+            'percent' => $percent,
+        ];
+    }
+
+    public function buildStatistics(string $domain): array
+    {
+        $userStats = DB::table('users')
+            ->where('domain', $domain)
+            ->selectRaw(
+                'COUNT(*) as total, ' .
+                'SUM(CASE WHEN role = ? THEN 1 ELSE 0 END) as admins, ' .
+                'SUM(CASE WHEN role = ? THEN 1 ELSE 0 END) as retail, ' .
+                'SUM(CASE WHEN role = ? THEN 1 ELSE 0 END) as agents, ' .
+                'SUM(CASE WHEN role = ? THEN 1 ELSE 0 END) as distributors, ' .
+                'SUM(CASE WHEN role = ? THEN 1 ELSE 0 END) as staff, ' .
+                'COALESCE(SUM(balance), 0) as balance',
+                [self::ROLE_ADMIN, self::ROLE_RETAIL, self::ROLE_CHILD_PANEL, self::ROLE_RESELLER, self::ROLE_STAFF]
+            )
+            ->first();
+
+        $payStats = DB::table('payments')
+            ->where('status', 'completed')
+            ->selectRaw(
+                'COALESCE(SUM(amount), 0) as deposits, ' .
+                'COALESCE(SUM(bonus_amount), 0) as bonuses'
+            )
+            ->first();
+
+        return [
+            'total_accounts'    => (int) $userStats->total,
+            'admin_count'       => (int) $userStats->admins,
+            'user_count'        => (int) $userStats->retail,
+            'reseller_count'    => (int) $userStats->agents,
+            'distributor_count' => (int) $userStats->distributors,
+            'staff_count'       => (int) $userStats->staff,
+            'total_balance'     => round((float) $userStats->balance, 2),
+            'total_deposit'     => round((float) $payStats->deposits, 2),
+            'total_bonus'       => round((float) $payStats->bonuses, 2),
+        ];
+    }
+
+    public function sanitizeSearchQuery(string $query): string
+    {
+        return trim(preg_replace('/[^a-zA-Z0-9._@\-\s]/u', '', $query));
+    }
+
+    public function applyKeywordSearch(Builder &$query, string $keyword): void
+    {
+        $query->where(function (Builder $q) use ($keyword) {
+            $q->where('username', 'like', "%{$keyword}%")
+              ->orWhere('email', 'like', "%{$keyword}%");
+        });
+    }
+
+    public function applyAccountTypeFilter(Builder &$query, string $type): void
+    {
+        if (empty($type)) {
+            return;
+        }
+
+        $role = match ($type) {
+            'admin' => self::ROLE_ADMIN, 'agent' => self::ROLE_CHILD_PANEL,
+            'distributor' => self::ROLE_RESELLER, 'staff' => self::ROLE_STAFF,
+            'retail' => self::ROLE_RETAIL, default => null,
+        };
+        if ($role !== null) {
+            $query->where('role', $role);
+        }
+    }
+
+    public function applyDataTableFilters(Builder &$query, Request $request): void
+    {
+        $columns = (array) $request->input('columns', []);
+
+        foreach ($columns as $col) {
+            $name  = $col['name'] ?? '';
+            $value = trim((string) ($col['search']['value'] ?? ''));
+
+            if (empty($name) || empty($value)) {
                 continue;
             }
 
-            if ($field === 'is_active') {
-                $value = $request->boolean('is_active');
+            if ($name === 'account_role' && !empty($value)) {
+                $this->applyAccountTypeFilter($query, (string) $value);
+                continue;
             }
 
-            // Check if field exists in original user data before comparing
-            if (!array_key_exists($field, $originalUser) || $originalUser[$field] != $value) {
-                $updateData[$field] = $value;
+            match ($name) {
+                'account_id'   => $query->where('id', (int) $value),
+                'account_user' => $this->applyKeywordSearch($query, $value),
+                'account_type' => $this->applyAccountTypeFilter($query, (string) $value),
+                default        => null,
+            };
+        }
+
+        if ($search = trim((string) $request->input('search.value', ''))) {
+            $this->applyKeywordSearch($query, $search);
+        }
+    }
+
+    public function resolveDataTableOrder(Request $request): array
+    {
+        $dir   = strtolower((string) $request->input('order.0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $index = (int) $request->input('order.0.column', 0);
+        $data  = (string) $request->input("columns.{$index}.data", 'account_id');
+        $orderCol = self::ORDER_COLUMNS[$data] ?? 'users.id';
+
+        return [$orderCol, $dir];
+    }
+
+    public function resolveDataTablePaging(Request $request): array
+    {
+        $start  = max(0, (int) $request->input('start', 0));
+        $length = (int) $request->input('length', 20);
+        $length = ($length < 1 || $length > self::MAX_PAGE_SIZE) ? self::MAX_PAGE_SIZE : $length;
+
+        return [$start, $length];
+    }
+
+    public function formatAccountRow(User $user): array
+    {
+        return [
+            'account_id'         => (int) $user->id,
+            'account_user'       => (string) $user->username,
+            'account_email'      => (string) $user->email,
+            'account_role'       => $this->getAccountRole($user),
+            'account_fund'       => (float) round($user->balance, 2),
+            'account_percent'    => (int) ($user->percent_bonus ?? 0),
+            'account_status'     => ($user->is_active ?? 1) ? 0 : 1,
+            'account_verified'   => 1,
+            'account_last_login' => $user->updated_at?->format('Y-m-d H:i:s') ?? null,
+        ];
+    }
+
+    public function getAccountRole(User $user): int
+    {
+        return (int) $user->role;
+    }
+
+    public function list(Request $request): JsonResponse
+    {
+        try {
+            $domain = getDomain();
+            $baseQuery = User::where('domain', $domain);
+            $total = $baseQuery->count();
+
+            $this->applyDataTableFilters($baseQuery, $request);
+            $filtered = (clone $baseQuery)->count();
+            [$orderCol, $orderDir] = $this->resolveDataTableOrder($request);
+            [$start, $length] = $this->resolveDataTablePaging($request);
+
+            $rows = $baseQuery
+                ->select(['id', 'username', 'email', 'role', 'balance', 'percent_bonus', 'updated_at', 'is_active'])
+                ->orderBy($orderCol, $orderDir)
+                ->skip($start)
+                ->take($length)
+                ->get()
+                ->map(fn (User $u) => $this->formatAccountRow($u))
+                ->values();
+
+            return response()->json([
+                'draw'            => (int) $request->input('draw', 1),
+                'recordsTotal'    => $total,
+                'recordsFiltered' => $filtered,
+                'data'            => $rows,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('ListAccount error: ' . $e->getMessage());
+
+            return response()->json([
+                'draw'            => (int) $request->input('draw', 1),
+                'recordsTotal'    => 0,
+                'recordsFiltered' => 0,
+                'data'            => [],
+            ]);
+        }
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        try {
+            $data = $request->input('data', []);
+            if (is_array($data) && !empty($data)) {
+                $request->merge($data);
             }
-        }
 
-        if (!empty($updateData)) {
-            $user->update($updateData);
-            $message = 'Cập nhật thành viên thành công!';
+            $request->merge([
+                'percent_bonus' => (int) ($request->input('percent') ?? 0),
+                'is_active'     => (int) $request->input('status', 1) === 1,
+                'domain'        => getDomain(),
+            ]);
 
-            // \Log::info('User updated', [
-            //     'user_id' => $user->id,
-            //     'updated_fields' => array_keys($updateData),
-            //     'changes' => $updateData
-            // ]);
-        } else {
-            $message = 'Không có thay đổi nào để cập nhật!';
-        }
+            $validated = $request->validateWithBag('default', [
+                'email'          => 'required|email|unique:users,email',
+                'username'       => 'nullable|string|max:255|unique:users,username',
+                'password'       => 'required|string|min:8',
+                'role'           => 'required|integer|in:0,1,4,5,6',
+                'percent_bonus'  => 'nullable|integer|min:0|max:100',
+                'is_active'      => 'nullable|boolean',
+                'domain'         => 'required|string',
+            ]);
 
-        return $request->expectsJson()
-            ? response()->json(['success' => true, 'message' => $message, 'user' => $user->fresh(), 'updated_fields' => array_keys($updateData ?? [])])
-            : redirect()->route('admin.users.index')->with('success', $message);
-    }
+            return DB::transaction(function () use ($validated) {
+                $base = $validated['username'] ?? strstr($validated['email'], '@', true);
+                $validated['username'] = $validated['username'] ?? str_replace(' ', '_', strtolower($base));
+                $validated['password'] = bcrypt($validated['password']);
+                $user = User::create($validated);
 
-    /**
-     * Remove the specified resource from storage.
-     * Handles single and bulk delete
-     */
-    public function destroy(Request $request, User $user = null)
-    {
-        // Handle bulk delete
-        if ($request->has('bulk_action') && $request->has('user_ids')) {
-            return $this->handleBulkAction($request);
-        }
-
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'Không tìm thấy thành viên!'], 404);
-        }
-
-        $userName = $user->name;
-        $user->delete();
-
-        return $request->expectsJson()
-            ? response()->json(['success' => true, 'message' => "Đã xóa thành viên {$userName} thành công!"])
-            : redirect()->route('admin.users.index')->with('success', "Đã xóa thành viên {$userName} thành công!");
-    }
-
-    /**
-     * Update user balance
-     */
-    public function updateBalance(Request $request, $accounts)
-    {
-        // Get user by ID or username
-        $user = User::where('id', $accounts)->orWhere('username', $accounts)->firstOrFail();
-
-        $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01',
-            'type' => 'required|in:deposit,withdraw,bonus',
-            'payment_method' => 'nullable|string|max:255',
-            'description' => 'nullable|string|max:500',
-            'payment_id' => 'nullable|exists:payment_methods,id'
-        ]);
-
-        $oldBalance = $user->balance;
-        $amount = abs($validated['amount']);
-
-        if ($validated['type'] === 'deposit' || $validated['type'] === 'bonus') {
-            $user->balance += $amount;
-            $transactionType = $validated['type'];
-        } else {
-            if ($user->balance < $amount) {
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Số dư không đủ để rút!'
-                ], 400);
-            }
-            $user->balance -= $amount;
-            $transactionType = 'withdraw';
+                    'success' => adminMessage('add'),
+                    'user'    => $user,
+                ], 200);
+            });
+
+        } catch (ValidationException $e) {
+            $messages = array_map(fn ($errs) => implode(', ', $errs), $e->errors());
+            return response()->json(['error' => implode(' | ', $messages)], 200);
+        } catch (\Throwable $e) {
+            Log::error('Store account error: ' . $e->getMessage());
+            return response()->json(['error' => 'Lỗi khi tạo tài khoản: ' . $e->getMessage()], 200);
         }
-
-        $user->save();
-
-        $transactionId = 'ADMIN-' . time() . '-' . $user->id;
-
-        // Create payment record in payments table
-        try {
-            if (class_exists('App\Models\Payment') && class_exists('App\Models\PaymentMethod')) {
-                // Xác định payment method
-                $paymentMethodId = null;
-
-                if ($validated['payment_id']) {
-                    // Nếu user chọn payment method cụ thể
-                    $paymentMethodId = $validated['payment_id'];
-                } else {
-                    // Tìm hoặc tạo payment method cho admin action
-                    $adminMethod = PaymentMethod::where('name', 'Bonus')
-                        ->where('type', 'other')
-                        ->first();
-
-                    if (!$adminMethod) {
-                        $adminMethod = PaymentMethod::create([
-                            'name' => 'Bonus',
-                            'type' => 'other',
-                            'image' => null,
-                            'position' => PaymentMethod::getNextPosition(),
-                            'status' => true,
-                            'domain' => getDomain()
-                        ]);
-                    }
-
-                    $paymentMethodId = $adminMethod->id;
-                }
-
-                // Chuẩn bị dữ liệu payment
-                $paymentData = [
-                    'user_id' => $user->id,
-                    'payment_method_id' => $paymentMethodId,
-                    'transaction_id' => $transactionId,
-                    'amount' => $transactionType === 'bonus' ? 0 : $amount,
-                    'bonus_amount' => $transactionType === 'bonus' ? $amount : 0,
-                    'total_amount' => $amount,
-                    'currency' => 'USD',
-                    'exchange_rate' => 1,
-                    'status' => 'completed',
-                    'note' => $validated['description'] ?? "Admin {$transactionType} action",
-                    'payment_info' => [
-                        'method' => $validated['payment_method'] ?? 'Bonus',
-                        'type' => $transactionType,
-                        'admin_action' => true,
-                        'admin_note' => $validated['description'] ?? null
-                    ],
-                    'domain' => getDomain()
-                ];
-
-                Payment::create($paymentData);
-            }
-        } catch (\Exception $e) {
-            // \Log::error('Failed to create payment record', [
-            //     'user_id' => $user->id,
-            //     'error' => $e->getMessage(),
-            //     'trace' => $e->getTraceAsString()
-            // ]);
-        }
-
-        // Log update balance
-        // \Log::info('=== ADMIN UPDATE BALANCE ===', [
-        //     'admin'            => auth()->user()?->username ?? 'system',
-        //     'target_user'      => ['id' => $user->id, 'username' => $user->username],
-        //     'type'             => $transactionType,
-        //     'amount'           => $amount,
-        //     'old_balance'      => $oldBalance,
-        //     'new_balance'      => $user->balance,
-        //     'transaction_id'   => $transactionId,
-        //     'description'      => $validated['description'] ?? null,
-        // ]);
-
-        // Xử lý affiliate commission khi deposit hoặc bonus
-        if ($transactionType === 'deposit' || $transactionType === 'bonus') {
-            \App\Services\AffiliateService::handleDeposit($user->id, $amount, $transactionId);
-        }
-
-        $typeLabel = $transactionType === 'bonus' ? 'Thưởng' : ($transactionType === 'deposit' ? 'Nạp' : 'Rút');
-
-        return response()->json([
-            'success'     => true,
-            'message'     => "{$typeLabel} \${$amount} thành công!",
-            'old_balance' => $oldBalance,
-            'new_balance' => $user->balance,
-            'user'        => $user->fresh(),
-        ]);
     }
 
     /**
-     * Handle bulk actions (private method)
+     * Delete a customer account owned by the current panel domain.
+     * The route has existed since the accounts module was introduced; keeping
+     * the domain and self-account checks here prevents an administrator from
+     * accidentally deleting an account from another panel or their own login.
      */
-    private function handleBulkAction(Request $request)
+    public function destroy(int $accounts): JsonResponse
     {
-        $validated = $request->validate([
-            'user_ids' => 'required|array',
-            'user_ids.*' => 'exists:users,id',
-            'bulk_action' => 'required|string|in:activate,deactivate,delete,update_role,update_level',
-            'bulk_data' => 'sometimes|array'
-        ]);
+        $account = User::whereKey($accounts)
+            ->where('domain', getDomain())
+            ->firstOrFail();
 
-        $userIds = $validated['user_ids'];
-        $action = $validated['bulk_action'];
-        $bulkData = $validated['bulk_data'] ?? [];
-
-        try {
-            $updatedCount = 0;
-            $processedIds = [];
-
-            switch ($action) {
-                case 'activate':
-                    // Get users that actually need to be updated (not already active)
-                    $usersToUpdate = User::whereIn('id', $userIds)->where('is_active', false)->pluck('id')->toArray();
-                    if (!empty($usersToUpdate)) {
-                        $updatedCount = User::whereIn('id', $usersToUpdate)->update(['is_active' => true]);
-                        $processedIds = $usersToUpdate;
-                    }
-                    $idsText = !empty($processedIds) ? ' (ID: ' . implode(', ', $processedIds) . ')' : '';
-                    $message = "Đã kích hoạt {$updatedCount} thành viên{$idsText}";
-                    break;
-
-                case 'deactivate':
-                    // Get users that actually need to be updated (not already inactive)
-                    $usersToUpdate = User::whereIn('id', $userIds)->where('is_active', true)->pluck('id')->toArray();
-                    if (!empty($usersToUpdate)) {
-                        $updatedCount = User::whereIn('id', $usersToUpdate)->update(['is_active' => false]);
-                        $processedIds = $usersToUpdate;
-                    }
-                    $idsText = !empty($processedIds) ? ' (ID: ' . implode(', ', $processedIds) . ')' : '';
-                    $message = "Đã vô hiệu hóa {$updatedCount} thành viên{$idsText}";
-                    break;
-
-                case 'delete':
-                    $processedIds = $userIds;  // All selected IDs will be deleted
-                    $updatedCount = User::whereIn('id', $userIds)->delete();
-                    $idsText = !empty($processedIds) ? ' (ID: ' . implode(', ', $processedIds) . ')' : '';
-                    $message = "Đã xóa {$updatedCount} thành viên{$idsText}";
-                    break;
-
-                case 'update_role':
-                    if (!isset($bulkData['role']) || !in_array($bulkData['role'], ['user', 'admin'])) {
-                        throw new \Exception('Role không hợp lệ');
-                    }
-                    // Get users that actually need role update
-                    $usersToUpdate = User::whereIn('id', $userIds)->where('role', '!=', $bulkData['role'])->pluck('id')->toArray();
-                    if (!empty($usersToUpdate)) {
-                        $updatedCount = User::whereIn('id', $usersToUpdate)->update(['role' => $bulkData['role']]);
-                        $processedIds = $usersToUpdate;
-                    }
-                    $idsText = !empty($processedIds) ? ' (ID: ' . implode(', ', $processedIds) . ')' : '';
-                    $message = "Đã cập nhật role cho {$updatedCount} thành viên{$idsText}";
-                    break;
-
-                case 'update_level':
-                    if (!isset($bulkData['level']) || !in_array($bulkData['level'], ['retail', 'agent', 'distributor'])) {
-                        throw new \Exception('Level không hợp lệ');
-                    }
-                    // Get users that actually need level update
-                    $usersToUpdate = User::whereIn('id', $userIds)->where('level', '!=', $bulkData['level'])->pluck('id')->toArray();
-                    if (!empty($usersToUpdate)) {
-                        $updatedCount = User::whereIn('id', $usersToUpdate)->update(['level' => $bulkData['level']]);
-                        $processedIds = $usersToUpdate;
-                    }
-                    $idsText = !empty($processedIds) ? ' (ID: ' . implode(', ', $processedIds) . ')' : '';
-                    $message = "Đã cập nhật level cho {$updatedCount} thành viên{$idsText}";
-                    break;
-
-                default:
-                    throw new \Exception('Hành động không hợp lệ');
-            }
-
-            // Log the bulk action with detailed information
-            // \Log::info('User bulk action completed', [
-            //     'action' => $action,
-            //     'requested_ids' => $userIds,
-            //     'processed_ids' => $processedIds,
-            //     'updated_count' => $updatedCount,
-            //     'bulk_data' => $bulkData
-            // ]);
-
-            return $request->expectsJson()
-                ? response()->json([
-                    'success' => true,
-                    'message' => $message,
-                    'updated_count' => $updatedCount,
-                    'processed_ids' => $processedIds
-                ])
-                : redirect()->route('admin.users.index')->with('success', $message);
-        } catch (\Exception $e) {
-            // \Log::error('User bulk action failed', [
-            //     'action' => $action,
-            //     'user_ids' => $userIds,
-            //     'error' => $e->getMessage()
-            // ]);
-
-            return $request->expectsJson()
-                ? response()->json(['success' => false, 'message' => $e->getMessage()], 500)
-                : redirect()->route('admin.users.index')->with('error', $e->getMessage());
+        if (Auth::id() === $account->id) {
+            return response()->json(['error' => 'Không thể xóa tài khoản đang đăng nhập.'], 422);
         }
+
+        $account->delete();
+
+        return response()->json(['success' => adminMessage('delete')]);
     }
-    
+
+    public function searchUsers(Request $request): JsonResponse
+    {
+        $withEmail = str_contains((string) $request->input('action', ''), 'ForEmailUsername');
+        $keyword = $this->sanitizeSearchQuery($request->input('keyword', ''));
+
+        $results = User::where('domain', getDomain())
+            ->select(['id', 'username', 'email'])
+            ->when($keyword, fn (Builder $q) => $q->where(function (Builder $qq) use ($keyword, $withEmail) {
+                $qq->where('username', 'like', "%{$keyword}%");
+                if ($withEmail) {
+                    $qq->orWhere('email', 'like', "%{$keyword}%");
+                }
+            }))
+            ->orderBy('username')
+            ->limit(30)
+            ->get()
+            ->map(fn (User $u) => [
+                'id'   => $u->id,
+                'text' => $withEmail ? "{$u->username} ({$u->email})" : $u->username,
+            ]);
+
+        return response()->json(['results' => $results]);
+    }
 }

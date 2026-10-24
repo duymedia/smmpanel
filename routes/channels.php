@@ -26,5 +26,5 @@ Broadcast::channel('ticket.{ticketId}', function ($user, $ticketId) {
     }
     
     // User can access if they own the ticket or are admin
-    return $user->id === $ticket->user_id || $user->role === 'admin';
+    return $user->id === $ticket->user_id || $user->isAdmin();
 });

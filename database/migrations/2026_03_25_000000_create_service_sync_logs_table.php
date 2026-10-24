@@ -20,9 +20,9 @@ return new class extends Migration
             $table->string('field_changed')->nullable();
             $table->boolean('is_read')->default(false);
             $table->string('domain')->nullable();
-            // log_type: 'api' = đồng bộ từ API (hiển thị user), 'website' = thay đổi nội bộ
+            // log_type: 'api' = Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ tÃƒÂ¡Ã‚Â»Ã‚Â« API (hiÃƒÂ¡Ã‚Â»Ã†â€™n thÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ user), 'website' = thay Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢i nÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢
             $table->enum('log_type', ['website', 'api'])->default('api');
-            // sync_batch: UUID nhóm tất cả logs từ cùng 1 lần chạy cron
+            // sync_batch: UUID nhÃƒÆ’Ã‚Â³m tÃƒÂ¡Ã‚ÂºÃ‚Â¥t cÃƒÂ¡Ã‚ÂºÃ‚Â£ logs tÃƒÂ¡Ã‚Â»Ã‚Â« cÃƒÆ’Ã‚Â¹ng 1 lÃƒÂ¡Ã‚ÂºÃ‚Â§n chÃƒÂ¡Ã‚ÂºÃ‚Â¡y cron
             $table->string('sync_batch', 36)->nullable();
             $table->json('changes')->nullable();
             $table->timestamps();

@@ -13,7 +13,10 @@ return [
     |
     */
 
-    'default' => env('QUEUE_CONNECTION', 'database'),
+    'default' => env('QUEUE_CONNECTION', 'rabbitmq'),
+
+    // Number of short-lived workers used by orders:queue-worker.
+    'staged_orders_workers' => (int) env('STAGED_ORDERS_WORKERS', 10),
 
     /*
     |--------------------------------------------------------------------------
@@ -30,6 +33,23 @@ return [
     */
 
     'connections' => [
+
+        'rabbitmq' => [
+            'driver' => 'rabbitmq',
+            'queue' => env('RABBITMQ_QUEUE', 'staged-orders'),
+            'connection' => env('RABBITMQ_CONNECTION', 'default'),
+            'hosts' => [
+                [
+                    'host' => env('RABBITMQ_HOST', '127.0.0.1'),
+                    'port' => (int) env('RABBITMQ_PORT', 5672),
+                    'user' => env('RABBITMQ_USER', 'guest'),
+                    'password' => env('RABBITMQ_PASSWORD', 'guest'),
+                    'vhost' => env('RABBITMQ_VHOST', '/'),
+                ],
+            ],
+            'retry_after' => (int) env('RABBITMQ_RETRY_AFTER', 90),
+            'after_commit' => false,
+        ],
 
         'sync' => [
             'driver' => 'sync',

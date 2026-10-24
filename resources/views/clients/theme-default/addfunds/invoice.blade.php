@@ -1,10 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
+﻿<!DOCTYPE html>
+<html lang="{{ auth()->user()?->lang ?? 'en' }}">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ __('addfunds.invoice') }} #{{ $payment->id }}</title>
+    <title>Invoice #{{ $payment->id }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -308,7 +308,7 @@
                 <p style="color: #666; font-size: 13px; margin: 0;">{{ config('app.url') }}</p>
             </div>
             <div class="invoice-number">
-                <h3>{{ __('addfunds.invoice') }}</h3>
+                <h3 data-lang="Invoice">Invoice</h3>
                 <p>#{{ $payment->id }}</p>
             </div>
         </div>
@@ -318,24 +318,24 @@
             <!-- Left Column: Company & Customer Info -->
             <div>
                 <div class="info-section">
-                    <h4>{{ __('addfunds.company_info') }}</h4>
+                    <h4 data-lang="Company Information">Company Information</h4>
                     <div class="info-item">
                         <p><strong>{{ config('app.name') }}</strong></p>
                     </div>
                 </div>
 
                 <div class="info-section" style="margin-top: 30px;">
-                    <h4>{{ __('addfunds.customer_info') }}</h4>
+                    <h4 data-lang="Customer Information">Customer Information</h4>
                     <div class="info-item">
-                        <label>{{ __('addfunds.name') }}</label>
+                        <label data-lang="Name">Name</label>
                         <p>{{ auth()->user()->name }}</p>
                     </div>
                     <div class="info-item">
-                        <label>{{ __('addfunds.email') }}</label>
+                        <label data-lang="Email">Email</label>
                         <p>{{ auth()->user()->email }}</p>
                     </div>
                     <div class="info-item">
-                        <label>{{ __('addfunds.username') }}</label>
+                        <label data-lang="Username">Username</label>
                         <p>{{ auth()->user()->username }}</p>
                     </div>
                 </div>
@@ -344,15 +344,15 @@
             <!-- Right Column: Invoice Details -->
             <div>
                 <div class="info-section">
-                    <h4>{{ __('addfunds.invoice_details') }}</h4>
+                    <h4 data-lang="Invoice Details">Invoice Details</h4>
                     <div class="info-item">
-                        <label>{{ __('addfunds.date') }}</label>
+                        <label data-lang="Date">Date</label>
                         <p>{{ $payment->created_at->format('d/m/Y H:i:s') }}</p>
                     </div>
                     <div class="info-item">
-                        <label>{{ __('addfunds.status') }}</label>
+                        <label data-lang="Status">Status</label>
                         <p>
-                            <span class="status-badge status-{{ $payment->status }}">
+                            <span data-lang="Status {{ ucfirst($payment->status) }}">
                                 {{ ucfirst($payment->status) }}
                             </span>
                         </p>
@@ -360,9 +360,9 @@
                 </div>
 
                 <div class="info-section" style="margin-top: 30px;">
-                    <h4>{{ __('addfunds.payment_info') }}</h4>
+                    <h4 data-lang="Payment Information">Payment Information</h4>
                     <div class="info-item">
-                        <label>{{ __('addfunds.payment_method') }}</label>
+                        <label data-lang="Choose method">Payment Method</label>
                         <p>
                             @if ($payment->paymentMethod?->image)
                                 <img src="{{ $payment->paymentMethod->image }}"
@@ -374,7 +374,7 @@
                     </div>
                     @if ($payment->reference)
                         <div class="info-item">
-                            <label>{{ __('addfunds.reference') }}</label>
+                            <label data-lang="Reference">Reference</label>
                             <p>{{ $payment->reference }}</p>
                         </div>
                     @endif
@@ -386,22 +386,22 @@
         <table class="invoice-table">
             <thead>
                 <tr>
-                    <th>{{ __('addfunds.description') }}</th>
-                    <th class="text-end">{{ __('addfunds.amount') }}</th>
-                    <th class="text-end">{{ __('addfunds.currency') }}</th>
-                    <th class="text-end">{{ __('addfunds.total') }}</th>
+                    <th data-lang="Description">Description</th>
+                    <th class="text-end" data-lang="Amount">Amount</th>
+                    <th class="text-end" data-lang="Currency">Currency</th>
+                    <th class="text-end" data-lang="Total">Total</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
                     <td>
-                        <strong>{{ __('addfunds.deposit_amount') }}</strong><br>
+                        <strong data-lang="Deposit Amount">Deposit Amount</strong><br>
                         <small style="color: #999;">{{ $payment->created_at->format('d/m/Y H:i:s') }}</small>
                     </td>
-                    <td class="text-end">{{ number_format($payment->amount, 2) }}</td>
-                    <td class="text-end">{{ $currency->code }}</td>
+                    <td class="text-end">{{ number_format($payment->amount, 0, ',', ',') }}</td>
+                    <td class="text-end">{{ $payment->currency ?? $currency->code }}</td>
                     <td class="text-end amount-bold">
-                        {{ formatCurrencyAmount($payment->amount, $currency, $nonDecimalCodes ?? []) }}
+                        {{ number_format($payment->amount, 0, ',', ',') }} {{ $payment->currency ?? $currency->code }}
                     </td>
                 </tr>
             </tbody>
@@ -411,44 +411,54 @@
         <div class="invoice-total">
             <div class="total-box">
                 <div class="total-row">
-                    <span>{{ __('addfunds.amount') }}:</span>
-                    <span>{{ number_format($payment->amount, 2) }}</span>
+                    <span><span data-lang="Amount">Amount</span>:</span>
+                    <span>{{ number_format($payment->amount, 0, ',', ',') }}
+                        {{ $payment->currency ?? $currency->code }}</span>
                 </div>
                 <div class="total-row final">
-                    <span>{{ __('addfunds.total') }}:</span>
-                    <span>{{ formatCurrencyAmount($payment->amount, $currency, $nonDecimalCodes ?? []) }}</span>
+                    <span><span data-lang="Total">Total</span>:</span>
+                    <span>{{ number_format($payment->amount, 0, ',', ',') }}
+                        {{ $payment->currency ?? $currency->code }}</span>
                 </div>
             </div>
         </div>
 
         <!-- Notes -->
         <div class="invoice-notes">
-            <h5>{{ __('addfunds.notes') }}</h5>
-            <p>{{ __('addfunds.invoice_note_1') }}</p>
-            <p>{{ __('addfunds.invoice_note_2') }}</p>
+            <h5 data-lang="Notes">Notes</h5>
+            <p data-lang="Invoice note 1">This invoice is automatically generated from the system.</p>
+            <p data-lang="Invoice note 2">Please keep this invoice as proof of payment.</p>
         </div>
 
         <!-- Footer -->
         <div class="invoice-footer">
-            <p>{{ __('addfunds.thank_you') }}</p>
+            <p data-lang="Thank you">Thank you for using our service!</p>
             <p>{{ config('app.name') }} © {{ date('Y') }}</p>
         </div>
 
         <!-- Action Buttons -->
         <div class="invoice-actions">
             <button class="btn btn-print" onclick="window.print()">
-                <i class="fas fa-print"></i> {{ __('addfunds.print') }}
+                <i class="fas fa-print"></i> <span data-lang="Print">Print</span>
             </button>
             <button class="btn btn-pdf" onclick="downloadPDF()">
-                <i class="fas fa-download"></i> {{ __('addfunds.download_pdf') }}
-            </button>
-            <button class="btn btn-close" onclick="window.close()">
-                <i class="fas fa-times"></i> {{ __('addfunds.close') }}
+                <i class="fas fa-download"></i> <span data-lang="Download PDF">Download PDF</span>
             </button>
         </div>
     </div>
 
     <!-- Scripts -->
+    <script src="{{ asset('assets/client/language.js') }}?v={{ config('app.version') }}"></script>
+    <script>
+        document.querySelectorAll('[data-lang]').forEach(function(element) {
+            var key = element.getAttribute('data-lang');
+            var value = LANGUAGE?.language?.['/addfunds']?.[key] ||
+                LANGUAGE?.core?.['/addfunds']?.[key] || key;
+            element.textContent = value;
+        });
+        document.title = (LANGUAGE?.language?.['/addfunds']?.Invoice ||
+            LANGUAGE?.core?.['/addfunds']?.Invoice || 'Invoice') + ' #{{ $payment->id }}';
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script>
         function downloadPDF() {
@@ -491,3 +501,4 @@
 </body>
 
 </html>
+

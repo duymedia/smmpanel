@@ -14,13 +14,13 @@ class TicketSubjectController extends Controller
         $subjects = TicketSubject::orderBy('sort_order')->orderBy('category')->get();
         $categories = TicketSubject::select('category')->distinct()->orderBy('category')->pluck('category');
         
-        return view('adminpanel.ticket-subjects.index', compact('subjects', 'categories'));
+        return view('admin.ticket-subjects.index', compact('subjects', 'categories'));
     }
 
     public function create()
     {
         $categories = TicketSubject::select('category')->distinct()->orderBy('category')->pluck('category');
-        return view('adminpanel.ticket-subjects.form', compact('categories'));
+        return view('admin.ticket-subjects.form', compact('categories'));
     }
 
     public function store(Request $request)
@@ -63,13 +63,17 @@ class TicketSubjectController extends Controller
 
     public function show(TicketSubject $ticketSubject)
     {
-        return view('admin.ticket-subjects.show', compact('ticketSubject'));
+        if (request()->ajax() || request()->expectsJson()) {
+            return response()->json(['success' => true, 'subject' => $ticketSubject]);
+        }
+
+        return redirect()->route('admin.ticket-subjects.edit', $ticketSubject);
     }
 
     public function edit(TicketSubject $ticketSubject)
     {
         $categories = TicketSubject::select('category')->distinct()->orderBy('category')->pluck('category');
-        return view('adminpanel.ticket-subjects.form', compact('ticketSubject', 'categories'));
+        return view('admin.ticket-subjects.form', compact('ticketSubject', 'categories'));
     }
 
     public function update(Request $request, TicketSubject $ticketSubject)
@@ -160,5 +164,75 @@ class TicketSubjectController extends Controller
             ->get(['id', 'subcategory', 'show_message_only', 'required_fields']);
 
         return response()->json($subcategories);
+    }
+
+    public function getFromRequest(Request $request)
+    {
+        return response()->json($this->findFromRequest($request));
+    }
+
+    public function saveFromRequest(Request $request)
+    {
+        $data = $request->validate([
+            'id' => ['nullable', 'integer'],
+            'category' => ['required', 'string', 'max:255'],
+            'subcategory' => ['nullable', 'string', 'max:255'],
+            'show_message_only' => ['required', 'boolean'],
+            'status' => ['required', 'boolean'],
+            'sort_order' => ['required', 'integer', 'min:0'],
+            'required_fields_json' => ['nullable', 'json'],
+        ]);
+
+        $fields = empty($data['required_fields_json']) ? [] : json_decode($data['required_fields_json'], true);
+        if (!is_array($fields) || !array_is_list($fields)) {
+            return response()->json(['error' => 'Trường bắt buộc phải là một mảng JSON hợp lệ.']);
+        }
+
+        $values = [
+            'category' => $data['category'],
+            'subcategory' => $data['subcategory'] ?? null,
+            'show_message_only' => (bool) $data['show_message_only'],
+            'required_fields' => $fields,
+            'status' => (int) $data['status'],
+            'sort_order' => (int) $data['sort_order'],
+        ];
+
+        $subject = empty($data['id']) ? new TicketSubject() : $this->findFromRequest($request);
+        $subject->fill($values)->save();
+
+        return response()->json(['success' => empty($data['id']) ? 'Thêm chủ đề thành công.' : 'Cập nhật chủ đề thành công.']);
+    }
+
+    public function toggleFromRequest(Request $request)
+    {
+        $subject = $this->findFromRequest($request);
+        $subject->update(['status' => $request->boolean('status')]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function deleteFromRequest(Request $request)
+    {
+        $subject = $this->findFromRequest($request);
+        if ($subject->tickets()->exists()) {
+            return response()->json(['error' => 'Không thể xóa vì đang có phiếu sử dụng chủ đề này.']);
+        }
+        $subject->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    public function reorderFromRequest(Request $request)
+    {
+        foreach ($request->validate(['items' => ['required', 'array'], 'items.*.id' => ['required', 'integer'], 'items.*.sort_order' => ['required', 'integer', 'min:0']])['items'] as $item) {
+            TicketSubject::whereKey($item['id'])->update(['sort_order' => $item['sort_order']]);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    private function findFromRequest(Request $request): TicketSubject
+    {
+        return TicketSubject::findOrFail((int) $request->input('id'));
     }
 }

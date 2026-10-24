@@ -10,82 +10,121 @@ class AffiliateController extends Controller
 {
     public function index(Request $request)
     {
-        // Trả về view nếu không phải AJAX
-        if (!$request->ajax() && !$request->wantsJson()) {
-            return view('adminpanel.affiliates.index');
+        return view('admin.affiliates.index');
+    }
+
+    public function list(Request $request)
+    {
+        $filters = $request->validate([
+            'referrer' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'in:active,inactive,suspended,pending'],
+            'length' => ['nullable', 'integer', 'min:10', 'max:100'],
+            'start' => ['nullable', 'integer', 'min:0'],
+            'draw' => ['nullable', 'integer', 'min:0'],
+        ]);
+        $query = Affiliate::with(['referrer', 'referred'])->where('domain', getDomain());
+
+        if (!empty($filters['referrer'])) {
+            $keyword = trim($filters['referrer']);
+            $query->whereHas('referrer', fn ($user) => $user->where('username', 'like', "%{$keyword}%"));
+        }
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
         }
 
-        $query = Affiliate::with(['referrer', 'referred']);
-
-        // Filter domain — tương thích cả 127.0.0.1 và 127.0.0.1:8000
-        $host = getDomain();
-        $query->where(function($q) use ($host) {
-            $q->where('domain', $host)
-              ->orWhere('domain', parse_url('http://' . $host, PHP_URL_HOST))
-              ->orWhereNull('domain');
-        });
-
-        if ($request->filled('referrer_id')) $query->where('referrer_id', $request->referrer_id);
-        if ($request->filled('referred_id')) $query->where('referred_id', $request->referred_id);
-        if ($request->filled('status'))      $query->where('status', $request->status);
-        if ($request->filled('referrer')) {
-            $query->whereHas('referrer', fn($q) => $q->where('username', 'like', '%' . $request->referrer . '%'));
+        // Aggregates are calculated in one database round-trip. The previous
+        // implementation executed four separate count/sum queries.
+        $statsQuery = Affiliate::query()->where('domain', getDomain());
+        if (!empty($filters['referrer'])) {
+            $statsQuery->whereHas('referrer', fn ($user) => $user->where('username', 'like', "%{$keyword}%"));
         }
-
-        // Aggregate stats trước khi paginate
-        $statsQuery = clone $query;
+        if (!empty($filters['status'])) {
+            $statsQuery->where('status', $filters['status']);
+        }
         $stats = [
-            'total'        => $statsQuery->count(),
-            'total_earned' => $statsQuery->sum('total_earned'),
-            'total_orders' => $statsQuery->sum('total_orders'),
-            'active_count' => (clone $query)->where('status', 'active')->count(),
+            'total' => 0,
+            'active_count' => 0,
+            'total_earned' => 0.0,
+            'total_orders' => 0.0,
         ];
+        $aggregate = $statsQuery->selectRaw('COUNT(*) total, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) active_count, COALESCE(SUM(total_earned), 0) total_earned, COALESCE(SUM(total_orders), 0) total_orders', ['active'])->first();
+        if ($aggregate) {
+            $stats = ['total' => (int) $aggregate->total, 'active_count' => (int) $aggregate->active_count, 'total_earned' => (float) $aggregate->total_earned, 'total_orders' => (float) $aggregate->total_orders];
+        }
+        $recordsTotal = Affiliate::where('domain', getDomain())->count();
+        $recordsFiltered = (clone $query)->count();
+        $length = $filters['length'] ?? 20;
+        $start = $filters['start'] ?? 0;
+        $rows = $query->latest()->skip($start)->take($length)->get()->map(fn ($affiliate) => [
+            'id' => $affiliate->id,
+            'created_at' => $affiliate->created_at?->format('Y-m-d H:i'),
+            'referrer_id' => $affiliate->referrer_id,
+            'referrer' => $affiliate->referrer?->username,
+            'referred_id' => $affiliate->referred_id,
+            'referred' => $affiliate->referred?->username,
+            'referral_code' => $affiliate->referral_code,
+            'commission_rate' => (float) $affiliate->commission_rate,
+            'total_earned' => (float) $affiliate->total_earned,
+            'total_orders' => (float) $affiliate->total_orders,
+            'orders_count' => (int) $affiliate->orders_count,
+            'status' => $affiliate->status,
+        ])->values();
 
-        $paginated = $query->latest()->paginate($request->per_page ?? 15);
+        return response()->json([
+            'draw' => $filters['draw'] ?? 0,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $rows,
+            'stats' => $stats,
+        ]);
+    }
 
-        return response()->json(array_merge($paginated->toArray(), $stats));
+    public function approve(Request $request)
+    {
+        $data = $request->validate(['id' => ['required', 'integer']]);
+        $affiliate = Affiliate::where('domain', getDomain())->findOrFail($data['id']);
+        $affiliate->update(['status' => 'active']);
+
+        return response()->json(['success' => true]);
     }
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'referrer_id' => 'required|exists:users,id',
-            'referred_id' => 'required|exists:users,id|different:referrer_id',
-            'referral_code' => 'nullable|string|max:255',
-            'commission_rate' => 'required|numeric|min:0|max:100',
-            'status' => 'required|in:active,inactive,suspended',
-            'note' => 'nullable|string'
+        $data = $request->validate([
+            'referrer_id' => ['required', 'exists:users,id'],
+            'referred_id' => ['required', 'exists:users,id', 'different:referrer_id'],
+            'referral_code' => ['nullable', 'string', 'max:255'],
+            'commission_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'status' => ['required', 'in:active,inactive,suspended'],
+            'note' => ['nullable', 'string'],
         ]);
-        $validated['domain'] = $request->getHost();
+        $data['domain'] = getDomain();
 
-        return response()->json(Affiliate::create($validated), 201);
+        return response()->json(Affiliate::create($data), 201);
     }
 
     public function show(Request $request, $id)
     {
-        $affiliate = Affiliate::where('domain', $request->getHost())->findOrFail($id);
-        return response()->json($affiliate->load(['referrer', 'referred']));
+        return response()->json(Affiliate::where('domain', getDomain())->findOrFail($id)->load(['referrer', 'referred']));
     }
 
     public function update(Request $request, $id)
     {
-        $affiliate = Affiliate::where('domain', $request->getHost())->findOrFail($id);
-        
-        $validated = $request->validate([
-            'referral_code' => 'nullable|string|max:255',
-            'commission_rate' => 'sometimes|numeric|min:0|max:100',
-            'status' => 'sometimes|in:active,inactive,suspended',
-            'note' => 'nullable|string'
-        ]);
+        $affiliate = Affiliate::where('domain', getDomain())->findOrFail($id);
+        $affiliate->update($request->validate([
+            'referral_code' => ['nullable', 'string', 'max:255'],
+            'commission_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'status' => ['sometimes', 'in:active,inactive,suspended'],
+            'note' => ['nullable', 'string'],
+        ]));
 
-        $affiliate->update($validated);
         return response()->json($affiliate);
     }
 
     public function destroy(Request $request, $id)
     {
-        $affiliate = Affiliate::where('domain', $request->getHost())->findOrFail($id);
-        $affiliate->delete();
+        Affiliate::where('domain', getDomain())->findOrFail($id)->delete();
+
         return response()->json(['message' => 'Affiliate deleted successfully']);
     }
 }

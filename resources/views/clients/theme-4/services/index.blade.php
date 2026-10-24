@@ -1,539 +1,501 @@
 @extends('clients.theme-4.layouts.app')
-@section('title', 'Services')
 
-@push('styles')
-    <style>
-        .wrap {
-            word-break: break-all;
-            overflow-wrap: anywhere;
-        }
-
-        #table-service thead th {
-            white-space: nowrap;
-            padding: 10px 8px;
-            font-size: 11px;
-        }
-
-        #table-service td {
-            line-height: 1.5;
-        }
-    </style>
-@endpush
+@section('title', __('services.title'))
 
 @section('content')
-    <div class="content flex-column-fluid" id="kt_content">
-        @include('clients.theme-4.layouts.toolbar', ['title' => 'Services', 'langKey' => 'services.title'])
 
-        <div class="post" id="kt_post">
-            {{-- Filter --}}
-            <div class="card mb-4">
-                <div class="card-body py-3 px-4">
-                    @php
-                        $catIdsWithServices = $groupedServices->keys()->map(fn($k) => (string) $k)->toArray();
-                        $platformIdsWithServices = collect($categories)
-                            ->filter(fn($c) => in_array((string) $c['id'], $catIdsWithServices))
-                            ->pluck('platform_id')
-                            ->unique()
-                            ->toArray();
-                    @endphp
-                    <div class="row g-2 align-items-center">
-                        <div class="col-12 col-md-3">
-                            <input type="text" id="ipt-keyword" class="form-control form-control-sm form-control-solid"
-                                placeholder="Keyword" data-lang="services.search" oninput="_services.on.input.keyword()">
-                        </div>
-                        <div class="col-12 col-md-3">
-                            <select id="sl-platform" class="form-select form-select-sm form-select-solid"
-                                onchange="_services.on.change.platform(this.value)">
-                                <option value="-100" data-lang="services.all_social_media">All social media</option>
-                                @foreach ($platforms as $p)
-                                    @if (in_array($p->id, $platformIdsWithServices))
-                                        @php
-                                            $pIcon = '';
-                                            if ($p->image) {
-                                                $pIcon =
-                                                    str_contains($p->image, '/') || str_contains($p->image, '.')
-                                                        ? '<img src="' .
-                                                            e($p->image) .
-                                                            '" class="w-15px h-15px me-1" />'
-                                                        : '<i class="' . e($p->image) . '"></i> ';
-                                            }
-                                        @endphp
-                                        <option value="{{ $p->id }}" data-content="{{ $pIcon . e($p->name) }}"
-                                            data-lang="">{{ $p->name }}</option>
-                                    @endif
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-3">
-                            <select id="sl-category" class="form-select form-select-sm form-select-solid"
-                                onchange="_services.on.change.category(this.value)">
-                                <option value="-100" data-platform="-100" data-lang="services.all_categories">All category</option>
-                            </select>
-                        </div>
-                        <div class="col-lg-3 col-12">
-                            <button type="button" id="btn-filter" class="btn btn-sm btn-primary"
-                                onclick="_services.on.click.filter()" data-lang="button::Filter">Filter</button>
-                            <button type="button" id="btn-toggle-rate" class="btn btn-warning btn-sm ms-2"
-                                onclick="_services.on.click.toggleRate()" data-lang="button::Rate Filter">Rate
-                                Filter</button>
-                            <button type="button" id="btn-reset" class="btn btn-sm btn-secondary"
-                                onclick="_services.on.click.reset()" data-lang="button::Reset">Reset</button>
-                        </div>
-                    </div>
+    <style>
+        .services-filter__active-category {
+            font-weight: 500;
+        }
 
-                    <div id="rate-filter-wrap" class="mt-3 mb-1 d-none" data-rate-min="0.0003" data-rate-max="9999">
-                        <div id="kt_slider_rate_range" class="ms-6 me-10 noUi-sm"></div>
-                    </div>
-                </div>
-            </div>
+        [data-favorite-service-id] {
+            cursor: pointer;
+            transition: color 0.2s ease;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
 
-            {{-- Table --}}
-            <div class="card card-services mb-5">
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover table-row-dashed table-row-gray-300 gs-3 gy-2 gx-2 mb-0"
-                            id="table-service">
-                            <thead>
-                                <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
-                                    <th width="1"></th>
-                                    <th width="1"></th>
-                                    <th data-lang="services.service" width="40%">Service</th>
-                                    <th class="text-end">
-                                        <span data-lang="services.rate">Rate</span>
-                                        <span class="ms-1 fa-regular fa-circle-question" data-bs-toggle="tooltip"
-                                            data-bs-placement="top" aria-label="Rate on 1000 units"
-                                            data-bs-original-title="Rate on 1000 units"></span>
-                                    </th>
-                                    <th class="text-end col-min" width="1">Min</th>
-                                    <th class="text-end col-max" width="1">Max</th>
-                                    @if($showAverageTime)
-                                    <th class="text-end col-avg" width="1">
-                                        <span data-lang="services.average_time">Average time</span>
-                                        <span class="ms-1 fa-regular fa-circle-question" data-bs-toggle="tooltip"
-                                            data-bs-placement="top"
-                                            aria-label="The average time is based on 10 latest completed orders per 1000 quantity"
-                                            data-bs-original-title="The average time is based on 10 latest completed orders per 1000 quantity"></span>
-                                    </th>
-                                    @endif
-                                    <th class="text-center" width="1" data-lang="services.description">Description</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @php
-                                    $labelColors = [
-                                        'Owner' => 'danger',
-                                        'Exclusive' => 'danger',
-                                        'Provider Direct' => 'danger',
-                                        'Best seller' => 'danger',
-                                        'No refund' => 'danger',
-                                        'New' => 'success',
-                                        'Promotion' => 'success',
-                                        'Recommend' => 'success',
-                                        'Instant' => 'success',
-                                        'Super Fast' => 'success',
-                                        'Real' => 'success',
-                                        'Lifetime' => 'success',
-                                        'Auto Refill' => 'success',
-                                        'Refill Button' => 'success',
-                                        'Cancel Button' => 'success',
-                                        'No refill' => 'success',
-                                        '7 days Refill' => 'success',
-                                        '15 days Refill' => 'success',
-                                        '30 days Refill' => 'success',
-                                        '60 days Refill' => 'success',
-                                        '90 days Refill' => 'success',
-                                        '365 days Refill' => 'success',
-                                    ];
-                                @endphp
+        [data-favorite-service-id]:hover {
+            color: #ffc107;
+            background-color: rgba(255, 193, 7, 0.1);
+        }
 
-                                @foreach ($categories as $cat)
-                                    @php $catSvcs = $groupedServices->get($cat['id'], collect()); @endphp
-                                    @if ($catSvcs->isNotEmpty())
-                                        {{-- Category header row --}}
-                                        <tr class="svc-cat-row bg-white border-top border-2"
-                                            data-platform="{{ $cat['platform_id'] ?? -1 }}"
-                                            data-category="{{ $cat['id'] }}">
-                                            @php
-                                                $platform = collect($platforms)->firstWhere(
-                                                    'id',
-                                                    $cat['platform_id'] ?? null,
-                                                );
-                                                $platformName = $platform['name'] ?? ($platform->name ?? null);
-                                                $platformImage = $platform['image'] ?? ($platform->image ?? null);
-                                            @endphp
-                                            <td colspan="8" class="fs-5 fw-bolder">
-                                                <div class="d-flex align-items-center">
-                                                    @if (!empty($platformImage))
-                                                        @if (str_contains($platformImage, '/') || str_contains($platformImage, '.'))
-                                                            <img src="{{ $platformImage }}" class="w-15px h-15px me-1">
-                                                        @else
-                                                            <i class="{{ $platformImage }} fs-5 me-1"></i>
-                                                        @endif
-                                                    @endif
-                                                    <div class="d-flex flex-column ls-1">
-                                                        {{ $platformName ? $platformName . ' | ' . $cat['name'] : $cat['name'] }}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
+        [data-favorite-service-id].favorite-active {
+            color: #ffc107;
+        }
 
-                                        {{-- Service rows --}}
-                                        @foreach ($catSvcs as $svc)
-                                            <tr class="svc-row" data-platform="{{ $cat['platform_id'] ?? -1 }}"
-                                                data-category="{{ $svc['category_id'] }}"
-                                                data-name="{{ strtolower($svc['name']) }} {{ $svc['id'] }}"
-                                                data-rate="{{ preg_replace('/[^0-9.]/', '', $svc['rate_formatted']) }}">
-                                                <td class="ps-3">
-                                                    <a href="javascript:;" class="svc-fav-btn"
-                                                        data-id="{{ $svc['id'] }}"
-                                                        data-cat="{{ $svc['category_id'] }}"
-                                                        data-pid="{{ $cat['platform_id'] ?? -1 }}"
-                                                        onclick="toggleFavorite({{ $svc['id'] }}, {{ $svc['category_id'] }}, {{ $cat['platform_id'] ?? -1 }})">
-                                                        <i class="fa-regular fa-star text-muted fs-7"></i>
+        .services-list__description .btn-actions {
+            padding: 0.375rem 0.75rem;
+            transition: all 0.2s ease;
+        }
+
+        .services-list__description .btn-actions:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .service-description-content {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 1rem 0;
+        }
+
+        .service-description-content h5 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .service-description-content p {
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+        }
+
+        .services-list-category-title h4 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .services-table-empty {
+            text-align: center;
+            padding: 2rem;
+            color: #999;
+        }
+
+        .services-table-empty i {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            .services-list__description .btn-actions {
+                width: 100%;
+            }
+        }
+    </style>
+
+    <!-- Main variables *content* -->
+    <div id="block_37">
+        <div class="block-bg"></div>
+        <div class="container-fluid">
+            <div class="services-list ">
+                <div class="row">
+                    <div class="col ">
+                        <div
+                            class="services-filters component_filter_form_group component_filter_card component_platforms mb-3">
+                            <div class="card">
+                                <div class="row">
+                                    <div class="col-md-auto mb-3 mb-md-0">
+                                        <div class="component_filter_button">
+                                            <div class="dropdown">
+                                                <a class="btn btn-big-primary w-sm-auto w-100 dropdown-toggle"
+                                                    href="#" role="button" id="dropdown-category-filter-37"
+                                                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                    <span class="fal fa-filter mr-1"></span>
+                                                    <span class="services-filter__active-category"
+                                                        data-filter-active-category="true">{{ __('services.all_categories') }}</span>
+                                                </a>
+                                                <div class="dropdown-menu" style="max-height:320px;overflow-y:auto;min-width:220px;">
+                                                    <a class="dropdown-item" href="#" data-filter-category-id="All"
+                                                        style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
+                                                        <span class="fas fa-list text-muted" style="width:16px;text-align:center;flex-shrink:0;"></span>
+                                                        <span>{{ __('services.all') }}</span>
                                                     </a>
-                                                </td>
-                                                <td class="fw-bold text-gray-600 fs-8 col-id">{{ $svc['id'] }}</td>
-                                                <td class="py-2 col-name">
-                                                    <div class="d-flex flex-column">
-                                                        <span
-                                                            class="fw-semibold text-gray-800 fs-7">{{ $svc['name'] }}</span>
-                                                        @if (!empty($svc['attributes']) && is_array($svc['attributes']))
-                                                            <div class="mt-1 d-flex flex-wrap gap-1">
-                                                                @foreach ($svc['attributes'] as $attr)
-                                                                    @php $color = $labelColors[$attr] ?? 'primary'; @endphp
-                                                                    <span
-                                                                        class="badge badge-outline badge-{{ $color }} fw-light fs-9 py-1 px-1">{{ $attr }}</span>
-                                                                @endforeach
-                                                            </div>
-                                                        @endif
+                                                    <div class="dropdown-divider"></div>
+                                                    <a class="dropdown-item" href="#"
+                                                        data-filter-category-id="favorites"
+                                                        data-filter-category-name="{{ __('services.favorite_services') }}"
+                                                        style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
+                                                        <span class="fas fa-star" style="width:16px;text-align:center;flex-shrink:0;color:#ffc107;"></span>
+                                                        <span>{{ __('services.favorite_services') }}</span>
+                                                    </a>
+                                                    <div class="dropdown-divider"></div>
+                                                    @foreach ($categories as $category)
+                                                        <a class="dropdown-item" href="#"
+                                                            data-filter-category-id="{{ $category['id'] ?? '' }}"
+                                                            data-filter-category-name="{{ $category['name'] ?? '' }}"
+                                                            style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
+                                                            <span style="width:16px;height:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                                                                @if (($category['image'] ?? ''))
+                                                                    @if (strpos(($category['image'] ?? ''), '.') !== false || strpos(($category['image'] ?? ''), '/') === 0 || strpos(($category['image'] ?? ''), 'http') === 0)
+                                                                        <img src="{{ ($category['image'] ?? '') }}" alt="{{ $category['name'] ?? '' }}"
+                                                                            style="width:16px;height:16px;object-fit:contain;">
+                                                                    @else
+                                                                        <i class="{{ ($category['image'] ?? '') }}" style="font-size:14px;"></i>
+                                                                    @endif
+                                                                @else
+                                                                    <span class="fas fa-folder text-muted" style="font-size:14px;"></span>
+                                                                @endif
+                                                            </span>
+                                                            <span>{{ $category['name'] ?? '' }}</span>
+                                                        </a>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col">
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" placeholder="{{ __('services.search') }}"
+                                                data-search-service="#service-table-37">
+                                            <span class="input-group-append component_button_search">
+                                                <button class="btn btn-big-secondary" type="button"
+                                                    data-filter-serch-btn="true">
+                                                    <i class="fas fa-search"></i>
+                                                </button>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col">
+                        <div class="services-list__table">
+                            <div class="table-bg component_table ">
+                                <div class="table-wr table-responsive editor__component-wrapper">
+                                    <table class="table" id="service-table-37">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 42px"></th>
+                                                <th>{{ __('services.id') }}</th>
+                                                <th class="nowrap">{{ __('services.service') }}</th>
+                                                <th class="nowrap">{{ __('services.rate_per_1000') }}</th>
+                                                <th class="nowrap">{{ __('services.min_order') }}</th>
+                                                <th class="nowrap">{{ __('services.max_order') }}</th>
+                                                <th class="nowrap" nowrap="">
+                                                    <div class="d-flex align-items-center">
+                                                        <span>{{ __('services.average_time') }}</span>
+                                                        <span class="ml-1 mr-1 fa fa-exclamation-circle"
+                                                            data-toggle="tooltip" data-placement="top" title=""
+                                                            data-original-title="{{ __('services.average_time_tooltip') }}"></span>
                                                     </div>
-                                                </td>
-                                                <td class="text-end col-rate">
-                                                    <span
-                                                        class="fw-bold text-primary fs-7">{{ $svc['rate_formatted'] }}</span>
-                                                </td>
-                                                <td class="text-end text-gray-700 fs-7 col-min">
-                                                    {{ number_format($svc['min']) }}</td>
-                                                <td class="text-end text-gray-700 fs-7 col-max">
-                                                    {{ number_format($svc['max']) }}</td>
-                                                @if($showAverageTime)
-                                                <td class="text-nowrap text-end text-gray-600 fs-7 col-avg">
-                                                    {{ $svc['average_time'] ?: '—' }}</td>
-                                                @endif
-                                                <td class="text-center pe-3 col-desc">
-                                                    <button type="button"
-                                                        class="btn btn-secondary btn-sm px-4 py-1"
-                                                        onclick="_services.on.click.viewDescription({{ $svc['id'] }})"
-                                                        data-lang="services.view">View</button>
-                                                </td>
+                                                </th>
+                                                <th class="hidden-xs hidden-sm service-description__th">{{ __('services.description') }}
+                                                </th>
                                             </tr>
-                                        @endforeach
-                                    @endif
-                                @endforeach
-                            </tbody>
-                        </table>
+                                        </thead>
+                                        <tbody id="service-tbody">
+                                            @foreach ($categories as $category)
+                                                @if (isset($groupedServices[$category['id'] ?? '']) && $groupedServices[$category['id'] ?? '']->count() > 0)
+                                                    <tr class="services-list-category-title"
+                                                        data-filter-table-category-id="{{ $category['id'] ?? '' }}">
+                                                        <td colspan="100%"
+                                                            class="style-bg-primary-alpha-20 style-text-primary services-category editor__component-wrapper">
+                                                            <div class="w-100 ">
+                                                                <h4>
+                                                                    @if (($category['image'] ?? ''))
+                                                                        @if (strpos(($category['image'] ?? ''), '.') !== false || strpos(($category['image'] ?? ''), '/') === 0 || strpos(($category['image'] ?? ''), 'http') === 0)
+                                                                            <img src="{{ ($category['image'] ?? '') }}"
+                                                                                alt="{{ $category['name'] ?? '' }}"
+                                                                                class="img-fluid align-middle mr-1"
+                                                                                style="max-width: calc(1em + 6px); max-height: calc(1em + 6px);">
+                                                                        @else
+                                                                            <i class="{{ ($category['image'] ?? '') }} align-middle mr-1" style="font-size: 18px;"></i>
+                                                                        @endif
+                                                                    @endif
+                                                                    <span
+                                                                        class="align-middle">{{ $category['name'] ?? '' }}</span>
+                                                                </h4>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+
+                                                    @foreach ($groupedServices[$category['id'] ?? ''] as $service)
+                                                        <tr data-filter-table-category-id="{{ $category['id'] ?? '' }}" class="service-row">
+                                                            <td data-label="{{ __('services.service') }}">
+                                                                <a href="#"
+                                                                    data-favorite-service-id="{{ $service['id'] ?? '' }}"
+                                                                    class="favorite-btn"
+                                                                    title="{{ __('services.add_to_favorites') }}">
+                                                                    <span data-favorite-icon="" class="far fa-star"></span>
+                                                                </a>
+                                                            </td>
+                                                            <td data-label="{{ __('services.id') }}"
+                                                                data-filter-table-service-id="{{ $service['id'] ?? '' }}">
+                                                                {{ $service['id'] ?? '' }}</td>
+                                                            <td data-label="{{ __('services.service') }}"
+                                                                data-filter-table-service-name="true">
+                                                                {{ $service['name'] ?? '' }}
+                                                            </td>
+                                                            <td data-label="{{ __('services.rate_per_1000') }}">
+                                                                {{ $service['rate_formatted'] ?? '' }}
+                                                            </td>
+                                                            <td data-label="{{ __('services.min_order') }}">
+                                                                {{ number_format($service['min'] ?? '') }}</td>
+                                                            <td data-label="{{ __('services.max_order') }}">
+                                                                {{ number_format($service['max'] ?? '') }}</td>
+                                                            <td data-label="{{ __('services.avg_time') }}" class="nowrap">
+                                                                {{ $service['average_time'] ?? '-' }}
+                                                            </td>
+                                                            <td data-label="{{ __('services.description') }}" class="services-list__description">
+                                                                <div class="component_button_view">
+                                                                    <button
+                                                                        class="btn btn-actions btn-view-service-description"
+                                                                        data-toggle="modal"
+                                                                        data-content-id="#service-description-id-{{ $service['id'] ?? '' }}"
+                                                                        data-service-id="{{ $service['id'] ?? '' }}"
+                                                                        data-service-name="{{ $service['name'] ?? '' }}"
+                                                                        data-min="{{ $service['min'] ?? '' }}"
+                                                                        data-max="{{ $service['max'] ?? '' }}"
+                                                                        data-target="#service-description-37">
+                                                                        {{ __('services.view') }}
+                                                                    </button>
+                                                                </div>
+                                                                <div class="d-none"
+                                                                    id="service-description-id-{{ $service['id'] ?? '' }}">
+                                                                    {{ $service['description'] ?? __('services.no_description') }}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    @endforeach
+                                                @endif
+                                            @endforeach
+                                            @if (empty($groupedServices) || collect($groupedServices)->sum(fn($s) => $s->count()) === 0)
+                                                <tr>
+                                                    <td colspan="100%" class="services-table-empty">
+                                                        <div>
+                                                            <i class="fas fa-inbox"></i>
+                                                            <p>{{ __('common.info') ?? 'No services available' }}</p>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            @endif
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {{-- No results row --}}
-            <div id="svc-no-result" class="text-center text-muted py-5 d-none">
-                <i class="fa-regular fa-face-sad-tear fs-2 mb-2"></i>
-                <div data-lang="services.no_services_found">No services found.</div>
-            </div>
-        </div>
-    </div>
-
-    {{-- Description modal --}}
-    <div class="modal fade" id="modal-description" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-body text-start p-5">
-                    <div id="service-name"></div>
-                    <div class="separator separator-dashed my-5"></div>
-                    <div id="service-description"></div>
-                    <a id="modal-desc-buy" href="#" target="_blank"
-                        class="btn btn-primary w-100 mt-5 text-uppercase">Buy now</a>
+            <div class="modal fade " tabindex="-1" role="dialog" id="service-description-37">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-body">
+                            <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <div class="service-description-content"></div>
+                            <button class="btn btn-block btn-big-primary" id="createQuickOrder"
+                                style="margin-top: 24px;">
+                                {{ __('services.create_order') }}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+
 @endsection
 
 @push('scripts')
     <script>
-        (function() {
-            // ── Favorites ──────────────────────────────────────────────────────────
-            var FAV_KEY = 'svc_favorites';
-
-            function getFavs() {
-                try {
-                    return JSON.parse(localStorage.getItem(FAV_KEY)) || {};
-                } catch (e) {
-                    return {};
-                }
+        $(document).ready(function() {
+            // LocalStorage helper functions for favorites
+            function getFavorites() {
+                const favorites = localStorage.getItem('favorite_services');
+                return favorites ? JSON.parse(favorites) : [];
             }
 
-            function saveFavs(f) {
-                localStorage.setItem(FAV_KEY, JSON.stringify(f));
+            function saveFavorites(favorites) {
+                localStorage.setItem('favorite_services', JSON.stringify(favorites));
             }
 
-            function applyFavIcons() {
-                var favs = getFavs();
-                document.querySelectorAll('.svc-fav-btn').forEach(function(el) {
-                    var icon = el.querySelector('i');
-                    if (favs[el.dataset.id]) {
-                        icon.classList.replace('fa-regular', 'fa-solid');
-                        icon.classList.replace('text-muted', 'text-warning');
-                    } else {
-                        icon.classList.replace('fa-solid', 'fa-regular');
-                        icon.classList.replace('text-warning', 'text-muted');
-                    }
-                });
+            function isFavorite(serviceId) {
+                const favorites = getFavorites();
+                return favorites.includes(parseInt(serviceId));
             }
-            window.toggleFavorite = function(id, categoryId, platformId) {
-                var key = String(id),
-                    favs = getFavs();
-                if (favs[key]) {
-                    delete favs[key];
+
+            function toggleFavorite(serviceId) {
+                let favorites = getFavorites();
+                const id = parseInt(serviceId);
+
+                if (favorites.includes(id)) {
+                    favorites = favorites.filter(fav => fav !== id);
                 } else {
-                    favs[key] = {
-                        id,
-                        category_id: categoryId,
-                        platform_id: platformId
-                    };
+                    favorites.push(id);
                 }
-                saveFavs(favs);
-                applyFavIcons();
-            };
 
-            // ── Service descriptions map ────────────────────────────────────────────
-            var _descMap = {
-                @foreach ($services as $svc)
-                    {{ $svc['id'] }}: {
-                        desc: {!! json_encode($svc['description'] ?? '') !!},
-                        name: {!! json_encode($svc['name']) !!},
-                        image: {!! json_encode($svc['image'] ?? '') !!}
-                    },
-                @endforeach
-            };
-
-            // ── Category data map (grouped by platform_id) ──────────────────────────
-            var _catsByPlatform = {!! json_encode(
-                collect($categories)->filter(fn($c) => in_array((string) $c['id'], $catIdsWithServices))->groupBy(fn($c) => (string) ($c['platform_id'] ?? -1))->map(
-                        fn($cats) => $cats->map(
-                                fn($c) => [
-                                    'id' => $c['id'],
-                                    'name' => $c['name'],
-                                    'image' => $c['image'] ?? null,
-                                    'platform_id' => $c['platform_id'] ?? -1,
-                                    'platform_name' =>
-                                        collect($platforms)->firstWhere('id', $c['platform_id'] ?? null)?->name ?? null,
-                                ],
-                            )->values(),
-                    ),
-            ) !!};
-
-            function iconHtml(img, cls) {
-                if (!img) return '';
-                cls = cls || 'w-15px h-15px';
-                return (img.indexOf('/') !== -1 || img.indexOf('.') !== -1) ?
-                    '<img src="' + img + '" class="' + cls + ' me-1" />' :
-                    '<i class="' + img + '"></i> ';
+                saveFavorites(favorites);
+                return favorites.includes(id);
             }
 
-            // ── Filter state ────────────────────────────────────────────────────────
-            var _state = {
-                keyword: '',
-                platform: '-100',
-                category: '-100',
-                rateMin: null,
-                rateMax: null
-            };
-            var _rateSlider = null;
+            // Initialize favorite icons on page load
+            function initializeFavorites() {
+                $('[data-favorite-service-id]').each(function() {
+                    const serviceId = $(this).data('favorite-service-id');
+                    const $link = $(this);
+                    const $icon = $(this).find('[data-favorite-icon]');
 
-            function applyFilter() {
-                var kw = _state.keyword.toLowerCase().trim();
-                var platform = String(_state.platform);
-                var category = String(_state.category);
-                var rMin = _state.rateMin;
-                var rMax = _state.rateMax;
-
-                var visibleCats = {};
-
-                // Filter service rows
-                document.querySelectorAll('#table-service tbody tr.svc-row').forEach(function(row) {
-                    var rowPlatform = String(row.dataset.platform);
-                    var rowCategory = String(row.dataset.category);
-                    var rowName = (row.dataset.name || '').toLowerCase();
-                    var rowRate = parseFloat(row.dataset.rate) || 0;
-
-                    var matchPlatform = platform === '-100' || rowPlatform === platform;
-                    var matchCategory = category === '-100' || rowCategory === category;
-                    var matchKeyword = !kw || rowName.indexOf(kw) !== -1;
-                    var matchRate = (rMin === null || rowRate >= rMin) && (rMax === null || rowRate <= rMax);
-
-                    var visible = matchPlatform && matchCategory && matchKeyword && matchRate;
-                    row.style.display = visible ? '' : 'none';
-                    if (visible) visibleCats[rowCategory] = true;
-                });
-
-                // Show/hide category header rows based on whether they have visible children
-                document.querySelectorAll('#table-service tbody tr.svc-cat-row').forEach(function(row) {
-                    var catId = String(row.dataset.category);
-                    row.style.display = visibleCats[catId] ? '' : 'none';
-                });
-
-                // Show "no result" message
-                var hasAny = Object.keys(visibleCats).length > 0;
-                var noResult = document.getElementById('svc-no-result');
-                if (noResult) noResult.classList.toggle('d-none', hasAny);
-            }
-
-            // ── _services public API ────────────────────────────────────────────────
-            window._services = {
-                on: {
-                    input: {
-                        keyword: function() {
-                            _state.keyword = document.getElementById('ipt-keyword').value;
-                        }
-                    },
-                    change: {
-                        platform: function(val) {
-                            _state.platform = String(val);
-                            _state.category = '-100';
-                            buildCategorySelect(val);
-                        },
-                        category: function(val) {
-                            _state.category = String(val);
-                        }
-                    },
-                    click: {
-                        filter: function() {
-                            applyFilter();
-                        },
-                        toggleRate: function() {
-                            var wrap = document.getElementById('rate-filter-wrap');
-                            var isHidden = wrap.classList.toggle('d-none');
-                            if (!isHidden && !_rateSlider) {
-                                var rMin = parseFloat(wrap.dataset.rateMin) || 0;
-                                var rMax = parseFloat(wrap.dataset.rateMax) || 9999;
-                                _rateSlider = noUiSlider.create(
-                                    document.getElementById('kt_slider_rate_range'), {
-                                        start: [rMin, rMax],
-                                        connect: true,
-                                        range: {
-                                            min: rMin,
-                                            max: rMax
-                                        },
-                                        tooltips: [true, true],
-                                        format: {
-                                            to: v => parseFloat(v).toFixed(4),
-                                            from: v => parseFloat(v)
-                                        }
-                                    }
-                                );
-                                _rateSlider.on('update', function(values) {
-                                    _state.rateMin = parseFloat(values[0]);
-                                    _state.rateMax = parseFloat(values[1]);
-                                    applyFilter();
-                                });
-                            }
-                            if (isHidden) {
-                                _state.rateMin = null;
-                                _state.rateMax = null;
-                                applyFilter();
-                            }
-                        },
-                        reset: function() {
-                            _state = {
-                                keyword: '',
-                                platform: '-100',
-                                category: '-100',
-                                rateMin: null,
-                                rateMax: null
-                            };
-                            document.getElementById('ipt-keyword').value = '';
-                            $('#sl-platform').val('-100').trigger('change.select2');
-                            buildCategorySelect('-100');
-
-                            var wrap = document.getElementById('rate-filter-wrap');
-                            wrap.classList.add('d-none');
-                            if (_rateSlider) {
-                                _rateSlider.destroy();
-                                _rateSlider = null;
-                            }
-
-                            applyFilter();
-                        },
-                        viewDescription: function(id) {
-                            var entry = _descMap[id] || {};
-                            var icon = iconHtml(entry.image || '', 'w-20px h-20px');
-                            document.getElementById('service-name').innerHTML =
-                                icon +
-                                '<span class="fw-bolder fs-4 ls-1">' + id + '</span>' +
-                                ' - <span class="fs-5">' + (entry.name || '') + '</span>';
-                            document.getElementById('service-description').innerHTML = entry.desc || '';
-                            document.getElementById('modal-desc-buy').href = '/new?service=' + id;
-                            new bootstrap.Modal(document.getElementById('modal-description')).show();
-                        }
+                    if (isFavorite(serviceId)) {
+                        $icon.removeClass('far').addClass('fas');
+                        $link.addClass('favorite-active');
+                    } else {
+                        $icon.removeClass('fas').addClass('far');
+                        $link.removeClass('favorite-active');
                     }
+                });
+            }
+
+            // Initialize favorites on page load
+            initializeFavorites();
+
+            // Category filter functionality
+            $('[data-filter-category-id]').on('click', function(e) {
+                e.preventDefault();
+
+                const categoryId = $(this).data('filter-category-id');
+                const categoryName = $(this).data('filter-category-name') || $(this).text().trim();
+
+                // Update active category display
+                $('.services-filter__active-category').text(categoryName);
+
+                // Show/hide services based on category
+                if (categoryId === 'All') {
+                    $('[data-filter-table-category-id]').show();
+                } else if (categoryId === 'favorites') {
+                    // Show only favorited services
+                    $('[data-filter-table-category-id]').hide();
+
+                    let hasVisibleFavorites = false;
+
+                    $('[data-filter-table-category-id]').each(function() {
+                        const $row = $(this);
+                        if (!$row.hasClass('services-list-category-title')) {
+                            const $favoriteLink = $row.find('[data-favorite-service-id]');
+                            if ($favoriteLink.hasClass('favorite-active')) {
+                                $row.show();
+                                hasVisibleFavorites = true;
+                                // Also show the category header
+                                const categoryId = $row.data('filter-table-category-id');
+                                $('[data-filter-table-category-id="' + categoryId +
+                                    '"].services-list-category-title').show();
+                            }
+                        }
+                    });
+
+                    // Show message if no favorites
+                    if (!hasVisibleFavorites) {
+                        const noFavoritesMsg = '{{ __('notifications.no_notifications') }}';
+                        console.log(noFavoritesMsg);
+                    }
+                } else {
+                    $('[data-filter-table-category-id]').hide();
+                    $('[data-filter-table-category-id="' + categoryId + '"]').show();
                 }
-            };
+            });
 
-            // ── Select2 options ─────────────────────────────────────────────────────
-            var s2opts = {
-                escapeMarkup: function(m) {
-                    return m;
-                },
-                minimumResultsForSearch: -1,
-                templateResult: function(o) {
-                    if (!o.element) return o.text;
-                    var c = o.element.getAttribute('data-content');
-                    return c ? c : o.text;
-                },
-                templateSelection: function(o) {
-                    if (!o.element) return o.text;
-                    var c = o.element.getAttribute('data-content');
-                    return c ? c : o.text;
-                },
-                width: '100%'
-            };
+            // Search functionality
+            $('[data-search-service]').on('input', function() {
+                const searchTerm = $(this).val().toLowerCase();
+                const tableSelector = $(this).data('search-service');
 
-            function buildCategorySelect(platformId) {
-                var $cat = $('#sl-category');
-                if ($cat.hasClass('select2-hidden-accessible')) $cat.select2('destroy');
-                $cat.empty().append($('<option>').val('-100').text(
-                    (LANGUAGE?._flat?.['services.all_categories']) || 'All category'
-                ).attr('data-platform', '-100'));
+                if (searchTerm === '') {
+                    $(tableSelector + ' tbody tr').show();
+                } else {
+                    $(tableSelector + ' tbody tr').each(function() {
+                        const $row = $(this);
+                        const serviceName = $row.find('[data-filter-table-service-name]').text()
+                            .toLowerCase();
+                        const serviceId = $row.find('[data-filter-table-service-id]').text()
+                            .toLowerCase();
 
-                if (String(platformId) !== '-100') {
-                    var cats = _catsByPlatform[String(platformId)] || [];
-                    cats.forEach(function(c) {
-                        var label = c.platform_name ? c.platform_name + ' | ' + c.name : c.name;
-                        $cat.append($('<option>').val(c.id).text(label)
-                            .attr('data-platform', c.platform_id)
-                            .attr('data-content', iconHtml(c.image) + label));
+                        if (serviceName.includes(searchTerm) || serviceId.includes(searchTerm)) {
+                            $row.show();
+                        } else if (!$row.hasClass('services-list-category-title')) {
+                            $row.hide();
+                        }
                     });
                 }
-
-                $cat.val('-100').select2(s2opts);
-            }
-
-            // ── Init select2 ────────────────────────────────────────────────────────
-            document.addEventListener('DOMContentLoaded', function() {
-                applyFavIcons();
-
-                $('#sl-platform').select2(s2opts).on('change', function() {
-                    _services.on.change.platform($(this).val());
-                });
-
-                buildCategorySelect('-100');
-
-                $(document).on('change', '#sl-category', function() {
-                    _services.on.change.category($(this).val());
-                });
             });
-        })();
+
+            // Service description modal functionality
+            $('.btn-view-service-description').on('click', function() {
+                const contentId = $(this).data('content-id');
+                const serviceName = $(this).data('service-name');
+                const serviceId = $(this).data('service-id');
+                const minOrder = $(this).data('min');
+                const maxOrder = $(this).data('max');
+
+                // Get description content
+                const description = $(contentId).html() || '{{ __('services.no_desc') }}';
+
+                // Update modal content
+                const modal = $($(this).data('target'));
+                const serviceIdLabel = '{{ __('services.service_id') }}';
+                const minOrderLabel = '{{ __('services.min_order') }}';
+                const maxOrderLabel = '{{ __('services.max_order') }}';
+                const descriptionLabel = '{{ __('services.description') }}';
+
+                modal.find('.service-description-content').html(`
+            <h5>${serviceName}</h5>
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <p><strong>${serviceIdLabel}:</strong> <span class="badge badge-primary">${serviceId}</span></p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>${minOrderLabel}:</strong> <span class="badge badge-info">${minOrder}</span></p>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <p><strong>${maxOrderLabel}:</strong> <span class="badge badge-warning">${maxOrder}</span></p>
+                </div>
+            </div>
+            <div class="mt-3">
+                <strong>${descriptionLabel}:</strong>
+                <div class="mt-2 p-2 bg-light rounded">${description || '<em>No description available</em>'}</div>
+            </div>
+        `);
+
+                // Update create order button
+                modal.find('#createQuickOrder').data('service-id', serviceId);
+            });
+
+            // Create quick order functionality
+            $('#createQuickOrder').on('click', function() {
+                const serviceId = $(this).data('service-id');
+                if (serviceId) {
+                    // Redirect to order creation page with service parameter
+                    window.location.href = `/new?service=${serviceId}`;
+                }
+            });
+
+            // Favorite service functionality with localStorage
+            $('[data-favorite-service-id]').on('click', function(e) {
+                e.preventDefault();
+
+                const serviceId = $(this).data('favorite-service-id');
+                const $link = $(this);
+                const $icon = $(this).find('[data-favorite-icon]');
+
+                // Toggle favorite status
+                const isFav = toggleFavorite(serviceId);
+
+                // Update icon and class
+                if (isFav) {
+                    $icon.removeClass('far').addClass('fas');
+                    $link.addClass('favorite-active');
+                    const removeLabel = '{{ __('services.favorite_services') }}';
+                    $link.attr('title', removeLabel);
+                } else {
+                    $icon.removeClass('fas').addClass('far');
+                    $link.removeClass('favorite-active');
+                    const addLabel = '{{ __('services.favorite_services') }}';
+                    $link.attr('title', addLabel);
+                }
+            });
+
+            // Initialize tooltips
+            $('[data-toggle="tooltip"]').tooltip();
+        });
     </script>
 @endpush

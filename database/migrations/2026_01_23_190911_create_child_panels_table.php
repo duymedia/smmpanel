@@ -26,7 +26,7 @@ return new class extends Migration
             
             // Access Level
             $table->decimal('price', 15, 2)->default(0);
-            $table->string('access')->default('child');
+            $table->text('access')->default('child');
             
             // Settings (JSON)
             $table->json('settings')->nullable();

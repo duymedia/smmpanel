@@ -1,4 +1,4 @@
-@extends('clients.theme-6.layouts.app')
+﻿@extends('clients.theme-6.layouts.app')
 
 @section('title', __('addfunds.title'))
 
@@ -42,11 +42,11 @@
                     </a>
                     <div class="pay-topbar__title">
                         <i class="fas fa-university"></i>
-                        {{ __('addfunds.transfer_details') }}
+                        Thông tin chuyển khoản
                     </div>
                 </div>
 
-                <div class="row">
+                <div class="row pay-layout">
                     <div class="col-lg-7 mb-4 mb-lg-0">
                         <div class="pay-card">
                             <div class="pay-card__header">
@@ -58,6 +58,10 @@
                                 </div>
                             </div>
                             <div class="pay-card__body">
+                                <div class="pay-summary">
+                                    <span>{{ __('addfunds.amount') }}</span>
+                                    <strong>{{ number_format((float) $amount, 2, '.', ',') }} {{ $payment->currency ?? 'VND' }}</strong>
+                                </div>
                                 @if ($accountName)
                                     <div class="prow">
                                         <span class="prow__label"><i
@@ -105,14 +109,15 @@
                             </div>
                             <div class="pnotice">
                                 <i class="fas fa-exclamation-triangle"></i>
-                                <span>{{ __('addfunds.auto_scan_notice') }}</span>
+                                <span>Sau khi chuyển khoản, hệ thống sẽ tự động kiểm tra và cộng tiền vào tài khoản.</span>
                             </div>
+                            <div class="pay-help"><i class="fas fa-shield-alt"></i><span>Sau khi chuyển khoản, hệ thống sẽ tự động kiểm tra và cộng tiền vào tài khoản.</span></div>
                         </div>
                     </div>
 
                     <div class="col-lg-5">
                         <div class="pay-card pay-card--qr">
-                            <div class="pay-card__qr-title"><i class="fas fa-qrcode"></i>{{ __('addfunds.scan_qr') }}</div>
+                            <div class="pay-card__qr-title"><i class="fas fa-qrcode"></i>Quét mã QR để thanh toán</div>
                             @if ($qrUrl)
                                 <div class="qr-wrap">
                                     <div class="qr-box">
@@ -125,16 +130,16 @@
                                         <div class="qr-corner br"></div>
                                     </div>
                                 </div>
-                                <div class="qr-hint"><i class="fas fa-mobile-alt"></i>{{ __('addfunds.open_banking_app') }}
+                                <div class="qr-hint"><i class="fas fa-mobile-alt"></i>Mở ứng dụng ngân hàng để quét mã
                                 </div>
                             @else
                                 <div class="qr-empty"><i class="fas fa-qrcode"></i>
-                                    <p>{{ __('addfunds.no_qr') }}</p>
+                                    <p>Chưa có mã QR cho phương thức này.</p>
                                 </div>
                             @endif
                             <div class="qr-amount-badge">
                                 <i class="fas fa-coins"></i>
-                                {{ number_format((float) $amount, 0, '.', ',') }} VND
+                                {{ number_format((float) $amount, 2, '.', ',') }} {{ $payment->currency ?? 'VND' }}
                             </div>
                         </div>
                     </div>
@@ -163,8 +168,28 @@
             display: flex;
             align-items: center;
             gap: 16px;
-            margin-bottom: 20px;
+            margin: 0 0 20px;
+            padding: 4px 0;
         }
+
+        .payment-progress { display:flex; align-items:center; max-width:680px; margin:0 auto 24px; }
+        .payment-progress__step { display:flex; align-items:center; gap:8px; color:var(--text-muted,#9ca3af); font-size:.75rem; white-space:nowrap; }
+        .payment-progress__step span { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:#eef2f7; font-weight:700; }
+        .payment-progress__step.is-active { color:var(--primary-color,#337ab7); }
+        .payment-progress__step.is-active span { color:#fff; background:var(--primary-color,#337ab7); }
+        .payment-progress__line { flex:1; height:1px; margin:0 12px; background:#dce3eb; }
+
+        .pay-topbar__title { letter-spacing: .1px; }
+        .pay-card__header { padding: 16px 20px; }
+        .pay-card__body { padding: 6px 20px; }
+        .pay-card { border-radius: 12px; box-shadow: 0 4px 18px rgba(15, 23, 42, .06); }
+        .pay-summary { margin: 8px 0; padding: 12px 14px; }
+        .pay-summary strong { font-size: 1.05rem; }
+        .prow { padding: 12px 0; }
+        .pnotice { margin: 0 20px 14px; padding: 10px 12px; font-size: .78rem; }
+        .pay-help { padding: 0 20px 14px; }
+        .qr-img { width: 190px; height: 190px; }
+        .pay-card--qr { padding: 22px 18px; gap: 12px; }
 
         .pay-back {
             display: inline-flex;
@@ -203,6 +228,7 @@
             box-shadow: 0 2px 16px rgba(0, 0, 0, .08);
             overflow: hidden;
             height: 100%;
+            border: 1px solid rgba(31, 41, 55, .06);
         }
 
         .pay-card__header {
@@ -242,6 +268,9 @@
         .pay-card__body {
             padding: 8px 24px;
         }
+
+        .pay-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:8px 0 4px; padding:14px 16px; border-radius:10px; background:linear-gradient(135deg,rgba(51,122,183,.1),rgba(51,122,183,.03)); color:var(--text-muted,#64748b); font-size:.8rem; text-transform:uppercase; letter-spacing:.4px; }
+        .pay-summary strong { color:var(--primary-color,#337ab7); font-size:1.15rem; letter-spacing:0; }
 
         .prow {
             display: flex;
@@ -374,6 +403,9 @@
             margin-top: 2px;
             flex-shrink: 0;
         }
+
+        .pay-help { display:flex; align-items:center; gap:8px; padding:0 24px 18px; color:var(--text-muted,#94a3b8); font-size:.76rem; }
+        .pay-help i { color:#10b981; }
 
         .pay-card--qr {
             display: flex;
@@ -523,19 +555,65 @@
             font-size: 3rem;
             opacity: .3;
         }
+
+        .pay-layout > [class*="col-"] {
+            display: flex;
+        }
+
+        @media (max-width: 991px) {
+            .pay-layout > [class*="col-"] {
+                display: block;
+            }
+
+            .pay-card--qr {
+                min-height: 360px;
+            }
+        }
+
+        @media (max-width: 575px) {
+            .pay-topbar {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .pay-card__header,
+            .pay-card__body {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            .pay-help { padding-left:16px; padding-right:16px; }
+            .payment-progress__step strong { display:none; }
+
+            .prow {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 6px;
+            }
+
+            .prow__label {
+                min-width: 0;
+            }
+
+            .prow__copy {
+                width: 100%;
+                justify-content: flex-end;
+            }
+
+            .pnotice {
+                margin-left: 16px;
+                margin-right: 16px;
+            }
+
+            .qr-img {
+                width: min(220px, 65vw);
+                height: min(220px, 65vw);
+            }
+        }
     </style>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Proxy external images to bypass CORS
-            const qrImg = document.querySelector('.qr-img');
-            if (qrImg && qrImg.src) {
-                const url = qrImg.src;
-                // Check if image is from external domain (imgur, etc)
-                if (url.includes('imgur.com') || url.includes('i.imgur.com')) {
-                    qrImg.src = '{{ route('proxy.image') }}?url=' + encodeURIComponent(url);
-                }
-            }
-
             document.addEventListener('click', function(e) {
                 const btn = e.target.closest('.btn-clip');
                 if (!btn) return;
@@ -556,3 +634,5 @@
         });
     </script>
 @endpush
+
+

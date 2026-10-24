@@ -5854,7 +5854,7 @@ if (!Element.prototype.closest) {
 
 
 //
-// requestAnimationFrame polyfill by Erik MĂ¶ller.
+// requestAnimationFrame polyfill by Erik Möller.
 //  With fixes from Paul Irish and Tino Zijdel
 //
 //  http://paulirish.com/2011/requestanimationframe-for-smart-animating/

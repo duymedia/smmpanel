@@ -51,7 +51,7 @@ class EventController extends Controller
         Event::create($validated);
 
         return redirect()->route('admin.events.index')
-            ->with('success', 'Tạo sự kiện thành công!');
+            ->with('success', adminMessage('add'));
     }
 
     public function edit(Event $event)
@@ -78,7 +78,7 @@ class EventController extends Controller
         $event->update($validated);
 
         return redirect()->route('admin.events.index')
-            ->with('success', 'Cập nhật sự kiện thành công!');
+            ->with('success', adminMessage('update'));
     }
 
     public function destroy(Event $event)
@@ -86,7 +86,7 @@ class EventController extends Controller
         $event->delete();
 
         return redirect()->route('admin.events.index')
-            ->with('success', 'Xóa sự kiện thành công!');
+            ->with('success', adminMessage('delete'));
     }
 
     public function toggleStatus(Request $request, Event $event)
@@ -95,7 +95,7 @@ class EventController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Cập nhật trạng thái thành công!',
+            'message' => adminMessage('status'),
             'status' => $event->status
         ]);
     }
@@ -125,3 +125,4 @@ class EventController extends Controller
         return view('admin.events.history', compact('spins', 'events'));
     }
 }
+

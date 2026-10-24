@@ -16,6 +16,7 @@ return new class extends Migration
         Schema::create('activity_logs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->nullable()->constrained('users')->onDelete('cascade');
+            // 191 chars giÃƒÂ¡Ã‚Â»Ã‚Â¯ index trong giÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi hÃƒÂ¡Ã‚ÂºÃ‚Â¡n 1000 byte cÃƒÂ¡Ã‚Â»Ã‚Â§a MySQL cÃƒâ€¦Ã‚Â© (utf8mb4).
             $table->string('type');
             $table->json('activity')->nullable();
             $table->string('domain')->nullable();
@@ -27,6 +28,7 @@ return new class extends Migration
             $table->index('domain');
             $table->index('created_at');
         });
+
     }
 
     /**

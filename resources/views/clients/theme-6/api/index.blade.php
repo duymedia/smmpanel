@@ -1,22 +1,22 @@
     @extends('clients.theme-6.layouts.app')
 
-    @section('title', __('newOrder.title'))
+    @section('title', __('api.title'))
 
     @section('content')
-        <div id="block_api" class="pt-5 pb-5">
-            <div class="block-api">
+        <div id="block_api" class="theme6-api-block">
+            <div class="block-api component_card">
                 <div class="bg"></div>
                 <div class="divider-top"></div>
                 <div class="divider-bottom"></div>
                 <div class="container-fluid">
                     <div class="row justify-content-center">
-                        <div class="col-lg-6">
-                            <div class="card">
+                        <div class="col-12">
+                            <div class="card api-card">
                                 <div class="table-bg">
-                                    <div class="center-big-content-block">
+                                    <div class="center-big-content-block api-content">
                                         <h4 class="mb-3">API Docs</h4>
                                         <div class="table-responsive mb-3">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <tbody>
                                                     <tr>
                                                         <td class="width-40">HTTP Method</td>
@@ -28,8 +28,7 @@
                                                     </tr>
                                                     <tr>
                                                         <td>API Key</td>
-                                                        <td>Get an API key on the <a
-                                                                href="/account">Account</a> page</td>
+                                                        <td>Get an API key on the <a href="{{ route('clients.account.index') }}">Account</a> page</td>
                                                     </tr>
                                                     <tr>
                                                         <td>Response format</td>
@@ -39,7 +38,7 @@
                                             </table>
                                         </div>
                                         <h4 class="mb-3">Service list</h4>
-                                        <table class="table  mb-3">
+                                        <table class="table api-table mb-3">
                                             <thead>
                                                 <tr>
                                                     <th class="width-40">Parameters</th>
@@ -107,7 +106,7 @@
                                             </div>
                                         </form>
                                         <div id="type_0" style="">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -147,7 +146,7 @@
                                             </table>
                                         </div>
                                         <div id="type_10" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -175,7 +174,7 @@
                                             </table>
                                         </div>
                                         <div id="type_1" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -211,7 +210,7 @@
                                             </table>
                                         </div>
                                         <div id="type_2" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -243,7 +242,7 @@
                                             </table>
                                         </div>
                                         <div id="type_9" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -279,7 +278,7 @@
                                             </table>
                                         </div>
                                         <div id="type_4" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -311,7 +310,7 @@
                                             </table>
                                         </div>
                                         <div id="type_6" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -347,7 +346,7 @@
                                             </table>
                                         </div>
                                         <div id="type_7" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -383,7 +382,7 @@
                                             </table>
                                         </div>
                                         <div id="type_8" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -419,7 +418,7 @@
                                             </table>
                                         </div>
                                         <div id="type_100" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -478,7 +477,7 @@
                                             </table>
                                         </div>
                                         <div id="type_14" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -510,7 +509,7 @@
                                             </table>
                                         </div>
                                         <div id="type_15" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -546,7 +545,7 @@
                                             </table>
                                         </div>
                                         <div id="type_17" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -582,7 +581,7 @@
                                             </table>
                                         </div>
                                         <div id="type_20" style="display:none;">
-                                            <table class="table ">
+                                            <table class="table api-table">
                                                 <thead>
                                                     <tr>
                                                         <th class="width-40">Parameters</th>
@@ -625,7 +624,7 @@
 }
 </pre>
                                         <h4 class="mb-3">Order status</h4>
-                                        <table class="table  mb-3">
+                                        <table class="table api-table mb-3">
                                             <thead>
                                                 <tr>
                                                     <th class="width-40">Parameters</th>
@@ -659,7 +658,7 @@
 }
 </pre>
                                         <h4 class="mb-3">Multiple orders status</h4>
-                                        <table class="table  mb-3">
+                                        <table class="table api-table mb-3">
                                             <thead>
                                                 <tr>
                                                     <th class="width-40">Parameters</th>
@@ -705,7 +704,7 @@
 }
 </pre>
                                         <h4 class="mb-3">Create refill</h4>
-                                        <table class="table  mb-3">
+                                        <table class="table api-table mb-3">
                                             <thead>
                                                 <tr>
                                                     <th class="width-40">Parameters</th>
@@ -735,7 +734,7 @@
 }
 </pre>
                                         <h4 class="mb-3">Create multiple refill</h4>
-                                        <table class="table  mb-3">
+                                        <table class="table api-table mb-3">
                                             <thead>
                                                 <tr>
                                                     <th class="width-40">Parameters</th>
@@ -778,7 +777,7 @@
 ]
 </pre>
                                         <h4 class="mb-3">Get refill status</h4>
-                                        <table class="table  mb-3">
+                                        <table class="table api-table mb-3">
                                             <thead>
                                                 <tr>
                                                     <th class="width-40">Parameters</th>
@@ -808,7 +807,7 @@
 }
 </pre>
                                         <h4 class="mb-3">Get multiple refill status</h4>
-                                        <table class="table  mb-3">
+                                        <table class="table api-table mb-3">
                                             <thead>
                                                 <tr>
                                                     <th class="width-40">Parameters</th>
@@ -851,7 +850,7 @@
 ]
 </pre>
                                         <h4 class="mb-3">Create cancel</h4>
-                                        <table class="table  mb-3">
+                                        <table class="table api-table mb-3">
                                             <thead>
                                                 <tr>
                                                     <th class="width-40">Parameters</th>
@@ -890,7 +889,7 @@
 ]
 </pre>
                                         <h4 class="mb-3">User balance</h4>
-                                        <table class="table  mb-3">
+                                        <table class="table api-table mb-3">
                                             <thead>
                                                 <tr>
                                                     <th class="width-40">Parameters</th>
@@ -926,4 +925,15 @@
                 </div>
             </div>
         </div>
-    @endsection
+    <style>
+#block_api.theme6-api-block { width:100%; min-width:0; padding:30px 0; position:relative; }
+#block_api .block-api, #block_api .api-card, #block_api .api-content { width:100%; max-width:none; }
+#block_api .api-card { border:0; box-shadow:none; }
+#block_api .api-content { padding:0; }
+#block_api .api-content h4 { margin-top:24px; }
+#block_api .api-table { width:100%; table-layout:auto; }
+#block_api .api-table th:first-child, #block_api .api-table td:first-child { width:40%; }
+#block_api pre { max-width:100%; overflow:auto; white-space:pre-wrap; word-break:break-word; padding:16px; border-radius:8px; background:#f5f6fa; }
+#block_api .api-key-value { font-family:monospace; font-weight:700; word-break:break-all; }
+@media (max-width: 768px) { #block_api { padding:16px 0; } #block_api .api-table { font-size:13px; } #block_api .api-table th:first-child, #block_api .api-table td:first-child { width:35%; } }
+</style>@endsection

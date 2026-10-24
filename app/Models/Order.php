@@ -24,4 +24,6 @@ class Order extends Model
 
     // Scopes
     public function scopeByStatus($query, $status) { return $query->where('status', $status); }
+    public function scopeDomain($query, $domain = null) { return $query->where('domain', $domain ?? getDomain()); }
+    public function scopeEmptyApi($query) { return $query->where(fn($q) => $q->whereNull('orders_api')->orWhere('orders_api', '')); }
 }

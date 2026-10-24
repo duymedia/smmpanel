@@ -5,38 +5,40 @@ namespace App\Http\Middleware;
 use App\Models\Config;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class Client
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $site = Config::where('domain', getDomain())->first();
-
-        // Chưa có config → chỉ cho vào install
-        if (!$site) {
-            return $request->routeIs('install', 'install.store') ? $next($request) : redirect()->route('install');
-        }
-
-        // Site active + đã setup → chặn install
-        if ($request->routeIs('install', 'install.store') && $site->status && $site->user_id) {
-            return redirect('/');
-        }
-
-        // Site không active → logout user + chỉ cho vào install
-        if (!$site->status) {
-            if (Auth::check()) {
-                Auth::logout();
-                $request->session()->invalidate();
-                $request->session()->regenerateToken();
+        try {
+            $site = Config::query()->where('domain', $request->getHost())->first();
+            if (!$site) {
+                return $request->routeIs('install') ? $next($request) : redirect()->route('install');
             }
-            return $request->routeIs('install', 'install.store') ? $next($request) : redirect()->route('install');
+
+            $request->attributes->set('site_config', $site);
+            $ready = (int) $site->status === 1 && $site->user_id;
+
+            if ($request->routeIs('install')) {
+                return redirect($ready ? '/' : route('login'));
+            }
+
+            if ($ready) {
+                return $next($request);
+            }
+
+            $bypass = $request->routeIs('login', 'signup', 'install')
+                || $request->is('admin', 'admin/*', 'api/*', 'maintenance');
+
+            if ((int) $site->status === 0 && !$bypass) {
+                $theme = $site->default_interface ?: 'default';
+                return response()->view("clients.theme-{$theme}.maintenance", ['config' => $site], 503);
+            }
+
+            return $next($request);
+        } catch (\Throwable) {
+            return redirect()->route('install');
         }
-
-        // Share tenant cho middleware/controller phía sau
-        $request->attributes->set('site_config', $site);
-
-        return $next($request);
     }
 }

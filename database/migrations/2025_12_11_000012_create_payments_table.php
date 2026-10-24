@@ -16,9 +16,9 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->foreignId('payment_method_id')->constrained('payment_methods')->onDelete('restrict');
             $table->string('transaction_id')->unique();
-            $table->decimal('amount', 15, 2);
-            $table->decimal('bonus_amount', 15, 2)->default(0);
-            $table->decimal('total_amount', 15, 2);
+            $table->decimal('amount', 20, 8);
+            $table->decimal('bonus_amount', 20, 8)->default(0);
+            $table->decimal('total_amount', 20, 8);
             $table->string('currency', 10)->default('USD');
             $table->decimal('exchange_rate', 15, 4)->default(1);
             $table->enum('status', ['pending', 'processing', 'completed', 'failed', 'cancelled'])->default('pending');

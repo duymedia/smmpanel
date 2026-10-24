@@ -3,714 +3,661 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Order;
-use App\Smm\Smm;
-use App\Models\Service;
-use App\Models\User;
 use App\Models\ApiProvider;
+use App\Models\Order;
+use App\Models\User;
+use App\Models\Transaction;
+use App\Smm\Smm;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
+    private const TICKET_TO_TAG = [
+        'canceled' => 'Cancel', 'refill' => 'Refill', 'speedup' => 'Speedup',
+    ];
+
+    private const TAG_TO_TICKET = [
+        'Cancel' => 'canceled', 'Refill' => 'refill', 'Speedup' => 'speedup', '' => null,
+    ];
+
+    // ── Page view ────────────────────────────────────────────────────────────
+
     public function index(Request $request, $status = null)
     {
-        // Build query with domain filter
-        $query = Order::query()->with(['user', 'service.category.platform'])->where('domain', getDomain());
+        $domain = getDomain();
+        $statusOrder = orderStatusFromUrl($status);
 
-        // Handle status from URL path
-        if ($status) {
-            $request->merge(['status_from_url' => $status]);
-
-            // Map URL status to filter logic
-            switch ($status) {
-                case 'manual':
-                    $query->where('status', 'pending')
-                        ->where(function ($q) {
-                            $q->whereNull('orders_api')
-                                ->orWhere('orders_api', '');
-                        });
-                    break;
-                case 'failed':
-                    // Filter by 'failed' status directly
-                    $query->where('status', 'failed');
-                    break;
-                case 'awaiting':
-                    // Filter by 'awaiting' status directly
-                    $query->where('status', 'awaiting');
-                    break;
-                case 'ticket':
-                    // Filter orders that have ticket data
-                    $query->whereNotNull('ticket')
-                        ->where('ticket', '!=', '');
-                    break;
-                case 'pending':
-                    $query->where('status', 'pending');
-                    break;
-                case 'processing':
-                    $query->where('status', 'processing');
-                    break;
-                case 'inprogress':
-                    $query->where('status', 'in_progress');
-                    break;
-                case 'completed':
-                    $query->where('status', 'completed');
-                    break;
-                case 'partial':
-                    $query->where('status', 'partial');
-                    break;
-                case 'canceled':
-                    $query->where('status', 'canceled');
-                    break;
-            }
-        }
-
-        // Search by order ID — supports multiple IDs separated by comma e.g. 254,123,281
-        if ($request->filled('order_id')) {
-            $ids = array_values(array_filter(array_map('trim', explode(',', $request->input('order_id')))));
-            if (count($ids) === 1) {
-                $query->where('id', $ids[0]);
-            } elseif (count($ids) > 1) {
-                $query->whereIn('id', $ids);
-            }
-        }
-
-        // Search by orders_api — supports multiple values separated by comma
-        if ($request->filled('orders_api')) {
-            $apiIds = array_values(array_filter(array_map('trim', explode(',', $request->input('orders_api')))));
-            if (count($apiIds) === 1) {
-                $query->where('orders_api', 'like', "%{$apiIds[0]}%");
-            } elseif (count($apiIds) > 1) {
-                $query->where(function ($q) use ($apiIds) {
-                    foreach ($apiIds as $apiId) {
-                        $q->orWhere('orders_api', 'like', "%{$apiId}%");
-                    }
-                });
-            }
-        }
-
-        // Search by NCC order ID (provider order ID) - apply regardless of status
-        if ($request->filled('ncc_order_id')) {
-            $query->where('provider_id', $request->ncc_order_id);
-        }
-
-        // Search by link - exact match
-        if ($request->filled('link')) {
-            $query->where('link', $request->link);
-        }
-
-        // Search by username - apply regardless of status
-        if ($request->filled('username')) {
-            $query->whereHas('user', function ($q) use ($request) {
-                $q->where('username', 'like', "%{$request->username}%");
-            });
-        }
-
-        // Search by provider name - apply regardless of status
-        if ($request->filled('provider_name')) {
-            $query->where('provider_name', 'like', "%{$request->provider_name}%");
-        }
-
-        // Main status filter (only if not already filtered by URL status)
-        if (!$status && $request->filled('main_status')) {
-            switch ($request->main_status) {
-                case 'manual':
-                    $query->where('status', 'pending');
-                    break;
-                case 'failed':
-                    $query->where('status', 'canceled');
-                    break;
-                case 'waiting':
-                    $query->whereIn('status', ['pending', 'processing']);
-                    break;
-                case 'support':
-                    $query->where('status', 'partial');
-                    break;
-            }
-        }
-
-        // Detailed status filter (only if not already filtered by URL status)
-        if (!$status && $request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        // Service filter - apply regardless of status
-        if ($request->filled('service_id')) {
-            $query->where('service_id', $request->service_id);
-        }
-
-        // User filter - apply regardless of status
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
-        }
-
-        // Provider filter - apply regardless of status
-        if ($request->filled('provider_id')) {
-            $providerId = $request->provider_id;
-
-            switch ($providerId) {
-                case 'manual':
-                case 'Manual':
-                    // Filter for manual orders (orders without provider or with specific manual provider)
-                    $query->where(function ($q) {
-                        $q->whereNull('provider_name')
-                            ->orWhere('provider_name', '')
-                            ->orWhere('provider_name', 'manual');
-                    });
-                    break;
-                case 'all_providers':
-                case 'Api':
-                    // Filter for orders that have a provider
-                    $query->whereNotNull('provider_name')
-                        ->where('provider_name', '!=', '')
-                        ->where('provider_name', '!=', 'manual');
-                    break;
-                default:
-                    // Filter by specific provider ID - match by provider name
-                    $provider = ApiProvider::find($providerId);
-                    if ($provider) {
-                        $query->where('provider_name', $provider->name);
-                    }
-                    break;
-            }
-        }
-
-        // Platform filter (through service->category relationship) - apply regardless of status
-        if ($request->filled('platform_id')) {
-            $query->whereHas('service.category', function ($q) use ($request) {
-                $q->where('platform_id', $request->platform_id);
-            });
-        }
-
-        // Sorting
-        switch ($request->get('sort')) {
-            case 'newest':
-                $query->orderBy('created_at', 'desc');
-                break;
-            case 'oldest':
-                $query->orderBy('created_at', 'asc');
-                break;
-            default:
-                $query->orderBy('created_at', 'desc');
-        }
-
-        // Date range filter - apply regardless of status
-        if ($request->filled('date_from')) {
-            $query->where('created_at', '>=', $request->date_from . ' 00:00:00');
-        }
-
-        if ($request->filled('date_to')) {
-            $query->where('created_at', '<=', $request->date_to . ' 23:59:59');
-        }
-
-        // General search functionality (for backward compatibility)
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('id', $search)
-                    ->orWhere('link', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($userQuery) use ($search) {
-                        $userQuery->where('username', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    });
-            });
-        }
-
-        // Paginate results — respect per_page from request, default 50
-        $perPage = (int) $request->input('per_page', 50);
-        $perPage = in_array($perPage, [15, 25, 50, 100, 200, 500, 1000]) ? $perPage : 50;
-        $orders = $query->paginate($perPage);
-
-        // Get data for dropdowns
-        // Services: get id and name (only 'en' from JSON)
-        $services = Service::select('id', 'name')
-            ->where('status', true)
-            ->orderBy('name->en')
-            ->get()
-            ->map(function ($service) {
-                // Extract 'en' value from JSON name field
-                $nameData = is_array($service->name) ? $service->name : json_decode($service->name, true);
-                $enName = is_array($nameData) ? ($nameData['en'] ?? 'N/A') : 'N/A';
-
-                return [
-                    'id' => $service->id,
-                    'name' => $enName
-                ];
-            });
-
-        $users = User::select('id', 'username')->orderBy('username')->get();
-        $providers = ApiProvider::select('id', 'name')->where('status', true)->orderBy('name')->get();
-
-        // Preserve search parameters for view
-        $searchParams = [
-            'order_id' => $request->input('order_id'),
-            'orders_api' => $request->input('orders_api'),
-            'ncc_order_id' => $request->input('ncc_order_id'),
-            'link' => $request->input('link'),
-            'username' => $request->input('username'),
-            'provider_name' => $request->input('provider_name'),
-            'service_id' => $request->input('service_id'),
-            'user_id' => $request->input('user_id'),
-            'provider_id' => $request->input('provider_id'),
-            'platform_id' => $request->input('platform_id'),
-            'date_from' => $request->input('date_from'),
-            'date_to' => $request->input('date_to'),
-            'main_status' => $request->input('main_status'),
-            'status' => $request->input('status'),
-            'search' => $request->input('search'),
-            'sort' => $request->input('sort')
-        ];
-
-        // Count orders for badges
-        $manualCount = Order::where('domain', getDomain())
-            ->where('status', 'pending')
-            ->where(function ($q) {
-                $q->whereNull('orders_api')
-                    ->orWhere('orders_api', '');
-            })
-            ->count();
-
-        $failedCount = Order::where('domain', getDomain())
-            ->where('status', 'failed')
-            ->count();
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'data' => $orders->items(),
-                'pagination' => [
-                    'total' => $orders->total(),
-                    'per_page' => $orders->perPage(),
-                    'current_page' => $orders->currentPage(),
-                    'last_page' => $orders->lastPage(),
-                    'from' => $orders->firstItem(),
-                    'to' => $orders->lastItem()
-                ]
-            ]);
-        }
-
-        return view('adminpanel.orders.index', compact('orders', 'services', 'users', 'providers', 'status', 'searchParams', 'manualCount', 'failedCount'));
+        return view('admin.orders.index', [
+            'statusOrder'  => $statusOrder,
+            'manualCount'  => $this->cacheCount('manual',   fn() => Order::domain($domain)->where('status','pending')->emptyApi()->count()),
+            'failedCount'  => $this->cacheCount('failed',   fn() => Order::domain($domain)->where('status','failed')->count()),
+            'providers'    => $this->cacheData('providers', fn() => ApiProvider::select('id','name')->where('status',true)->orderBy('name')->get()),
+            'services'     => $this->cacheData('services',  fn() => \App\Models\Service::select('id','name')->where('status',true)->where('domain',$domain)->orderBy('id')->get()->map(fn($s) => ['id' => $s->id, 'name' => $this->resolveName($s->name)])),
+            'searchParams' => [
+                'order_id'    => $request->input('id', $request->input('order_id', '')),
+                'user_id'     => $request->input('user_id', '0'),
+                'service_id'  => $request->input('service_id', ''),
+                'provider_id' => $request->input('provider_id', ''),
+            ],
+        ]);
     }
+
+    // ── AJAX: DataTables ─────────────────────────────────────────────────────
+
+    public function list(Request $request): JsonResponse
+    {
+        return $this->dataTablesResponse($request,
+            Order::with(['user:id,username', 'service:id,name,type,refill,cancel'])->domain(getDomain())
+        );
+    }
+
+    public function listOld(Request $request): JsonResponse
+    {
+        return $this->dataTablesResponse($request,
+            Order::with(['user:id,username', 'service:id,name,type,refill,cancel'])
+                ->domain(getDomain())->where('status','completed')->where('created_at','<',now()->subMonths(3))
+        );
+    }
+
+    // ── AJAX: Single order actions ───────────────────────────────────────────
+
+    public function get(Request $request): JsonResponse
+    {
+        $order = Order::with(['user:id,username','service:id,name,type,refill,cancel'])
+            ->domain(getDomain())->find($request->input('data.id'));
+
+        return $order
+            ? response()->json($this->mapOrderRow($order))
+            : response()->json(['error' => 'Order not found'], 404);
+    }
+
+    public function changeStatus(Request $request): JsonResponse
+    {
+        $d = $request->input('data', []);
+        $order = $this->findOrder($d['id'] ?? null);
+        if (!$order) return $this->notFound();
+
+        $dbStatus = orderStatusToDatabase($d['new_status'] ?? '');
+        $update   = ['status' => $dbStatus];
+
+        $this->completeCancelRequest($order, $dbStatus, $update);
+
+        $this->applyStatusFinancials($order, $dbStatus, $d['remains'] ?? null, $update);
+
+        $order->update($update);
+        return $this->ok();
+    }
+
+    public function bulkChangeStatus(Request $request): JsonResponse
+    {
+        $d    = $request->input('data', []);
+        $ids  = (array)($d['ids'] ?? []);
+        $dbStatus = orderStatusToDatabase($d['data'] ?? '');
+        Order::domain(getDomain())->whereIn('id', $ids)->update(['status' => $dbStatus]);
+        if (in_array($dbStatus, ['partial', 'canceled'], true)) {
+            Order::domain(getDomain())->whereIn('id', $ids)
+                ->whereNotNull('cancel_status')->where('cancel_status', '!=', '')
+                ->update(['cancel_status' => 'completed']);
+        }
+
+        return response()->json(['success' => adminMessage('update'), 'count' => count($ids)]);
+    }
+
+    public function addTag(Request $request): JsonResponse
+    {
+        $d = $request->input('data', []);
+        $order = $this->findOrder($d['id'] ?? null);
+        if (!$order) return $this->notFound();
+
+        $order->update(['ticket' => self::TAG_TO_TICKET[$d['tag'] ?? ''] ?? null]);
+        return $this->ok();
+    }
+
+    public function addNote(Request $request): JsonResponse
+    {
+        $d = $request->input('data', []);
+        $order = $this->findOrder($d['id'] ?? null);
+        if (!$order) return $this->notFound();
+
+        $order->update(['note' => substr((string)($d['note'] ?? ''), 0, 20)]);
+        return $this->ok();
+    }
+
+    public function addStartCount(Request $request): JsonResponse
+    {
+        $d = $request->input('data', []);
+        $order = $this->findOrder($d['id'] ?? null);
+        if (!$order) return $this->notFound();
+
+        $order->update(['start_count' => (int)($d['start'] ?? 0)]);
+        return $this->ok();
+    }
+
+    public function addProviderOrderID(Request $request): JsonResponse
+    {
+        $d = $request->input('data', []);
+        $order = $this->findOrder($d['id'] ?? null);
+        if (!$order) return $this->notFound();
+
+        $order->update(['orders_api' => $d['provider_oid'] ?? '', 'status' => 'pending']);
+        return response()->json(['success' => adminMessage('update')]);
+    }
+
+    public function sendOrder(Request $request): JsonResponse
+    {
+        $d     = $request->input('data', []);
+        $order = Order::with('service')->domain(getDomain())->find($d['id'] ?? null);
+        if (!$order) return $this->notFound();
+        if (!$order->provider_id) return response()->json(['error' => 'No provider assigned'], 400);
+
+        try {
+            [$smm] = $this->buildSmm($order->provider_id);
+            $res = (array) json_decode(json_encode($smm->order([
+                'link' => $order->link, 'service' => $order->service_api, 'quantity' => $order->quantity,
+            ])), true);
+
+            if (!empty($res['order'])) {
+                $order->update(['orders_api' => $res['order'], 'status' => 'pending']);
+                return response()->json(['success' => 'Order sent']);
+            }
+            return response()->json(['error' => $res['error'] ?? 'Provider error'], 400);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function changeStatusFromApi(Request $request): JsonResponse
+    {
+        $d     = $request->input('data', []);
+        $order = $this->findOrder($d['id'] ?? null);
+        if (!$order) return $this->notFound();
+        if (!$order->provider_id || !$order->orders_api)
+            return response()->json(['error' => 'No provider order ID'], 400);
+
+        try {
+            [$smm] = $this->buildSmm($order->provider_id);
+            $res   = (object)(is_array($r = $smm->status($order->orders_api)) ? $r : (array)$r);
+
+            if (empty($res->status))
+                return response()->json(['success' => true, 'message' => $res->error ?? 'No status', 'provider_error' => true]);
+
+            $newStatus = orderStatusToDatabase($res->status);
+            if (!$newStatus) return response()->json(['error' => 'Unknown status: ' . $res->status], 400);
+
+            $update = ['status' => $newStatus];
+            $this->completeCancelRequest($order, $newStatus, $update);
+
+            // API status responses include start_count. Keep it even when it
+            // is 0 so the value shown in the orders table matches the provider.
+            if (property_exists($res, 'start_count') && is_numeric($res->start_count)) {
+                $update['start_count'] = (int) $res->start_count;
+            }
+
+            if ($newStatus === 'completed') {
+                $update['remains'] = 0;
+            } elseif ($newStatus === 'partial') {
+                if (!property_exists($res, 'remains') || !is_numeric($res->remains)) {
+                    return response()->json(['error' => 'Provider did not return a valid remaining quantity'], 422);
+                }
+
+                $remains = max(0, min((int) $res->remains, (int) $order->quantity));
+                if (!in_array($order->status, ['partial', 'canceled'], true)) {
+                    $this->applyPartialRefund($order, $remains, $update);
+                } else {
+                    $update['remains'] = $remains;
+                }
+            }
+
+            $order->update($update);
+
+            return response()->json(['success' => adminMessage('status'), 'status' => $newStatus]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function statsOrder(Request $request): JsonResponse
+    {
+        $orders = Order::domain(getDomain());
+
+        return response()->json([
+            [
+                'order_status' => 'Manual',
+                'total' => (clone $orders)->where('status', 'pending')->emptyApi()->count(),
+            ],
+            [
+                'order_status' => 'Failed',
+                'total' => (clone $orders)->where('status', 'failed')->count(),
+            ],
+        ]);
+    }
+
+    public function editOrderOld(Request $request): JsonResponse
+    {
+        return $this->ok();
+    }
+
+    public function exportOrders(Request $request): JsonResponse
+    {
+        return response()->json(['error' => 'Export not implemented'], 501);
+    }
+
+    // ── Non-AJAX CRUD ────────────────────────────────────────────────────────
 
     public function show(Request $request, $id)
     {
-        $order = Order::with(['user', 'service'])->where('domain', getDomain())->findOrFail($id);
-
+        $order = Order::with(['user','service'])->domain(getDomain())->findOrFail($id);
         return $request->expectsJson()
             ? response()->json(['success' => true, 'order' => $order])
-            : view('adminpanel.orders.show', compact('order'));
-
-        return view('adminpanel.orders.show', compact('order'));
+            : abort(404);
     }
 
     public function update(Request $request, $id = null)
     {
-        $order = Order::where('domain', getDomain())->findOrFail($id);
+        $order = Order::domain(getDomain())->findOrFail($id);
 
-        // Handle status toggle (from status-switch component)
         if ($request->has('toggle_status')) {
-            $status = $request->input('status');
-            $entityId = $request->input('entity_id', $order->id);
-
-            // Ensure entityId is not null or empty
-            if (empty($entityId)) {
-                $entityId = $order->id;
+            $dbStatus = orderStatusToDatabase($request->input('status'));
+            $changed  = $order->status !== $dbStatus;
+            if ($changed) {
+                $upd = ['status' => $dbStatus];
+                if ($dbStatus === 'canceled') $this->refundAndZero($order, $upd);
+                $order->update($upd);
             }
-
-            if ($order->status !== $status) {
-                // If status is canceled, add charge to user's balance and set charge to 0
-                if ($status === 'canceled' && $order->charge > 0) {
-                    $user = User::find($order->user_id);
-                    if ($user) {
-                        $user->increment('balance', $order->charge);
-                    }
-                    $order->update(['status' => $status, 'charge' => 0]);
-                } else {
-                    $order->update(['status' => $status]);
-                }
-                $statusText = match ($status) {
-                    'awaiting' => 'Đang chờ',
-                    'pending' => 'Chờ xử lý',
-                    'processing' => 'Đang xử lý',
-                    'in_progress' => 'Đang chạy',
-                    'completed' => 'Hoàn thành',
-                    'partial' => 'Hoàn tiền một phần',
-                    'canceled' => 'Đã hủy',
-                    'failed' => 'Thất bại',
-                    default => 'Không xác định'
-                };
-
-                $message = "Cập nhật trạng thái đơn hàng ID #{$entityId} thành {$statusText} thành công!";
-            } else {
-                $message = "Trạng thái đơn hàng ID #{$entityId} không thay đổi!";
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => $message,
-                'status' => $status,
-                'entity_id' => $entityId,
-                'order' => $order->fresh()
-            ]);
+            return response()->json(['success' => true, 'message' => $changed ? 'Updated' : 'No change', 'order' => $order->fresh()]);
         }
 
-        // Handle quick status change
         if ($request->has('quick_status')) {
-            $status = $request->input('quick_status');
-
-            // If status is canceled, add charge to user's balance and set charge to 0
-            if ($status === 'canceled' && $order->charge > 0) {
-                $user = User::find($order->user_id);
-                if ($user) {
-                    $user->increment('balance', $order->charge);
-                }
-                $order->update(['status' => $status, 'charge' => 0]);
-            } else {
-                $order->update(['status' => $status]);
-            }
-
-            $statusText = match ($status) {
-                'pending' => 'Chờ xử lý',
-                'processing' => 'Đang xử lý',
-                'in_progress' => 'Đang chạy',
-                'completed' => 'Hoàn thành',
-                'partial' => 'Hoàn tiền một phần',
-                'canceled' => 'Hủy',
-                default => 'Không xác định'
-            };
-
-            return response()->json([
-                'success' => true,
-                'message' => "Đã cập nhật trạng thái đơn hàng #{$order->id} thành {$statusText}",
-                'order_id' => $order->id,
-                'status' => $status
-            ]);
+            $dbStatus = orderStatusToDatabase($request->input('quick_status'));
+            $upd = ['status' => $dbStatus];
+            if ($dbStatus === 'canceled') $this->refundAndZero($order, $upd);
+            $order->update($upd);
+            return response()->json(['success' => true, 'order_id' => $order->id]);
         }
 
-        // Handle add start count (replace, not add)
         if ($request->has('add_start_count')) {
-            $startCount = $request->input('start_count', 0);
-
-            $order->update(['start_count' => (int)$startCount]);
-
-            return response()->json([
-                'success' => true,
-                'order_id' => $order->id,
-            ]);
-        }
-
-        // Handle note update
-        if ($request->has('note')) {
-            $note = $request->input('note');
-
-            $order->update(['note' => $note]);
-
-            return response()->json([
-                'success' => true,
-                'order_id' => $order->id
-            ]);
-        }
-
-        // Handle update orders_api (mã đơn hàng NCC)
-        if ($request->has('orders_api')) {
-            $ordersApi = $request->input('orders_api');
-            $order->update([
-                'orders_api' => $ordersApi,
-                'status'     => 'pending',
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => "Đã cập nhật mã đơn hàng NCC: {$ordersApi}",
-                'order_id' => $order->id,
-                'orders_api' => $ordersApi
-            ]);
-        }
-
-        // Handle ticket update (yêu cầu)
-        if ($request->has('ticket')) {
-            $ticket = strtolower(trim($request->input('ticket') ?? ''));
-
-            // Map display names to database values
-            $ticketMap = [
-                'cancel' => 'canceled',
-                'canceled' => 'canceled',
-                'refill' => 'refill',
-                'speedup' => 'speedup',
-                '' => null
-            ];
-
-            if (!array_key_exists($ticket, $ticketMap)) {
-                return response()->json(['success' => false, 'message' => 'Invalid ticket type'], 400);
-            }
-
-            $order->update(['ticket' => $ticketMap[$ticket]]);
-
+            $order->update(['start_count' => (int)$request->input('start_count', 0)]);
             return response()->json(['success' => true]);
         }
 
-        // Handle regular form update
-        $validated = $request->validate([
-            'status' => 'sometimes|required|in:pending,processing,in_progress,completed,partial,canceled',
+        if ($request->has('note')) {
+            $order->update(['note' => $request->input('note')]);
+            return response()->json(['success' => true]);
+        }
+
+        if ($request->has('orders_api')) {
+            $order->update(['orders_api' => $request->input('orders_api'), 'status' => 'pending']);
+            return response()->json(['success' => true]);
+        }
+
+        if ($request->has('ticket')) {
+            $t = strtolower(trim((string)$request->input('ticket')));
+            $map = ['cancel' => 'canceled', 'refill' => 'refill', 'speedup' => 'speedup', '' => null];
+            if (!array_key_exists($t, $map)) return response()->json(['error' => 'Invalid ticket'], 400);
+            $order->update(['ticket' => $map[$t]]);
+            return response()->json(['success' => true]);
+        }
+
+        $v = $request->validate([
+            'status'      => 'sometimes|in:pending,processing,in progress,completed,partial,canceled,awaiting,failed',
             'start_count' => 'sometimes|nullable|integer|min:0',
-            'remains' => 'sometimes|nullable|integer|min:0'
+            'remains'     => 'sometimes|nullable|integer|min:0',
         ]);
-
-        // Prepare data for update - only include changed fields
-        $updateData = [];
-        $originalOrder = $order->getOriginal();
-
-        foreach ($validated as $field => $value) {
-            if (($originalOrder[$field] ?? null) != $value) {
-                $updateData[$field] = $value;
-            }
-        }
-
-        if (!empty($updateData)) {
-            $order->update($updateData);
-        }
+        $diff = array_filter($v, fn($val, $k) => $order->getAttribute($k) != $val, ARRAY_FILTER_USE_BOTH);
+        if ($diff) $order->update($diff);
 
         return $request->expectsJson()
-            ? response()->json(['success' => 'Update Successfully'])
-            : redirect()->back()->with('success', 'Update Successfully');
+            ? response()->json(['success' => adminMessage('update')])
+            : redirect()->back()->with('success', adminMessage('update'));
     }
 
     public function destroy(Request $request, $id = null)
     {
-        $order = Order::where('domain', getDomain())->findOrFail($id);
-        $orderId = $order->id;
+        $order = Order::domain(getDomain())->findOrFail($id);
         $order->delete();
-        $message = "Đã xóa đơn hàng ID #{$orderId} thành công!";
 
         return $request->expectsJson()
-            ? response()->json(['success' => true, 'message' => $message])
-            : redirect()->back()->with('success', $message);
+            ? response()->json(['success' => true, 'message' => adminMessage('delete')])
+            : redirect()->back()->with('success', adminMessage('delete'));
     }
 
-    public function updateOrderStatus(Request $request, $id)
+    public function updateOrderStatus(Request $request, $id): JsonResponse
     {
         try {
-            $order = Order::where('domain', getDomain())->findOrFail($id);
-            $status = $request->input('status');
-            $remains = $request->input('remains');
+            $order    = Order::domain(getDomain())->findOrFail($id);
+            $dbStatus = orderStatusToDatabase($request->input('status'));
+            if (!$dbStatus) return response()->json(['error' => 'Unknown status'], 400);
 
-            // Map display status to database status
-            $statusMap = [
-                'Chờ xử lý' => 'pending',
-                'Đang xử lý' => 'processing',
-                'Đang chạy' => 'in_progress',
-                'In progress' => 'in_progress',
-                'Hoàn thành' => 'completed',
-                'Completed' => 'completed',
-                'Hoàn tiền một phần' => 'partial',
-                'Partial' => 'partial',
-                'Hủy' => 'canceled',
-                'Canceled' => 'canceled',
-                'Đang chờ' => 'awaiting',
-                'Awaiting' => 'awaiting',
-                'Thất bại' => 'failed',
-                'Failed' => 'failed'
-            ];
-
-            // Convert display status to database status if needed
-            $dbStatus = $statusMap[$status] ?? $status;
-
-            // Validate status
-            $validStatuses = ['pending', 'processing', 'in_progress', 'completed', 'partial', 'canceled', 'awaiting', 'failed'];
-            if (!in_array($dbStatus, $validStatuses)) {
-                return response()->json(['success' => false], 400);
-            }
-
-            // Prepare update data
-            $updateData = ['status' => $dbStatus];
-
-            // Auto-update remains and charge based on status
+            $update = ['status' => $dbStatus];
             if ($dbStatus === 'completed') {
-                // When status is completed, set remains to 0
-                $updateData['remains'] = 0;
-            } elseif (in_array($dbStatus, ['in_progress', 'processing'])) {
-                // When status is in_progress or processing, set remains to quantity
-                $updateData['remains'] = $order->quantity;
-            } elseif ($dbStatus === 'partial' && $remains !== null) {
-                // When status is partial and remains is provided
-                $remainsValue = (int)$remains;
-                $updateData['remains'] = $remainsValue;
-
-                // Calculate charge_used: (remains / quantity) * total
-                if ($order->quantity > 0 && $order->total > 0) {
-                    $chargeUsed = ($remainsValue / $order->quantity) * $order->total;
-                    $newCharge = $order->charge - $chargeUsed;
-                    $updateData['charge'] = max(0, $newCharge); // Ensure charge doesn't go below 0
-
-                    // Add charge_used to user's balance
-                    $user = User::find($order->user_id);
-                    if ($user) {
-                        $user->increment('balance', $chargeUsed);
-                    }
-                }
+                $update += ['remains' => 0, 'success_time' => $order->success_time ?? now()];
+            } elseif (in_array($dbStatus, ['in progress', 'processing'], true)) {
+                $update['remains'] = $order->quantity;
+            } elseif ($dbStatus === 'partial') {
+                $this->applyPartialRefund($order, (int) $request->input('remains', 0), $update);
             } elseif ($dbStatus === 'canceled') {
-                // When status is canceled, add charge to user's balance and set charge to 0
-                if ($order->charge > 0) {
-                    $user = User::find($order->user_id);
-                    if ($user) {
-                        $user->increment('balance', $order->charge);
-                    }
-                    $updateData['charge'] = 0;
-                }
+                $this->applyStatusFinancials($order, $newStatus, $remains ?? null, $update);
             }
 
-            // Update order status and related fields
-            $order->update($updateData);
-
-            return response()->json(['success' => 'Update Successfully']);
+            $order->update($update);
+            return response()->json(['success' => adminMessage('update')]);
         } catch (\Exception $e) {
-            Log::error('Error updating order status', [
-                'order_id' => $id,
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json(['success' => false], 500);
+            Log::error('updateOrderStatus', ['id' => $id, 'err' => $e->getMessage()]);
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
-    public function resendOrder(Request $request, $id)
+    public function resendOrder(Request $request, $id): JsonResponse
     {
         try {
-            $order = Order::with('service')->where('domain', getDomain())->findOrFail($id);
+            $order = Order::with('service')->domain(getDomain())->findOrFail($id);
+            if ($order->status !== 'failed')    return response()->json(['error' => "Only 'failed' orders can be resent"], 400);
+            if (!$order->provider_id)           return response()->json(['error' => 'No provider assigned'], 400);
 
-            if (!in_array($order->status, ['failed'])) {
-                return response()->json(['success' => false, 'message' => "Chỉ có thể gửi lại đơn hàng có trạng thái 'canceled' hoặc 'failed'"], 400);
-            }
-
-            if (empty($order->provider_id)) {
-                return response()->json(['success' => false, 'message' => "Đơn hàng #{$order->id} không có provider_id"], 400);
-            }
-
-            $apiProvider = ApiProvider::findOrFail($order->provider_id);
-            $service = $order->service ?? Service::findOrFail($order->service_id);
-
-            $smm = new Smm();
-            $smm->api_url = $apiProvider->link;
-            $smm->api_key = $apiProvider->api_key;
-
-            if (!empty($apiProvider->note)) {
-                try {
-                    $config = json_decode($apiProvider->note, true);
-                    if (isset($config['headers']) && is_array($config['headers'])) {
-                        $smm->headers = array_map(fn($k, $v) => "$k: $v", array_keys($config['headers']), $config['headers']);
-                    }
-                    if (isset($config['cookies'])) {
-                        $smm->cookies = $config['cookies'];
-                    }
-                } catch (\Exception $e) {
-                }
-            }
-
-            $response = json_decode(json_encode($smm->order([
-                'link' => $order->link,
-                'service' => $order->service_api,
-                'quantity' => $order->quantity
+            [$smm] = $this->buildSmm($order->provider_id);
+            $res   = (array) json_decode(json_encode($smm->order([
+                'link' => $order->link, 'service' => $order->service_api, 'quantity' => $order->quantity,
             ])), true);
 
-            if (isset($response['order'])) {
-                $order->update([
-                    'orders_api' => $response['order'],
-                    'status' => 'pending',
-                    'order_data' => json_encode($response),
-                    'response_data' => json_encode($response)
-                ]);
-
-                return response()->json([
-                    'success' => true,
-                    'message' => "Resend Order Successfully",
-                ]);
+            if (isset($res['order'])) {
+                $order->update(['orders_api' => $res['order'], 'status' => 'pending', 'order_data' => json_encode($res)]);
+                return response()->json(['success' => true, 'message' => 'Resent']);
             }
-
-            $order->update([
-                'order_data' => json_encode(['error' => $response['error'] ?? '']),
-                'response_data' => json_encode($response)
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => $response['error'] ?? '',
-            ], 400);
+            $order->update(['order_data' => json_encode(['error' => $res['error'] ?? ''])]);
+            return response()->json(['error' => $res['error'] ?? 'Provider error'], 400);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
-    public function updateOrderStatusProvider(Request $request)
+    // ── Private helpers ──────────────────────────────────────────────────────
+
+    private function dataTablesResponse(Request $request, $base): JsonResponse
     {
-        try {
-            $orderId = $request->input('order_id');
-            if (empty($orderId)) return response()->json(['success' => false, 'message' => 'Order ID is required'], 400);
+        $hasFilter   = false;
+        $searchTypes = (array)$request->input('searchTypes', []);
 
-            $order = Order::where('domain', getDomain())->where('id', $orderId)->with('service')->first();
-            if (!$order) return response()->json(['success' => false, 'message' => 'Order not found'], 404);
-            if (empty($order->provider_id) || empty($order->orders_api))
-                return response()->json(['success' => false, 'message' => 'Order has no provider or orders_api'], 400);
+        foreach ((array)$request->input('columns', []) as $col) {
+            $name  = $col['name'] ?? '';
+            $value = trim((string)($col['search']['value'] ?? ''));
+            if (!$name || !$value) continue;
 
-            $apiProvider = ApiProvider::find($order->provider_id);
-            if (!$apiProvider) return response()->json(['success' => false, 'message' => 'Provider not found'], 404);
+            $hasFilter = true;
 
-            $smm = new Smm();
-            $smm->api_url = $apiProvider->link;
-            $smm->api_key = $apiProvider->api_key;
-
-            $response = $smm->status($order->orders_api);
-            $response = is_array($response) ? (object) $response : $response;
-
-            // Provider returned error (no status) — still success:true so bulk continues
-            if (!$response || !isset($response->status)) {
-                $raw = $response->error ?? ($response ? json_encode($response, JSON_UNESCAPED_UNICODE) : 'No response from provider');
-                // Strip redundant "Provider error: " prefix if present
-                $msg = preg_replace('/^Provider error:\s*/i', '', $raw);
-                return response()->json(['success' => true, 'message' => $msg, 'provider_error' => true]);
+            switch ($name) {
+                case 'order_status':
+                    $base->whereIn('status', array_map('orderStatusToDatabase', array_filter(array_map('trim', explode(',', $value)))));
+                    break;
+                case 'order_tag':
+                    $tags = array_filter(array_map('trim', explode(',', $value)));
+                    $tickets = array_filter(array_map(fn($t) => self::TAG_TO_TICKET[$t] ?? null, $tags));
+                    in_array('Partial', $tags)
+                        ? $base->where(fn($q) => $q->whereIn('ticket', $tickets)->orWhere('status','partial'))
+                        : $base->whereIn('ticket', $tickets);
+                    break;
+                case 'order_type':
+                    match (strtoupper($value)) {
+                        'MANUAL' => $base->where(fn($q) => $q->whereNull('orders_api')->orWhere('orders_api','')),
+                        'API'    => $base->where(fn($q) => $q->whereNotNull('orders_api')->where('orders_api','!=',' ')),
+                        default  => null,
+                    };
+                    break;
+                case 'order_id':
+                    $ids = array_values(array_filter(array_map('trim', explode(',', $value))));
+                    count($ids) === 1 ? $base->where('id',$ids[0]) : $base->whereIn('id',$ids);
+                    break;
+                case 'order_link':
+                    ($searchTypes['order_link'] ?? 'contain') === 'exact'
+                        ? $base->where('link', $value)
+                        : $base->where('link', 'like', "%{$value}%");
+                    break;
+                case 'account_id':   $base->where('user_id', (int)$value);                          break;
+                case 'service_id':   $base->where('service_id', (int)$value);                       break;
+                case 'provider_oid': $base->where('orders_api', 'like', "%{$value}%");              break;
+                case 'provider_id':  $this->applyProviderFilter($base, $value);                     break;
+                case 'order_created':
+                    $parts = array_map('trim', explode('|', $value));
+                    if (!empty($parts[0])) $base->where('created_at', '>=', $parts[0]);
+                    if (!empty($parts[1])) $base->where('created_at', '<=', $parts[1]);
+                    break;
             }
-
-            $statusMap = [
-                'pending' => 'pending',
-                'Pending' => 'pending',
-                'processing' => 'processing',
-                'Processing' => 'processing',
-                'in progress' => 'in_progress',
-                'In progress' => 'in_progress',
-                'In Progress' => 'in_progress',
-                'completed' => 'completed',
-                'Completed' => 'completed',
-                'partial' => 'partial',
-                'Partial' => 'partial',
-                'canceled' => 'canceled',
-                'Canceled' => 'canceled',
-                'failed' => 'failed',
-                'Failed' => 'failed',
-            ];
-
-            $providerStatus = trim($response->status);
-            $newStatus = $statusMap[$providerStatus] ?? null;
-
-            if (!$newStatus) return response()->json(['success' => false, 'message' => 'Unknown status: ' . $providerStatus], 400);
-
-            $updateData = ['status' => $newStatus];
-
-            if ($newStatus === 'completed')                          $updateData['remains'] = 0;
-            elseif (in_array($newStatus, ['in_progress', 'processing'])) $updateData['remains'] = $order->quantity;
-            elseif ($newStatus === 'canceled' && $order->charge > 0) {
-                User::find($order->user_id)?->increment('balance', $order->charge);
-                $updateData['charge'] = 0;
-            }
-
-            if (isset($response->start_count))                      $updateData['start_count'] = $response->start_count;
-            if (isset($response->remains) && $newStatus === 'partial') $updateData['remains']  = $response->remains;
-            if (isset($response->charge))                            $updateData['charge']      = $response->charge;
-
-            $order->update($updateData);
-
-            return response()->json(['success' => true, 'message' => "Updated to $newStatus", 'status' => $newStatus, 'order' => $order->fresh()]);
-        } catch (\Exception $e) {
-            Log::error('updateOrderStatusProvider', ['order_id' => $request->input('order_id'), 'error' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
+
+        $domain      = getDomain();
+        $total       = $this->cacheCount('total', fn() => Order::domain($domain)->count());
+        $filtered    = $hasFilter ? (clone $base)->count() : $total;
+        $dir         = strtolower($request->input('order.0.dir','desc')) === 'asc' ? 'asc' : 'desc';
+        $start       = max(0, (int)$request->input('start', 0));
+        $length      = (int)$request->input('length', 50);
+
+        if ($length > 0) $base->skip($start)->take($length);
+        $base->orderBy('id', $dir);
+
+        return response()->json([
+            'draw'            => (int)$request->input('draw', 0),
+            'recordsTotal'    => $total,
+            'recordsFiltered' => $filtered,
+            'data'            => $base->get()->map(fn(Order $o) => $this->mapOrderRow($o))->all(),
+        ]);
+    }
+
+    private function mapOrderRow(Order $o): array
+    {
+        $provider = (string)($o->provider_name ?? '');
+        $isManual = $provider === '' || strtolower($provider) === 'manual';
+        $features = [];
+        if ($o->service) {
+            if ($o->service->refill) $features[] = 'Refill';
+            if ($o->service->cancel) $features[] = 'Cancel';
+        }
+
+        return [
+            'order_id'           => (int)$o->id,
+            'account_id'         => (int)$o->user_id,
+            'account_user'       => $o->user->username ?? '',
+            'service_id'         => (int)($o->service_id ?? 0),
+            'service_name'       => $o->service ? $this->resolveName($o->service->name) : '',
+            'service_type'       => $o->service->type ?? 'Default',
+            'service_feature'    => json_encode($features),
+            'order_status'       => orderStatusToDisplay($o->status),
+            'order_type'         => (!empty($o->orders_api) || !$isManual) ? 'Api' : 'Manual',
+            // A client cancel request is tracked in cancel_status (and may not
+            // have a ticket tag yet). Expose it as the existing Cancel tag so
+            // admin.js renders the history link consistently.
+            'order_tag'          => filled($o->cancel_status)
+                ? 'Cancel'
+                : (self::TICKET_TO_TAG[$o->ticket ?? ''] ?? ''),
+            'provider_name'      => $provider,
+            'provider_type'      => $isManual ? 'manual' : '',
+            'provider_oid'       => $o->orders_api ?? 0,
+            'provider_id'        => (int)($o->provider_id ?? 0),
+            'order_charge'       => (float)($o->charge ?? 0),
+            'order_price'        => (float)($o->rate ?? 0),
+            'order_quantity'     => (int)($o->quantity ?? 0),
+            'order_start'        => (int)($o->start_count ?? 0),
+            'order_remains'      => (int)($o->remains ?? 0),
+            'order_discount'     => 0,
+            'coupon_id'          => 0,
+            'order_link'         => (string)($o->link ?? ''),
+            'order_comment'      => filled($o->comment) ? (string) $o->comment : null,
+            'order_more'         => $o->order_data ? self::safeOrderMore($o->order_data) : '',
+            'order_note'         => (string)($o->note ?? ''),
+            'order_loop'         => (int)($o->loop_quantity ?? 0),
+            'order_loop_spacing' => (int)($o->loop_spacing ?? 0),
+            'order_schedule'     => $o->schedule_time ? 1 : 0,
+            'order_created'      => optional($o->created_at)->format('Y-m-d H:i:s') ?? '',
+            'order_changed'      => optional($o->updated_at)->format('Y-m-d H:i:s') ?? '',
+            'order_from'         => 0,
+        ];
+    }
+
+    /**
+     * Encode order_more as a pure-ASCII JSON string so the browser's btoa()
+     * never throws an InvalidCharacterError.
+     *
+     * btoa() only accepts Latin-1 characters. PHP's json_encode() without
+     * JSON_UNESCAPED_UNICODE escapes every non-ASCII codepoint as \uXXXX,
+     * producing a 100% ASCII string that btoa() handles safely. The JS side
+     * calls atob() → JSON.parse(), which correctly decodes \uXXXX escapes.
+     */
+    private static function safeOrderMore(mixed $data): string
+    {
+        if (!$data) return '';
+
+        if (is_string($data)) {
+            $decoded = json_decode($data, true);
+            $data    = $decoded ?? ['raw' => $data];
+        }
+
+        // JSON_UNESCAPED_SLASHES keeps URLs readable; non-ASCII → \uXXXX (btoa-safe)
+        return json_encode($data, JSON_UNESCAPED_SLASHES) ?: '';
+    }
+
+    private function findOrder($id): ?Order
+    {
+        return $id ? Order::domain(getDomain())->find($id) : null;
+    }
+
+    private function completeCancelRequest(Order $order, string $status, array &$update): void
+    {
+        if (in_array($status, ['partial', 'canceled'], true) && filled($order->cancel_status)) {
+            $update['cancel_status'] = 'completed';
+        }
+    }
+
+    private function notFound(): JsonResponse
+    {
+        return response()->json(['error' => 'Order not found'], 404);
+    }
+
+    private function ok(string $msg = 'Success'): JsonResponse
+    {
+        return response()->json(['success' => $msg]);
+    }
+
+    private function refundAndZero(Order $order, array &$update): void
+    {
+        $update['remains'] = (int) $order->quantity;
+
+        if ($order->charge > 0) {
+            User::find($order->user_id)?->increment('balance', $order->charge);
+            $update['charge'] = 0;
+        }
+    }
+
+    private function applyStatusFinancials(Order $order, string $status, ?int $remains, array &$update): void
+    {
+        $previous = $order->status;
+        $total = (float) ($order->total ?? $order->charge ?? 0);
+
+        if ($status === 'completed') {
+            $update['remains'] = 0;
+        } elseif (in_array($status, ['processing', 'in progress', 'pending'], true)) {
+            $update['remains'] = (int) $order->quantity;
+        } elseif ($status === 'partial' && $remains !== null) {
+            $update['remains'] = max(0, min($remains, (int) $order->quantity));
+        } elseif ($status === 'canceled') {
+            $this->refundAndZero($order, $update);
+        }
+
+        if ($previous === 'partial' && $status !== 'partial' && $total > (float) $order->charge) {
+            $amount = $total - (float) $order->charge;
+            DB::transaction(function () use ($order, $amount): void {
+                $user = User::whereKey($order->user_id)->lockForUpdate()->first();
+                if (!$user) return;
+                $user->decrement('balance', $amount);
+                $user->refresh();
+                Transaction::create([
+                    'user_id' => $user->id,
+                    'order_id' => $order->id,
+                    'amount' => -$amount,
+                    'type' => 'refund_reversal',
+                    'status' => 'completed',
+                    'payment_method' => null,
+                    'transaction_id' => 'REVERSE-REFUND-ORDER-' . $order->id . '-' . uniqid(),
+                    'description' => 'Reversal of partial refund for order #' . $order->id,
+                    'balance_after' => $user->balance,
+                    'domain' => $order->domain,
+                ]);
+            });
+            $update['charge'] = $total;
+            $update['remains'] = (int) $order->quantity;
+        }
+    }
+
+    private function applyPartialRefund(Order $order, int $remains, array &$update): void
+    {
+        $update['remains'] = $remains;
+        if ($order->quantity <= 0 || ($order->total ?? 0) <= 0) return;
+
+        $refund = round($remains * $order->total / $order->quantity, 8);
+        $update['charge'] = max(0, $order->charge - $refund);
+        if ($refund > 0) {
+            DB::transaction(function () use ($order, $refund): void {
+                $user = User::whereKey($order->user_id)->lockForUpdate()->first();
+                if (!$user) return;
+                $user->increment('balance', $refund);
+                $user->refresh();
+                Transaction::create([
+                    'user_id' => $user->id,
+                    'order_id' => $order->id,
+                    'amount' => $refund,
+                    'type' => 'refund',
+                    'status' => 'completed',
+                    'payment_method' => null,
+                    'transaction_id' => 'PARTIAL-REFUND-ORDER-' . $order->id . '-' . uniqid(),
+                    'description' => 'Partial refund for order #' . $order->id,
+                    'balance_after' => $user->balance,
+                    'domain' => $order->domain,
+                ]);
+            });
+        }
+    }
+
+    private function resolveName(mixed $name): string
+    {
+        if (is_string($name)) $name = json_decode($name, true) ?? $name;
+        if (is_array($name))  return $name['en'] ?? $name['vi'] ?? (string)(reset($name) ?? '');
+        return (string)($name ?? '');
+    }
+
+    private function applyProviderFilter($query, string $value): void
+    {
+        match (strtolower($value)) {
+            'manual' => $query->where(fn($q) => $q->whereNull('provider_name')->orWhere('provider_name','')->orWhere('provider_name','manual')),
+            'api', 'all_providers' => $query->whereNotNull('provider_name')->where('provider_name','!=','')->where('provider_name','!=','manual'),
+            default => tap(ApiProvider::find($value), fn($p) => $p && $query->where('provider_name', $p->name)),
+        };
+    }
+
+    private function buildSmm(int $providerId): array
+    {
+        $provider = ApiProvider::findOrFail($providerId);
+        $smm      = new Smm();
+        $smm->api_url = $provider->link;
+        $smm->api_key = $provider->api_key;
+
+        if (!empty($provider->note)) {
+            try {
+                $cfg = json_decode($provider->note, true);
+                if (isset($cfg['headers'])) $smm->headers = array_map(fn($k,$v) => "$k: $v", array_keys($cfg['headers']), $cfg['headers']);
+                if (isset($cfg['cookies'])) $smm->cookies = $cfg['cookies'];
+            } catch (\Exception) {}
+        }
+        return [$smm, $provider];
+    }
+
+    private function cacheCount(string $key, \Closure $fn): int
+    {
+        return (int) Cache::remember("orders_{$key}_" . md5(getDomain()), 60, $fn);
+    }
+
+    private function cacheData(string $key, \Closure $fn, int $ttl = 300): mixed
+    {
+        return Cache::remember("orders_{$key}_" . md5(getDomain()), $ttl, $fn);
     }
 }

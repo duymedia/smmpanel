@@ -53,7 +53,18 @@ class Smm
 
     public function cancel($order_ids)
     {
-        return $this->request('cancel', ['orders' => implode(',', (array)$order_ids)], true);
+        $orderIds = array_values(array_filter(
+            array_map('trim', (array) $order_ids),
+            static fn ($orderId) => $orderId !== ''
+        ));
+
+        if ($orderIds === []) {
+            return ['error' => 'Missing provider order ID'];
+        }
+
+        return $this->request('cancel', [
+            'orders' => implode(',', $orderIds),
+        ], true);
     }
 
     public function balance()
@@ -111,12 +122,21 @@ class Smm
         $result = curl_exec($ch);
         $errno  = curl_errno($ch);
         $errmsg = curl_error($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         curl_close($ch);
 
-        if ($errno !== 0 && empty($result)) {
+        if ($errno !== 0) {
             // Return JSON error so callers can detect and surface the real reason
             return json_encode(['error' => $errmsg ?: 'cURL error ' . $errno, 'curl_errno' => $errno]);
+        }
+
+        if ($httpCode >= 400) {
+            return json_encode(['error' => 'HTTP error ' . $httpCode, 'http_code' => $httpCode]);
+        }
+
+        if ($result === false || trim((string) $result) === '') {
+            return json_encode(['error' => 'Empty response from provider', 'http_code' => $httpCode]);
         }
 
         return $result;

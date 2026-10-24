@@ -1,501 +1,234 @@
-@extends('clients.theme-default.layouts.app')
+﻿@extends('clients.theme-default.layouts.app')
+@section('title', 'Services')
 
-@section('title', __('services.title'))
-
-@section('content')
-
+@push('styles')
     <style>
-        .services-filter__active-category {
-            font-weight: 500;
+        #table-service {
+            min-width: 980px;
+            table-layout: auto;
         }
 
-        [data-favorite-service-id] {
-            cursor: pointer;
-            transition: color 0.2s ease;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
+        #table-service th,
+        #table-service td:not(.col-name) {
+            white-space: nowrap;
         }
 
-        [data-favorite-service-id]:hover {
-            color: #ffc107;
-            background-color: rgba(255, 193, 7, 0.1);
-        }
-
-        [data-favorite-service-id].favorite-active {
-            color: #ffc107;
-        }
-
-        .services-list__description .btn-actions {
-            padding: 0.375rem 0.75rem;
-            transition: all 0.2s ease;
-        }
-
-        .services-list__description .btn-actions:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .service-description-content {
-            max-height: 400px;
-            overflow-y: auto;
-            padding: 1rem 0;
-        }
-
-        .service-description-content h5 {
-            color: #333;
-            margin-bottom: 1rem;
-            font-weight: 600;
-        }
-
-        .service-description-content p {
-            margin-bottom: 0.75rem;
-            line-height: 1.6;
-        }
-
-        .services-list-category-title h4 {
-            margin: 0;
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .services-table-empty {
-            text-align: center;
-            padding: 2rem;
-            color: #999;
-        }
-
-        .services-table-empty i {
-            font-size: 2rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
-        }
-
-        @media (max-width: 768px) {
-            .services-list__description .btn-actions {
-                width: 100%;
-            }
+        #table-service .col-name {
+            min-width: 360px;
         }
     </style>
+@endpush
 
-    <!-- Main variables *content* -->
-    <div id="block_37">
-        <div class="block-bg"></div>
-        <div class="container-fluid">
-            <div class="services-list ">
-                <div class="row">
-                    <div class="col ">
-                        <div
-                            class="services-filters component_filter_form_group component_filter_card component_platforms mb-3">
-                            <div class="card">
-                                <div class="row">
-                                    <div class="col-md-auto mb-3 mb-md-0">
-                                        <div class="component_filter_button">
-                                            <div class="dropdown">
-                                                <a class="btn btn-big-primary w-sm-auto w-100 dropdown-toggle"
-                                                    href="#" role="button" id="dropdown-category-filter-37"
-                                                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                                    <span class="fal fa-filter mr-1"></span>
-                                                    <span class="services-filter__active-category"
-                                                        data-filter-active-category="true">{{ __('services.all_categories') }}</span>
-                                                </a>
-                                                <div class="dropdown-menu" style="max-height:320px;overflow-y:auto;min-width:220px;">
-                                                    <a class="dropdown-item" href="#" data-filter-category-id="All"
-                                                        style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
-                                                        <span class="fas fa-list text-muted" style="width:16px;text-align:center;flex-shrink:0;"></span>
-                                                        <span>{{ __('services.all') }}</span>
-                                                    </a>
-                                                    <div class="dropdown-divider"></div>
-                                                    <a class="dropdown-item" href="#"
-                                                        data-filter-category-id="favorites"
-                                                        data-filter-category-name="{{ __('services.favorite_services') }}"
-                                                        style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
-                                                        <span class="fas fa-star" style="width:16px;text-align:center;flex-shrink:0;color:#ffc107;"></span>
-                                                        <span>{{ __('services.favorite_services') }}</span>
-                                                    </a>
-                                                    <div class="dropdown-divider"></div>
-                                                    @foreach ($categories as $category)
-                                                        <a class="dropdown-item" href="#"
-                                                            data-filter-category-id="{{ $category['id'] }}"
-                                                            data-filter-category-name="{{ $category['name'] }}"
-                                                            style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
-                                                            <span style="width:16px;height:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-                                                                @if ($category['image'])
-                                                                    @if (strpos($category['image'], '.') !== false || strpos($category['image'], '/') === 0 || strpos($category['image'], 'http') === 0)
-                                                                        <img src="{{ $category['image'] }}" alt="{{ $category['name'] }}"
-                                                                            style="width:16px;height:16px;object-fit:contain;">
-                                                                    @else
-                                                                        <i class="{{ $category['image'] }}" style="font-size:14px;"></i>
-                                                                    @endif
-                                                                @else
-                                                                    <span class="fas fa-folder text-muted" style="font-size:14px;"></span>
-                                                                @endif
-                                                            </span>
-                                                            <span>{{ $category['name'] }}</span>
-                                                        </a>
-                                                    @endforeach
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col">
-                                        <div class="input-group">
-                                            <input type="text" class="form-control" placeholder="{{ __('services.search') }}"
-                                                data-search-service="#service-table-37">
-                                            <span class="input-group-append component_button_search">
-                                                <button class="btn btn-big-secondary" type="button"
-                                                    data-filter-serch-btn="true">
-                                                    <i class="fas fa-search"></i>
-                                                </button>
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+@section('content')
+    @php
+        $isVndCurrency = strtoupper((string) (auth()->user()?->currency ?? '')) === 'VND';
+    @endphp
+    <div class="content flex-column-fluid" id="kt_content">
+        @include('clients.theme-default.layouts.toolbar', ['title' => 'Services', 'langKey' => 'menu::Services'])
+
+        <div class="post" id="kt_post">
+            {{-- Filter --}}
+            <div class="card mb-4">
+                <div class="card-body py-3 px-4">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-12 col-md-3">
+                            <input type="text" id="ipt-keyword" class="form-control form-control-sm form-control-solid"
+                                placeholder="Keyword" data-lang="Keyword">
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <select id="sl-platform" class="form-select form-select-sm form-select-solid"
+                                data-kt-select2="true" data-control="select2" data-hide-search="true"
+                                data-placeholder="All social media"
+                                onchange="_services.on.change.platform(this.value)">
+                                <option value="-100" data-lang="All social media">All social media</option>
+                                @foreach ($platforms as $platform)
+                                    <option value="{{ $platform['id'] }}" data-content="{{ $platform['option_html'] }}"
+                                        data-lang="">{{ $platform['name'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <select id="sl-category" class="form-select form-select-sm form-select-solid"
+                                data-kt-select2="true" data-control="select2" data-hide-search="true"
+                                data-placeholder="All category">
+                                <option value="-100" data-platform="-100" data-lang="All category">All category</option>
+                                @foreach ($categories as $category)
+                                    <option value="{{ $category['id'] }}" data-platform="{{ $category['platform_id'] ?? -1 }}">
+                                        {{ $category['name'] }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-12">
+                            <button type="button" id="btn-filter" class="btn btn-sm btn-primary"
+                                onclick="_services.on.click.filter()" data-lang="button::Filter">Filter</button>
+                            <button type="button" id="btn-toggle-rate" class="btn btn-warning btn-sm ms-2"
+                                onclick="_services.on.click.toggleRate()" data-lang="button::Rate Filter">Rate
+                                Filter</button>
+                            <button type="button" id="btn-reset" class="btn btn-sm btn-secondary"
+                                onclick="_services.on.click.reset()" data-lang="button::Reset">Reset</button>
                         </div>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col">
-                        <div class="services-list__table">
-                            <div class="table-bg component_table ">
-                                <div class="table-wr table-responsive editor__component-wrapper">
-                                    <table class="table" id="service-table-37">
-                                        <thead>
-                                            <tr>
-                                                <th style="width: 42px"></th>
-                                                <th>{{ __('services.id') }}</th>
-                                                <th class="nowrap">{{ __('services.service') }}</th>
-                                                <th class="nowrap">{{ __('services.rate_per_1000') }}</th>
-                                                <th class="nowrap">{{ __('services.min_order') }}</th>
-                                                <th class="nowrap">{{ __('services.max_order') }}</th>
-                                                <th class="nowrap" nowrap="">
-                                                    <div class="d-flex align-items-center">
-                                                        <span>{{ __('services.average_time') }}</span>
-                                                        <span class="ml-1 mr-1 fa fa-exclamation-circle"
-                                                            data-toggle="tooltip" data-placement="top" title=""
-                                                            data-original-title="{{ __('services.average_time_tooltip') }}"></span>
-                                                    </div>
-                                                </th>
-                                                <th class="hidden-xs hidden-sm service-description__th">{{ __('services.description') }}
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="service-tbody">
-                                            @foreach ($categories as $category)
-                                                @if (isset($groupedServices[$category['id']]) && $groupedServices[$category['id']]->count() > 0)
-                                                    <tr class="services-list-category-title"
-                                                        data-filter-table-category-id="{{ $category['id'] }}">
-                                                        <td colspan="100%"
-                                                            class="style-bg-primary-alpha-20 style-text-primary services-category editor__component-wrapper">
-                                                            <div class="w-100 ">
-                                                                <h4>
-                                                                    @if ($category['image'])
-                                                                        @if (strpos($category['image'], '.') !== false || strpos($category['image'], '/') === 0 || strpos($category['image'], 'http') === 0)
-                                                                            <img src="{{ $category['image'] }}"
-                                                                                alt="{{ $category['name'] }}"
-                                                                                class="img-fluid align-middle mr-1"
-                                                                                style="max-width: calc(1em + 6px); max-height: calc(1em + 6px);">
-                                                                        @else
-                                                                            <i class="{{ $category['image'] }} align-middle mr-1" style="font-size: 18px;"></i>
-                                                                        @endif
-                                                                    @endif
-                                                                    <span
-                                                                        class="align-middle">{{ $category['name'] }}</span>
-                                                                </h4>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
 
-                                                    @foreach ($groupedServices[$category['id']] as $service)
-                                                        <tr data-filter-table-category-id="{{ $category['id'] }}" class="service-row">
-                                                            <td data-label="{{ __('services.service') }}">
-                                                                <a href="#"
-                                                                    data-favorite-service-id="{{ $service['id'] }}"
-                                                                    class="favorite-btn"
-                                                                    title="{{ __('services.add_to_favorites') }}">
-                                                                    <span data-favorite-icon="" class="far fa-star"></span>
-                                                                </a>
-                                                            </td>
-                                                            <td data-label="{{ __('services.id') }}"
-                                                                data-filter-table-service-id="{{ $service['id'] }}">
-                                                                {{ $service['id'] }}</td>
-                                                            <td data-label="{{ __('services.service') }}"
-                                                                data-filter-table-service-name="true">
-                                                                {{ $service['name'] }}
-                                                            </td>
-                                                            <td data-label="{{ __('services.rate_per_1000') }}">
-                                                                {{ $service['rate_formatted'] }}
-                                                            </td>
-                                                            <td data-label="{{ __('services.min_order') }}">
-                                                                {{ number_format($service['min']) }}</td>
-                                                            <td data-label="{{ __('services.max_order') }}">
-                                                                {{ number_format($service['max']) }}</td>
-                                                            <td data-label="{{ __('services.avg_time') }}" class="nowrap">
-                                                                {{ $service['average_time'] ?? '-' }}
-                                                            </td>
-                                                            <td data-label="{{ __('services.description') }}" class="services-list__description">
-                                                                <div class="component_button_view">
-                                                                    <button
-                                                                        class="btn btn-actions btn-view-service-description"
-                                                                        data-toggle="modal"
-                                                                        data-content-id="#service-description-id-{{ $service['id'] }}"
-                                                                        data-service-id="{{ $service['id'] }}"
-                                                                        data-service-name="{{ $service['name'] }}"
-                                                                        data-min="{{ $service['min'] }}"
-                                                                        data-max="{{ $service['max'] }}"
-                                                                        data-target="#service-description-37">
-                                                                        {{ __('services.view') }}
-                                                                    </button>
-                                                                </div>
-                                                                <div class="d-none"
-                                                                    id="service-description-id-{{ $service['id'] }}">
-                                                                    {{ $service['description'] ?? __('services.no_description') }}
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    @endforeach
-                                                @endif
-                                            @endforeach
-                                            @if (empty($groupedServices) || collect($groupedServices)->sum(fn($s) => $s->count()) === 0)
-                                                <tr>
-                                                    <td colspan="100%" class="services-table-empty">
-                                                        <div>
-                                                            <i class="fas fa-inbox"></i>
-                                                            <p>{{ __('common.info') ?? 'No services available' }}</p>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            @endif
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                    <div id="rate-filter-wrap" class="mt-3 mb-1 d-none" data-rate-min="{{ $rateMin }}" data-rate-max="{{ $rateMax }}">
+                        <div id="kt_slider_rate_range" class="ms-6 me-10 noUi-sm"></div>
+                        <div class="d-flex justify-content-between mt-2 text-muted fs-8">
+                            <span id="rate_min_text">{{ $rateMin }}</span>
+                            <span id="rate_max_text">{{ $rateMax }}</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="modal fade " tabindex="-1" role="dialog" id="service-description-37">
-                <div class="modal-dialog" role="document">
-                    <div class="modal-content">
-                        <div class="modal-body">
-                            <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                                <i class="fas fa-times"></i>
-                            </button>
-                            <div class="service-description-content"></div>
-                            <button class="btn btn-block btn-big-primary" id="createQuickOrder"
-                                style="margin-top: 24px;">
-                                {{ __('services.create_order') }}
-                            </button>
-                        </div>
+            {{-- Table --}}
+            <div class="card card-services mb-5">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-row-dashed table-row-gray-300 gs-3 gy-2 gx-2 mb-0"
+                            id="table-service">
+                            <thead>
+                                <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
+                                    <th width="1"></th>
+                                    <th width="1"></th>
+                                    <th data-lang="Service" width="40%">Service</th>
+                                    <th class="text-end">
+                                        <span data-lang="Rate">Rate</span>
+                                        <span class="ms-1 fa-regular fa-circle-question" data-bs-toggle="tooltip"
+                                            data-bs-placement="top" aria-label="Rate on 1000 units"
+                                            data-bs-original-title="Rate on 1000 units"></span>
+                                    </th>
+                                    <th class="text-end col-min" width="1">Min</th>
+                                    <th class="text-end col-max" width="1">Max</th>
+                                    @if($showAverageTime)
+                                    <th class="text-end col-avg" width="1">
+                                        <span data-lang="Average time">Average time</span>
+                                        <span class="ms-1 fa-regular fa-circle-question" data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            aria-label="The average time is based on 10 latest completed orders per 1000 quantity"
+                                            data-bs-original-title="The average time is based on 10 latest completed orders per 1000 quantity"></span>
+                                    </th>
+                                    @endif
+                                    <th class="text-center" width="1" data-lang="Description">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($serviceGroups as $group)
+                                        {{-- Category header row --}}
+                                        <tr class="svc-cat-row bg-white border-top border-2"
+                                            data-platform="{{ $group['platform_id'] }}"
+                                            data-category="{{ $group['id'] }}">
+                                            <td colspan="{{ $serviceColumnCount }}" class="fs-5 fw-bolder">
+                                                <div class="d-flex align-items-center">
+                                                    @if ($group['platform_image_url'])
+                                                        <img src="{{ $group['platform_image_url'] }}" class="w-15px h-15px me-1">
+                                                    @elseif ($group['platform_icon_class'])
+                                                        <i class="{{ $group['platform_icon_class'] }} fs-5 me-1"></i>
+                                                    @endif
+                                                    <div class="d-flex flex-column ls-1">
+                                                        {{ $group['title'] }}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        {{-- Service rows --}}
+                                        @foreach ($group['services'] as $svc)
+                                            <tr class="service svc-row" data-platform="{{ $group['platform_id'] }}"
+                                                data-category="{{ $svc['category_id'] }}"
+                                                data-name="{{ strtolower($svc['name']) }} {{ $svc['id'] }}"
+                                                data-rate="{{ $svc['rate'] }}">
+                                                <td class="ps-3">
+                                                    @auth
+                                                    <a href="javascript:;" class="svc-fav-btn"
+                                                        data-id="{{ $svc['id'] }}"
+                                                        data-cat="{{ $svc['category_id'] }}"
+                                                        data-pid="{{ $group['platform_id'] }}"
+                                                        onclick="_services.on.click.favorite({{ $svc['id'] }})">
+                                                        <i class="fa-regular fa-star text-muted fs-7"></i>
+                                                    </a>
+                                                    @endauth
+                                                </td>
+                                                <td class="fw-bold text-gray-600 fs-8 col-id">{{ $svc['id'] }}</td>
+                                                <td class="py-2 col-name">
+                                                    <div class="d-flex flex-column">
+                                                        <span
+                                                            class="fw-semibold text-gray-800 fs-7">{{ $svc['name'] }}</span>
+                                                        @if ($svc['attribute_badges'])
+                                                            <div class="mt-1 d-flex flex-wrap gap-1">
+                                                                @foreach ($svc['attribute_badges'] as $badge)
+                                                                    <span
+                                                                        class="badge badge-outline badge-{{ $badge['color'] }} fw-light fs-9 py-1 px-1">{{ $badge['name'] }}</span>
+                                                                @endforeach
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                </td>
+                                                <td class="text-end col-rate">
+                                                    <span class="fw-bold text-primary fs-7">
+                                                        @if ($isVndCurrency)
+                                                            @php
+                                                                $rateNumber = preg_replace('/[^\d,.-]/u', '', (string) $svc['rate_formatted']);
+                                                                $rateNumber = str_replace('.', '', $rateNumber);
+                                                                $rateNumber = str_replace(',', '.', $rateNumber);
+                                                            @endphp
+                                                            {{ number_format(round((float) $rateNumber), 0, ',', '.') }} VND
+                                                        @else
+                                                            {{ $svc['rate_formatted'] }}
+                                                        @endif
+                                                    </span>
+                                                </td>
+                                                <td class="text-end text-gray-700 fs-7 col-min">
+                                                    {{ $svc['min_formatted'] }}</td>
+                                                <td class="text-end text-gray-700 fs-7 col-max">
+                                                    {{ $svc['max_formatted'] }}</td>
+                                                @if($showAverageTime)
+                                                <td class="text-nowrap text-end text-gray-600 fs-7 col-avg">
+                                                    {{ $svc['average_time'] ?: '—' }}</td>
+                                                @endif
+                                                <td class="text-center pe-3 col-desc">
+                                                    <button type="button"
+                                                        class="btn btn-secondary btn-sm px-4 py-1"
+                                                        onclick="_services.on.click.viewDescription({{ $svc['id'] }})"
+                                                        data-lang="View">View</button>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
+                </div>
+            </div>
+
+            {{-- No results row --}}
+            <div id="svc-no-result" class="text-center text-muted py-5 d-none">
+                <i class="fa-regular fa-face-sad-tear fs-2 mb-2"></i>
+                <div data-lang="services.no_services_found">No services found.</div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Description modal --}}
+    <div class="modal fade" id="modal-description" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-start p-5">
+                    <div id="service-name"></div>
+                    <div class="separator separator-dashed my-5"></div>
+                    <div id="service-description"></div>
+                    <a id="modal-desc-buy" href="#" target="_blank"
+                        class="btn btn-primary w-100 mt-5 text-uppercase" data-lang="Buy now">Buy now</a>
                 </div>
             </div>
         </div>
     </div>
 
+    <script>var SERVICES = @json($servicesPayload);</script>
 @endsection
 
 @push('scripts')
     <script>
-        $(document).ready(function() {
-            // LocalStorage helper functions for favorites
-            function getFavorites() {
-                const favorites = localStorage.getItem('favorite_services');
-                return favorites ? JSON.parse(favorites) : [];
-            }
-
-            function saveFavorites(favorites) {
-                localStorage.setItem('favorite_services', JSON.stringify(favorites));
-            }
-
-            function isFavorite(serviceId) {
-                const favorites = getFavorites();
-                return favorites.includes(parseInt(serviceId));
-            }
-
-            function toggleFavorite(serviceId) {
-                let favorites = getFavorites();
-                const id = parseInt(serviceId);
-
-                if (favorites.includes(id)) {
-                    favorites = favorites.filter(fav => fav !== id);
-                } else {
-                    favorites.push(id);
-                }
-
-                saveFavorites(favorites);
-                return favorites.includes(id);
-            }
-
-            // Initialize favorite icons on page load
-            function initializeFavorites() {
-                $('[data-favorite-service-id]').each(function() {
-                    const serviceId = $(this).data('favorite-service-id');
-                    const $link = $(this);
-                    const $icon = $(this).find('[data-favorite-icon]');
-
-                    if (isFavorite(serviceId)) {
-                        $icon.removeClass('far').addClass('fas');
-                        $link.addClass('favorite-active');
-                    } else {
-                        $icon.removeClass('fas').addClass('far');
-                        $link.removeClass('favorite-active');
-                    }
-                });
-            }
-
-            // Initialize favorites on page load
-            initializeFavorites();
-
-            // Category filter functionality
-            $('[data-filter-category-id]').on('click', function(e) {
-                e.preventDefault();
-
-                const categoryId = $(this).data('filter-category-id');
-                const categoryName = $(this).data('filter-category-name') || $(this).text().trim();
-
-                // Update active category display
-                $('.services-filter__active-category').text(categoryName);
-
-                // Show/hide services based on category
-                if (categoryId === 'All') {
-                    $('[data-filter-table-category-id]').show();
-                } else if (categoryId === 'favorites') {
-                    // Show only favorited services
-                    $('[data-filter-table-category-id]').hide();
-
-                    let hasVisibleFavorites = false;
-
-                    $('[data-filter-table-category-id]').each(function() {
-                        const $row = $(this);
-                        if (!$row.hasClass('services-list-category-title')) {
-                            const $favoriteLink = $row.find('[data-favorite-service-id]');
-                            if ($favoriteLink.hasClass('favorite-active')) {
-                                $row.show();
-                                hasVisibleFavorites = true;
-                                // Also show the category header
-                                const categoryId = $row.data('filter-table-category-id');
-                                $('[data-filter-table-category-id="' + categoryId +
-                                    '"].services-list-category-title').show();
-                            }
-                        }
-                    });
-
-                    // Show message if no favorites
-                    if (!hasVisibleFavorites) {
-                        const noFavoritesMsg = '{{ __('notifications.no_notifications') }}';
-                        console.log(noFavoritesMsg);
-                    }
-                } else {
-                    $('[data-filter-table-category-id]').hide();
-                    $('[data-filter-table-category-id="' + categoryId + '"]').show();
-                }
-            });
-
-            // Search functionality
-            $('[data-search-service]').on('input', function() {
-                const searchTerm = $(this).val().toLowerCase();
-                const tableSelector = $(this).data('search-service');
-
-                if (searchTerm === '') {
-                    $(tableSelector + ' tbody tr').show();
-                } else {
-                    $(tableSelector + ' tbody tr').each(function() {
-                        const $row = $(this);
-                        const serviceName = $row.find('[data-filter-table-service-name]').text()
-                            .toLowerCase();
-                        const serviceId = $row.find('[data-filter-table-service-id]').text()
-                            .toLowerCase();
-
-                        if (serviceName.includes(searchTerm) || serviceId.includes(searchTerm)) {
-                            $row.show();
-                        } else if (!$row.hasClass('services-list-category-title')) {
-                            $row.hide();
-                        }
-                    });
-                }
-            });
-
-            // Service description modal functionality
-            $('.btn-view-service-description').on('click', function() {
-                const contentId = $(this).data('content-id');
-                const serviceName = $(this).data('service-name');
-                const serviceId = $(this).data('service-id');
-                const minOrder = $(this).data('min');
-                const maxOrder = $(this).data('max');
-
-                // Get description content
-                const description = $(contentId).html() || '{{ __('services.no_desc') }}';
-
-                // Update modal content
-                const modal = $($(this).data('target'));
-                const serviceIdLabel = '{{ __('services.service_id') }}';
-                const minOrderLabel = '{{ __('services.min_order') }}';
-                const maxOrderLabel = '{{ __('services.max_order') }}';
-                const descriptionLabel = '{{ __('services.description') }}';
-                
-                modal.find('.service-description-content').html(`
-            <h5>${serviceName}</h5>
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <p><strong>${serviceIdLabel}:</strong> <span class="badge badge-primary">${serviceId}</span></p>
-                </div>
-                <div class="col-md-6">
-                    <p><strong>${minOrderLabel}:</strong> <span class="badge badge-info">${minOrder}</span></p>
-                </div>
-            </div>
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <p><strong>${maxOrderLabel}:</strong> <span class="badge badge-warning">${maxOrder}</span></p>
-                </div>
-            </div>
-            <div class="mt-3">
-                <strong>${descriptionLabel}:</strong>
-                <div class="mt-2 p-2 bg-light rounded">${description || '<em>No description available</em>'}</div>
-            </div>
-        `);
-
-                // Update create order button
-                modal.find('#createQuickOrder').data('service-id', serviceId);
-            });
-
-            // Create quick order functionality
-            $('#createQuickOrder').on('click', function() {
-                const serviceId = $(this).data('service-id');
-                if (serviceId) {
-                    // Redirect to order creation page with service parameter
-                    window.location.href = `/new?service=${serviceId}`;
-                }
-            });
-
-            // Favorite service functionality with localStorage
-            $('[data-favorite-service-id]').on('click', function(e) {
-                e.preventDefault();
-
-                const serviceId = $(this).data('favorite-service-id');
-                const $link = $(this);
-                const $icon = $(this).find('[data-favorite-icon]');
-
-                // Toggle favorite status
-                const isFav = toggleFavorite(serviceId);
-
-                // Update icon and class
-                if (isFav) {
-                    $icon.removeClass('far').addClass('fas');
-                    $link.addClass('favorite-active');
-                    const removeLabel = '{{ __('services.favorite_services') }}';
-                    $link.attr('title', removeLabel);
-                } else {
-                    $icon.removeClass('fas').addClass('far');
-                    $link.removeClass('favorite-active');
-                    const addLabel = '{{ __('services.favorite_services') }}';
-                    $link.attr('title', addLabel);
-                }
-            });
-
-            // Initialize tooltips
-            $('[data-toggle="tooltip"]').tooltip();
-        });
+        _services.init();
     </script>
 @endpush
+

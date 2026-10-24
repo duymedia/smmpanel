@@ -1,1118 +1,1987 @@
-@extends('clients.theme-4.layouts.app')
-@section('title', 'New Order')
+    @extends('clients.theme-4.layouts.app')
 
-@section('content')
-    <!--begin::Content-->
-    <div class="content flex-column-fluid" id="kt_content">
-        <!--begin::Toolbar-->
-        @include('clients.theme-4.layouts.toolbar', ['title' => 'New Order', 'langKey' => 'newOrder.title'])
-        <!--end::Toolbar-->
-        <!--begin::Post-->
-        <div class="post" id="kt_post">
-            <div class="card mb-5">
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="sl-quick-search" class="form-label" data-lang="newOrder.quick_search">Quick search service</label>
-                        {{-- Placeholder hiển thị khi JS chưa load, trông giống empty select --}}
-                        <div id="qs-placeholder" class="form-select form-select-solid text-muted" style="pointer-events:none;color:#b5b5c3!important">&nbsp;</div>
-                        <select id="sl-quick-search" class="form-select form-select-solid" style="display:none">
-                            <option value=""></option>
-                            @foreach ($data['services'] as $svc)
-                                <option value="{{ $svc['id'] }}" data-rate="{{ $svc['rate_formatted'] }}"
-                                    data-content="<div><span class=&quot;fw-bolder me-1&quot;>{{ $svc['id'] }}</span> - {{ e($svc['name']) }} - <span class=&quot;text-primary fw-bolder ms-1&quot;>{{ e($svc['rate_formatted']) }}</span></div>">
-                                    {{ $svc['id'] }} - {{ $svc['name'] }} - {{ $svc['rate_formatted'] }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="row g-5">
+    @section('title', __('newOrder.title'))
+
+    @section('content')
+
+        @include('clients.theme-4.components.index')
+
+        <div id="block_39">
+            <div class="block-bg"></div>
+            <div class="container-fluid">
+                <div class="new_order-block">
+                    <div class="row">
+                        <!-- Left: Form -->
+                        <div class="col-lg-7 mb-4 mb-lg-0">
+                            <div class="component_form_group component_card component_radio_button component_platforms">
+                                <div class="card">
+                                    <form action="{{ route('clients.orders.store') }}" method="post" id="order-form">
+                                        @csrf
+
+                                        <!-- Alert Messages -->
+                                        <div class="alert alert-dismissible mb-3 js-order-alert alert-danger" role="alert"
+                                            id="js-order-alert-error" style="display: none;">
+                                            <button type="button" class="close" data-hide="alert" aria-label="Close">
+                                                <span aria-hidden="true">×</span>
+                                            </button>
+                                            <div class="text"></div>
+                                        </div>
+
+                                        <div class="alert alert-dismissible mb-3 js-order-alert alert-success"
+                                            role="alert" id="js-order-alert-success" style="display: none;">
+                                            <button type="button" class="close" data-hide="alert" aria-label="Close">
+                                                <span aria-hidden="true">×</span>
+                                            </button>
+                                            <div class="text"></div>
+                                        </div>
+
+                                        <!-- Platforms -->
+                                        <div class="platforms">
+
+                                            {{-- ALL PLATFORM --}}
+                                            <div class="platforms-item platforms-item-col-5">
+                                                <button type="button" class="platforms-item__with-icon active"
+                                                    data-platform="all" data-platform-id="all">
+
+                                                    <span class="platforms-item__icon platforms-item__icon-original">
+                                                        <svg width="100%" height="100%" viewBox="0 0 24 24"
+                                                            fill="none">
+                                                            <path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor"
+                                                                stroke-width="2" />
+                                                        </svg>
+                                                    </span>
+
+                                                    <span class="platforms-item__title">{{ __('newOrder.all') }}</span>
+                                                </button>
+                                            </div>
+
+                                            {{-- PLATFORMS FROM DB --}}
+                                            @foreach ($data['platforms'] as $platform)
+                                                <div class="platforms-item platforms-item-col-5">
+                                                    <button type="button" class="platforms-item__with-icon"
+                                                        data-platform="{{ Str::slug($platform->name) }}"
+                                                        data-platform-id="{{ $platform->id }}"
+                                                        data-icon="{{ $platform->image }}">
+
+                                                        <span class="platforms-item__icon platforms-item__icon-original">
+                                                            @if ($platform->image && (strpos($platform->image, '.') !== false || strpos($platform->image, '/') === 0 || strpos($platform->image, 'http') === 0))
+                                                                <img src="{{ $platform->image }}" alt="{{ $platform->name }}"
+                                                                    style="width:20px;height:20px;object-fit:contain;">
+                                                            @else
+                                                                <i class="{{ $platform->image }}" style="font-size:18px;"></i>
+                                                            @endif
+                                                        </span>
+
+                                                        <span class="platforms-item__title">
+                                                            {{ $platform->name }}
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                            @endforeach
+                                            <div class="platforms-item platforms-item-col-5">
+                                                <button type="button" class="platforms-item__with-icon"
+                                                    data-platform="other" data-platform-id="2">
+                                                    <span class="platforms-item__icon platforms-item__icon-original">
+                                                        <svg width="100%" height="100%" viewBox="0 0 24 24"
+                                                            fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                            <path
+                                                                d="M13 5C13 4.44687 12.5531 4 12 4C11.4469 4 11 4.44687 11 5V11H5C4.44687 11 4 11.4469 4 12C4 12.5531 4.44687 13 5 13H11V19C11 19.5531 11.4469 20 12 20C12.5531 20 13 19.5531 13 19V13H19C19.5531 13 20 12.5531 20 12C20 11.4469 19.5531 11 19 11H13V5Z"
+                                                                fill="currentColor"></path>
+                                                        </svg>
+                                                    </span>
+                                                    <span class="platforms-item__title">{{ __('newOrder.other') }}</span> </button>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <div class="search-dropdown select2-container--default select2-container--below"
+                                                id="search-container" style="position: relative;">
+                                                <div class="input-wrapper">
+                                                    <button type="button" class="input-wrapper__prepend">
+                                                        <span class="fas fa-search"></span>
+                                                    </button>
+                                                    <input id="service-search-input" placeholder="{{ __('newOrder.search') }}"
+                                                        class="select2-selection select2-selection--single form-control"
+                                                        autocomplete="off">
+                                                    <button type="button" class="input-wrapper__append"
+                                                        id="search-clear-btn" style="display: none;">
+                                                        <span class="fas fa-times"></span>
+                                                    </button>
+                                                </div>
+                                                <!-- Search Results Dropdown -->
+                                                <div id="search-results-container" style="position: relative;">
+                                                    <span
+                                                        class="select2-container select2-container--default select2-container--open"
+                                                        id="search-dropdown-wrapper"
+                                                        style="position: absolute; top: 0px; left: 0px; width: 100%; display: none; z-index: 1050;">
+                                                        <span class="select2-dropdown dropdown-menu select2-dropdown--below"
+                                                            style="width: 100%; position: relative;">
+                                                            <span class="select2-results" style="width: 100%;">
+                                                                <div
+                                                                    style="max-height: 400px; overflow-y: auto; overflow-x: hidden; width: 100%; scrollbar-width: thin; scrollbar-color: #ccc #f1f1f1;">
+                                                                    <ul role="group"
+                                                                        class="select2-results__options dropdown-menu"
+                                                                        id="search-results-list"
+                                                                        style="padding: 0; margin: 0; list-style: none;">
+                                                                        <!-- Search results will be populated here -->
+                                                                    </ul>
+                                                                </div>
+                                                            </span>
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Category – Tự động thay đổi theo platform -->
+                                        <div class="form-group">
+                                            <label for="orderform-category" class="control-label">{{ __('newOrder.category') }}</label>
+                                            <select class="form-control select2-hidden-accessible" id="orderform-category"
+                                                name="category" data-select="true" data-select-search="true"
+                                                data-select-search-placeholder="{{ __('newOrder.search') }}"
+                                                data-select-container="#select-category-container" tabindex="-1"
+                                                aria-hidden="true">
+                                                {{-- Option Favorites: ẩn mặc định, JS enable khi có favorite_services --}}
+                                                <option value="favorites" data-fav="1"
+                                                    data-icon="&lt;i class='fas fa-star' style='color:#ffc107;'&gt;&lt;/i&gt;"
+                                                    disabled style="display:none">{{ __('services.favorite_services') }}</option>
+                                                @foreach ($data['categories'] as $key => $categories)
+                                                    @php
+                                                        $img = $categories['image'] ?? '';
+                                                        $dataIcon = '';
+                                                        if ($img) {
+                                                            if (str_starts_with($img, 'http') || str_starts_with($img, '/') || str_contains($img, '.')) {
+                                                                $dataIcon = '<img src="' . e($img) . '" class="img-responsive btn-group-vertical" style="width:20px;height:20px;object-fit:contain;">';
+                                                            } else {
+                                                                $dataIcon = '<i class="' . e($img) . '"></i>';
+                                                            }
+                                                        }
+                                                    @endphp
+                                                    <option value="{{ $categories['id'] }}"
+                                                        data-category-id="{{ $categories['id'] }}"
+                                                        data-platform_id="{{ $categories['platform_id'] }}"
+                                                        @if($dataIcon) data-icon="{{ $dataIcon }}" @endif>
+                                                        {{ $categories['name'] }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+
+                                            <div id="select-category-container" class="position-relative"></div>
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label for="orderform-service" class="control-label">{{ __('newOrder.service') }}</label>
+                                            <div class="d-flex">
+                                                <div class="w-100 new_order-block__services-list">
+                                                    <select class="form-control select2-hidden-accessible"
+                                                        id="orderform-service" name="service" data-select="true"
+                                                        data-select-search="true" data-select-search-placeholder="{{ __('newOrder.search') }}"
+                                                        data-select-container="#select-service-container" tabindex="-1"
+                                                        aria-hidden="true">
+                                                        @foreach ($data['services'] as $service)
+                                                            <option data-type="0" value="{{ $service['id'] ?? '' }}"
+                                                                data-template="{{ $service['id'] ?? '' }} - {{ $service['name'] ?? '' }} - {{ $service['rate_formatted'] ?? '' }}"
+                                                                data-category_id ="{{ $service['category_id'] ?? '' }}"
+                                                                data-id="{{ $service['id'] ?? '' }}"
+                                                                data-name="{{ $service['name'] ?? '' }}"
+                                                                data-title="{{ $service['title'] ?? '' }}"
+                                                                data-description="{{ $service['description'] ?? '' }}"
+                                                                data-position="{{ $service['position'] ?? '' }}"
+                                                                data-attributes="{{ $service['attributes'] ?? '' }}"
+                                                                data-min="{{ $service['min'] ?? '' }}"
+                                                                data-max="{{ $service['max'] ?? '' }}"
+                                                                data-type_service="{{ $service['type_service'] ?? '' }}"
+                                                                data-type_radio="{{ $service['type_radio'] ?? '' }}"
+                                                                data-refill="{{ $service['refill'] ?? '' }}"
+                                                                data-cancel="{{ $service['cancel'] ?? '' }}"
+                                                                data-dripfeed="{{ $service['dripfeed'] ?? '' }}"
+                                                                data-average-time="{{ $service['average_time'] ?? '' }}"
+                                                                data-note="{{ $service['note'] ?? '' }}"
+                                                                data-rate_formatted="{{ $service['rate_formatted'] ?? '' }}">
+
+                                                                {{ $service['id'] ?? '' }} - {{ $service['name'] ?? '' }} -
+                                                                {{ $service['rate_formatted'] ?? '' }}
+                                                            </option>
+                                                        @endforeach
+
+                                                    </select>
+
+                                                    <div id="select-service-container" class="position-relative">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+
+                                        <!-- Service Description -->
+                                        <div class="form-group hidden fields component_service_description"
+                                            id="service_description">
+                                            <label for="service_description" class="control-label">{{ __('newOrder.description') }}</label>
+                                            <div class="panel-description"><br>
+                                            </div>
+                                        </div>
+
+                                        <!-- Fields -->
+                                        <div id="fields">
+                                            {{-- <div class="form-group hidden fields" id="order_user_name">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-user_name">Username</label>
+                                                        <input class="form-control w-full" name="OrderForm[user_name]"
+                                                            value="" type="text"
+                                                            id="field-orderform-fields-user_name">
+                                                    </div> --}}
+                                            <div class="form-group fields" id="order_link">
+                                                <label class="control-label"
+                                                    for="field-orderform-fields-link">{{ __('newOrder.link') }}</label>
+                                                <input class="form-control" name="link" value="" type="text"
+                                                    dir="ltr" id="field-orderform-fields-link">
+                                            </div>
+                                            <div class="form-group fields" id="order_quantity">
+                                                <label class="control-label"
+                                                    for="field-orderform-fields-quantity">{{ __('newOrder.quantity') }}</label>
+                                                <input class="form-control" name="quantity" value=""
+                                                    type="text" id="field-orderform-fields-quantity"><small
+                                                    class="help-block min-max"></small>
+                                            </div>
+                                            <div class="form-group hidden fields" id="order_keywords">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-keywords">Keywords (1 per line)</label>
+                                                        <textarea class="form-control" name="keywords" id="field-orderform-fields-keywords" cols="30"
+                                                            rows="10"></textarea>
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_comment">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-comments">Comments (1 per line)</label>
+                                                        <textarea class="form-control" name="comments" id="field-orderform-fields-comments" cols="30"
+                                                            rows="10"></textarea>
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_mentionUsernames">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-mentionUsernames">Usernames (1 per
+                                                            line)</label>
+                                                        <textarea class="form-control" name="mentionUsernames" id="field-orderform-fields-mentionUsernames"
+                                                            cols="30" rows="10"></textarea>
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_usernames">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-usernames">Usernames (1 per
+                                                            line)</label>
+                                                        <textarea class="form-control w-full" name="usernames" id="field-orderform-fields-usernames"
+                                                            cols="30" rows="10"></textarea>
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_usernames_custom">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-usernames_custom">Usernames (1 per
+                                                            line)</label>
+                                                        <textarea class="form-control" name="OrderForm[usernames_custom]" id="field-orderform-fields-usernames_custom"
+                                                            cols="30" rows="10"></textarea>
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_username">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-username">Username</label>
+                                                        <input class="form-control" name="username" value=""
+                                                            type="text" id="field-orderform-fields-username">
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_mediaUrl">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-mediaUrl">Media URL</label>
+                                                        <input class="form-control" name="mediaUrl" value=""
+                                                            type="text" id="field-orderform-fields-mediaUrl">
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_hashtag">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-hashtag">Hashtag</label>
+                                                        <input class="form-control" name="hashtag" value=""
+                                                            type="text" id="field-orderform-fields-hashtag">
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_hashtags">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-hashtags">Hashtags (1 per line)</label>
+                                                        <textarea class="form-control" name="hashtags" id="field-orderform-fields-hashtags" cols="30"
+                                                            rows="10"></textarea>
+                                                    </div>
+                                                    <div id="dripfeed" class="space-y-3">
+                                                        <!-- Drip-feed Toggle -->
+                                                        <!-- Schedule Toggle -->
+                                                        <div class="form-group">
+                                                            <div class="form-group__checkbox">
+                                                                <label class="form-group__checkbox-label">
+                                                                    <input type="checkbox" id="is_schedule-time" name="is_schedule_time" value="1">
+                                                                    <span class="checkmark"></span>
+                                                                </label>
+                                                                <label for="is_schedule-time"
+                                                                    class="form-group__label-title">
+                                                                    {{ __('schedule.description') }}
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <!-- Schedule DateTime Input -->
+                                                        <div id="is-schedule-time-content" class="hidden">
+                                                            <div class="form-group">
+                                                                <label class="control-label" for="schedule-time">{{ __('schedule.datetime_label') }}</label>
+                                                                <input type="datetime-local" id="schedule-time" name="schedule_time" class="form-control">
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- Loop Toggle -->
+                                                        <div class="form-group">
+                                                            <div class="form-group__checkbox">
+                                                                <label class="form-group__checkbox-label">
+                                                                    <input type="checkbox" id="is_loop" name="loop" value="1">
+                                                                    <span class="checkmark"></span>
+                                                                </label>
+                                                                <label for="is_loop"
+                                                                    class="form-group__label-title">
+                                                                    {{ __('loop.title') }}
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <!-- Loop Inputs -->
+                                                        <div id="loop-fields" class="hidden">
+                                                            <div class="form-group">
+                                                                <label class="control-label" for="loop_quantity">{{ __('loop.quantity') }}</label>
+                                                                <input type="number" id="loop_quantity" name="loop_quantity" class="form-control" placeholder="1">
+                                                                <small class="form-text text-muted d-block">{{ __('loop.quantity_help') }}</small>
+                                                            </div>
+                                                            <div class="form-group">
+                                                                <label class="control-label" for="loop_spacing">{{ __('loop.spacing') }}</label>
+                                                                <input type="number" id="loop_spacing" name="loop_spacing" class="form-control" placeholder="30">
+                                                                <small class="form-text text-muted d-block">{{ __('loop.spacing_help') }}</small>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_posts">
+                                                        <label class="control-label" for="field-orderform-fields-posts">New
+                                                            posts</label>
+                                                        <input class="form-control" name="posts" value=""
+                                                            type="text" id="field-orderform-fields-posts">
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_old_posts">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-old_posts">Old posts</label>
+                                                        <input class="form-control" name="old_posts"
+                                                            value="" type="text"
+                                                            id="field-orderform-fields-old_posts">
+                                                        <small class="help-block max"></small>
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_min">
+                                                        <label class="control-label" for="order_count">Quantity</label>
+                                                        <div class="row">
+                                                            <div class="col-md-6">
+                                                                <input type="text" class="form-control" id="order_count"
+                                                                    name="min" value=""
+                                                                    placeholder="Min"><small class="help-block min-max"></small>
+                                                            </div>
+
+                                                            <div class="col-md-6">
+                                                                <input type="text" class="form-control" id="order_count"
+                                                                    name="max" value="" placeholder="Max">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_delay">
+                                                        <div class="row">
+                                                            <div class="col-md-6">
+                                                                <label class="control-label"
+                                                                    for="field-orderform-fields-delay">Delay (minutes)</label>
+                                                                <select class="form-control" name="delay"
+                                                                    id="field-orderform-fields-delay">
+
+                                                                    <option value="0">No delay (0 min)</option>
+
+                                                                    <option value="5">5 minutes</option>
+
+                                                                    <option value="10">10 minutes</option>
+
+                                                                    <option value="15">15 minutes</option>
+
+                                                                    <option value="20">20 minutes</option>
+
+                                                                    <option value="30">30 minutes</option>
+
+                                                                    <option value="40">40 minutes</option>
+
+                                                                    <option value="50">50 minutes</option>
+
+                                                                    <option value="60">60 minutes (1 hour)</option>
+
+                                                                    <option value="90">90 minutes (1.5 hours)</option>
+
+                                                                    <option value="120">120 minutes (2 hours)</option>
+
+                                                                    <option value="150">150 minutes (2.5 hours)</option>
+
+                                                                    <option value="180">180 minutes (3 hours)</option>
+
+                                                                    <option value="210">210 minutes (3.5 hours)</option>
+
+                                                                    <option value="240">240 minutes (4 hours)</option>
+
+                                                                    <option value="270">270 minutes (4.5 hours)</option>
+
+                                                                    <option value="300">300 minutes (5 hours)</option>
+
+                                                                    <option value="360">360 minutes (6 hours)</option>
+
+                                                                    <option value="420">420 minutes (7 hours)</option>
+
+                                                                    <option value="480">480 minutes (8 hours)</option>
+
+                                                                    <option value="540">540 minutes (9 hours)</option>
+
+                                                                    <option value="600">600 minutes (10 hours)</option>
+
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label for="field-orderform-fields-expiry">Expiry (d/m/Y)</label>
+                                                                <div class="input-group">
+                                                                    <input class="form-control datetime" autocomplete="off"
+                                                                        name="expiry" value="" placeholder="dd/mm/yyyy"
+                                                                        type="text" id="field-orderform-fields-expiry">
+                                                                    <span class="input-group-btn">
+                                                                        <button
+                                                                            class="btn btn-default btn-big-secondary clear-datetime"
+                                                                            type="button"
+                                                                            data-rel="#field-orderform-fields-expiry"><span
+                                                                                class="fa far fa-trash-alt"></span></button>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_comment_username">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-comment_username">Username of the
+                                                            comment owner</label>
+                                                        <input class="form-control" name="OrderForm[comment_username]"
+                                                            value="" type="text"
+                                                            id="field-orderform-fields-comment_username">
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_answer_number">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-answer_number">Answer number</label>
+                                                        <input class="form-control" name="OrderForm[answer_number]"
+                                                            value="" type="text"
+                                                            id="field-orderform-fields-answer_number">
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_email">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-email">Email</label>
+                                                        <input class="form-control" name="OrderForm[email]" value=""
+                                                            type="text" id="field-orderform-fields-email">
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_groups">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-groups">Groups</label>
+                                                        <textarea class="form-control" name="OrderForm[groups]" id="field-orderform-fields-groups" cols="30"
+                                                            rows="10"></textarea>
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_country">
+                                                        <label class="control-label" for="field-orderform-fields-country">
+                                                            Country
+                                                        </label>
+                                                        <input class="form-control" name="country" value=""
+                                                            placeholder="US" type="text"
+                                                            id="field-orderform-fields-country">
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_device">
+                                                        <label class="control-label" for="field-orderform-fields-device">
+                                                            Device
+                                                        </label>
+
+                                                        <div class="form-group__checkbox">
+                                                            <label class="form-group__checkbox-label">
+                                                                <input class="form-check-input" type="radio"
+                                                                    name="device" id="device-1" value="1">
+                                                                <span class="radiomark"></span>
+                                                            </label>
+                                                            <label class="form-check-label form-group__label-title mr-5"
+                                                                for="device-1">Desktop</label>
+                                                        </div>
+
+                                                        <div class="form-group__checkbox">
+                                                            <label class="form-group__checkbox-label">
+                                                                <input class="form-check-input" type="radio"
+                                                                    name="device" id="device-2" value="2">
+                                                                <span class="radiomark"></span>
+                                                            </label>
+                                                            <label class="form-check-label form-group__label-title mr-5"
+                                                                for="device-2">Mobile (Android)</label>
+                                                        </div>
+
+                                                        <div class="form-group__checkbox">
+                                                            <label class="form-group__checkbox-label">
+                                                                <input class="form-check-input" type="radio"
+                                                                    name="device" id="device-3" value="3">
+                                                                <span class="radiomark"></span>
+                                                            </label>
+                                                            <label class="form-check-label form-group__label-title mr-5"
+                                                                for="device-3">Mobile (iOS)</label>
+                                                        </div>
+
+                                                        <div class="form-group__checkbox">
+                                                            <label class="form-group__checkbox-label">
+                                                                <input class="form-check-input" type="radio"
+                                                                    name="device" id="device-4" value="4">
+                                                                <span class="radiomark"></span>
+                                                            </label>
+                                                            <label class="form-check-label form-group__label-title mr-5"
+                                                                for="device-4">Mixed (Mobile)</label>
+                                                        </div>
+
+                                                        <div class="form-group__checkbox">
+                                                            <label class="form-group__checkbox-label">
+                                                                <input class="form-check-input" type="radio"
+                                                                    name="device" id="device-5" value="5">
+                                                                <span class="radiomark"></span>
+                                                            </label>
+                                                            <label class="form-check-label form-group__label-title mr-5"
+                                                                for="device-5">Mixed (Mobile &amp; Desktop)</label>
+                                                        </div>
+
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_type_of_traffic">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-type_of_traffic">
+                                                            Type of Traffic
+                                                        </label>
+
+                                                        <div class="form-group__checkbox">
+                                                            <label class="form-group__checkbox-label">
+                                                                <input class="form-check-input" type="radio"
+                                                                    name="type_of_traffic" id="type_of_traffic-1"
+                                                                    checked="" value="1">
+                                                                <span class="radiomark"></span>
+                                                            </label>
+                                                            <label class="form-check-label form-group__label-title mr-5"
+                                                                for="type_of_traffic-1">Google Keyword</label>
+                                                        </div>
+
+                                                        <div class="form-group__checkbox">
+                                                            <label class="form-group__checkbox-label">
+                                                                <input class="form-check-input" type="radio"
+                                                                    name="type_of_traffic" id="type_of_traffic-2"
+                                                                    value="2">
+                                                                <span class="radiomark"></span>
+                                                            </label>
+                                                            <label class="form-check-label form-group__label-title mr-5"
+                                                                for="type_of_traffic-2">Custom Referrer</label>
+                                                        </div>
+
+                                                        <div class="form-group__checkbox">
+                                                            <label class="form-group__checkbox-label">
+                                                                <input class="form-check-input" type="radio"
+                                                                    name="type_of_traffic" id="type_of_traffic-3"
+                                                                    value="3">
+                                                                <span class="radiomark"></span>
+                                                            </label>
+                                                            <label class="form-check-label form-group__label-title mr-5"
+                                                                for="type_of_traffic-3">Blank Referrer</label>
+                                                        </div>
+
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_google_keyword">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-google_keyword">
+                                                            Google Keyword
+                                                        </label>
+                                                        <input class="form-control" name="google_keyword"
+                                                            value="" placeholder="Google Keyword..." type="text"
+                                                            id="field-orderform-fields-google_keyword">
+                                                    </div>
+                                                    <div class="form-group hidden fields" id="order_referring_url">
+                                                        <label class="control-label"
+                                                            for="field-orderform-fields-referring_url">
+                                                            Referring URL
+                                                        </label>
+                                                        <input class="form-control" name="referring_url"
+                                                            value="" placeholder="https://instagram.com" type="text"
+                                                            id="field-orderform-fields-referring_url">
+                                                    </div>
+
+                                            <div class="form-group hidden fields" id="order_average_time">
+                                                <label class="control-label" for="field-orderform-fields-average_time">
+                                                    {{ __('newOrder.average_time') }}
+                                                    <span class="ml-1 mr-1 fa fa-exclamation-circle" data-toggle="tooltip"
+                                                        data-placement="right"
+                                                        title="The average completion time is calculated based on the completion times of the latest orders.">
+                                                    </span>
+                                                </label>
+                                                <input class="form-control" readonly="" value="" type="text"
+                                                    id="field-orderform-fields-average_time" disabled="">
+                                            </div>
+                                        </div>
+
+                                        <!-- Schedule Time Section -->
+                                        {{-- <div class="space-y-3 mb-3">
+                                            <!-- Toggle Schedule -->
+                                            <label for="is_schedule-time" class="flex items-center gap-3 cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 transition hover:border-indigo-400 dark:hover:border-indigo-500">
+                                                <input type="checkbox" id="is_schedule-time" name="is_schedule_time" value="1" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Đặt lịch chạy. Múi giờ: +07:00</span>
+                                            </label>
+
+                                            <!-- DateTime Input -->
+                                            <div id="is-schedule-time-content" class="hidden">
+                                                <div class="position-relative">
+                                                    <input type="datetime-local" id="schedule-time" name="schedule_time" class="form-control pl-5">
+                                                    <!-- Calendar Icon -->
+                                                    <div class="position-absolute" style="top: 50%; left: 10px; transform: translateY(-50%); pointer-events: none; color: #9ca3af;">
+                                                        <svg class="h-5 w-5" style="width: 20px; height: 20px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div> --}}
+
+                                        <!-- Loop Section -->
+                                        {{-- <div class="space-y-3 mb-3">
+                                            <!-- Toggle Loop -->
+                                            <label for="is_loop" class="flex items-center gap-3 cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 transition hover:border-indigo-400 dark:hover:border-indigo-500">
+                                                <input type="checkbox" id="is_loop" name="loop" value="1" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Đặt vòng lặp</span>
+                                            </label>
+
+                                            <!-- Loop Inputs -->
+                                            <div id="loop-fields" class="row hidden">
+                                                <div class="col-md-6 mb-3">
+                                                    <label for="loop_quantity" class="control-label font-weight-bold">Loop quantity (số lần)</label>
+                                                    <input type="number" id="loop_quantity" name="loop_quantity" class="form-control" placeholder="1">
+                                                    <small class="form-text text-muted">Tổng số lần bạn muốn chạy lặp (bao gồm lần đầu)</small>
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <label for="loop_spacing" class="control-label font-weight-bold">Loop spacing (minutes)</label>
+                                                    <input type="number" id="loop_spacing" name="loop_spacing" class="form-control" placeholder="30">
+                                                    <small class="form-text text-muted">Khoảng cách thời gian giữa mỗi lần chạy lặp (phút)</small>
+                                                </div>
+                                            </div>
+                                        </div> --}}
+
+                                        <div class="form-group">
+                                            <div class="form-group">
+                                                <label for="charge" class="control-label">{{ __('newOrder.charge') }}</label>
+                                                <input type="text" class="form-control" id="charge" value=""
+                                                    readonly="">
+                                            </div>
+                                        </div>
+
+                                        <div class="new-order-button-submit component_button_submit ">
+                                            <button id="submit-btn" type="submit"
+                                                class="btn btn-block btn-big-primary">{{ __('newOrder.submit') }}</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Policy -->
                         <div class="col-lg-5">
-                            <div class="mb-3">
-                                <label for="sl-platform" class="form-label" data-lang="newOrder.social_media">Social media</label>
-                                <select id="sl-platform" class="form-select form-select-solid">
-                                    <option value="-1"
-                                        data-content="&lt;i class=&quot;fa-solid fa-star&quot;&gt;&lt;/i&gt; Best for you"
-                                        data-lang="newOrder.best_for_you" data-fav="1"
-                                        style="display:none" disabled>Best for you</option>
-                                    @foreach ($data['platforms'] as $p)
-                                        @if ($p->image && (str_contains($p->image, '/') || str_contains($p->image, '.')))
-                                            <option value="{{ $p->id }}"
-                                                data-content="&lt;img src=&quot;{{ $p->image }}&quot; class=&quot;w-15px h-15px me-1&quot; /&gt; {{ $p->name }}"
-                                                data-lang="">{{ $p->name }}</option>
-                                        @elseif($p->image)
-                                            <option value="{{ $p->id }}"
-                                                data-content="&lt;i class=&quot;{{ $p->image }}&quot;&gt;&lt;/i&gt; {{ $p->name }}"
-                                                data-lang="">{{ $p->name }}</option>
-                                        @else
-                                            <option value="{{ $p->id }}" data-content="{{ $p->name }}"
-                                                data-lang="">{{ $p->name }}</option>
+                            <div class="component_content_card component_content_button">
+                                <div class="card">
+                                    <div class="new-order__content-text">
+                                        @if ($config && $config->notice_system)
+                                            {!! $config->notice_system !!}
                                         @endif
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-lg-7">
-                            <div class="mb-3">
-                                <label for="sl-category" class="form-label" data-lang="newOrder.category">Category</label>
-                                <select id="sl-category" class="form-select form-select-solid">
-                                    <option value="-1"
-                                        data-content="&lt;i class=&quot;fa-solid fa-star&quot;&gt;&lt;/i&gt; Favorite"
-                                        data-lang="newOrder.favorite" data-fav="1">Favorite</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mb-3 display-as display-as-default">
-                        <label for="sl-service" class="form-label" data-lang="newOrder.service">Service</label>
-                        <select id="sl-service" class="form-select form-select-solid"
-                            onchange="_new.on.change.service(this.value)">
-                        </select>
-                    </div>
-                    <div class="display-as display-as-table" style="display: none;"></div>
-                </div>
-            </div>
-            <div class="row g-5">
-                <div class="col-lg-7">
-                    <div class="card div-order">
-                        <div class="card-body">
-                            <fieldset class="border border-2 rounded p-2 mb-5">
-                                <legend class="float-none w-auto fs-7 d-flex">
-                                    <div class="form-check form-check-custom form-check-solid me-5">
-                                        <input class="form-check-input" type="radio" value="0" name="link_input_type"
-                                            onchange="_new.on.change.link_input_type(this.value)" checked="">
-                                        <label class="form-check-label" data-lang="newOrder.one">One</label>
-                                    </div>
-                                    <div class="form-check form-check-custom form-check-solid">
-                                        <input class="form-check-input" type="radio" value="1" name="link_input_type"
-                                            onchange="_new.on.change.link_input_type(this.value)">
-                                        <label class="form-check-label" data-lang="newOrder.multi">Multi</label>
-                                    </div>
-                                </legend>
-                                <div class="mb-0">
-                                    <label class="form-label" data-lang="newOrder.link">Link</label>
-                                    <div class="input-group input-group-solid">
-
-                                        <input type="text" id="ipt-link" class="form-control form-control-solid"
-                                            oninput="_new.on.input.showButton(this.value)">
-                                        <button id="btn-convert" class="btn btn-icon btn-light-primary d-none"
-                                            type="button" onclick="_new.on.click.getUID()"><i
-                                                class="ki-duotone ki-arrows-loop fs-2"><span class="path1"></span><span
-                                                    class="path2"></span></i></button>
-                                    </div>
-                                    <small class="form-text text-muted fst-italic">
-                                        <p class="mb-0 link-convert-notice d-none text-info"><i
-                                                class="bi bi-info-circle me-1"></i><span data-lang="newOrder.if_service_requires_id">If service
-                                                requires ID, click</span> <i class="ki-solid ki-arrows-loop"></i></p>
-                                    </small>
-                                </div>
-                                <div class="mb-0" style="display: none;">
-                                    <label class="form-label" data-lang="newOrder.link_per_line">Link (1 per line)</label>
-                                    <div class="position-relative">
-                                        <textarea id="txa-link" class="form-control form-control-solid" rows="8"></textarea>
-                                        <div class="position-absolute text-muted fs-8 link-count-overlay"
-                                            style="bottom: 8px; right: 12px; pointer-events: none; background: rgba(255,255,255,0.8); padding: 2px 6px; border-radius: 4px;">
-                                            0</div>
                                     </div>
                                 </div>
-                            </fieldset>
-                            <script>
-                                function updateCharCount() {
-                                    document.querySelector('.link-count-overlay').textContent = document.querySelector('#txa-link').value.trim()
-                                        .split('\n').filter(line => line.trim() !== '').length;
-                                }
-                                document.addEventListener('DOMContentLoaded', function() {
-                                    document.querySelector('#txa-link').addEventListener('input', function() {
-                                        updateCharCount();
-                                    });
-                                    updateCharCount();
-                                });
-                            </script>
-                            <div class="mb-3">
-                                <label class="form-label" data-lang="newOrder.quantity">Quantity</label>
-                                <div class="input-group input-group-solid">
-
-                                    <input type="text" id="ipt-quantity" class="form-control"
-                                        onkeyup="_new.on.keyup.calculatePrice(0)"
-                                        data-inputmask="'mask': '9', 'repeat': 10, 'greedy' : false" inputmode="text">
-                                    <span class="input-group-text"><span class="badge badge-primary fw-bold charge">$
-                                            0</span></span>
-                                </div>
-                                <small class="form-text text-muted fst-italic">
-                                    <p class="mb-0"><span data-lang="newOrder.min">Min</span>: <span class="min">500</span> -
-                                        <span data-lang="newOrder.max">Max</span>: <span class="max">1000000000</span>
-                                    </p><a href="#" class="text-warning fw-bold span-quantity-discount ms-2"
-                                        data-bs-toggle="modal" data-bs-target="#modal-quantity-discount"
-                                        style="display: none;" data-lang="newOrder.special_discount">Special Discount</a>
-                                </small>
-                            </div> <!-- begin::Type -->
-                            <div class="mb-3 service-type custom-comments" style="display: none;">
-                                <label class="form-label" data-lang="newOrder.comments_per_line">Comments (1 per line)</label>
-                                <textarea id="txa-comment" class="form-control form-control-solid" rows="8"
-                                    onkeyup="_new.on.keyup.calculatePrice(1, '#txa-comment')"></textarea>
-
-                            </div>
-                            <div class="mb-3 service-type special special-1" style="display: none;">
-                                <label class="form-label" data-lang="newOrder.list">List</label>
-                                <input type="text" id="ipt-suggest" class="form-control form-control-solid">
-
-                            </div>
-                            <div class="mb-35 service-type special-1" style="display: none;">
-                                <label class="form-label" data-lang="newOrder.keyword_list">Keyword list</label>
-                                <input type="text" id="ipt-search" class="form-control form-control-solid">
-
-                            </div>
-                            <div class="mb-3 service-type mentions mentions-with-hashtags mentions-custom-list"
-                                style="display: none;">
-                                <label class="form-label" data-lang="newOrder.usernames_per_line">Usernames (1 per line)</label>
-                                <textarea id="txa-usernames" class="form-control form-control-solid" rows="8"></textarea>
-
-                            </div>
-                            <div class="mb-3 service-type mentions-with-hashtags" style="display: none;">
-                                <label class="form-label" data-lang="newOrder.hashtags_per_line">Hashtags (1 per line)</label>
-                                <textarea id="txa-hashtags" class="form-control form-control-solid" rows="8"></textarea>
-
-                            </div>
-                            <div class="mb-3 service-type seo" style="display: none;">
-                                <label class="form-label" data-lang="newOrder.keywords_per_line">Keywords (1 per line)</label>
-                                <textarea id="txa-keywords" class="form-control form-control-solid" rows="8"></textarea>
-
-                            </div>
-                            <div class="mb-3 service-type mentions-user-followers comment-likes" style="display: none;">
-                                <label class="form-label" data-lang="newOrder.username">Username</label>
-                                <input type="text" id="ipt-username" class="form-control form-control-solid">
-
-                            </div>
-                            <div class="mb-3 service-type mentions-hashtag" style="display: none;">
-                                <label class="form-label" data-lang="newOrder.video_description">Video description</label>
-                                <input type="text" id="ipt-hashtag" class="form-control form-control-solid">
-
-                            </div>
-                            <div class="mb-3 service-type mentions-media-likers" style="display: none;">
-                                <label class="form-label" data-lang="newOrder.media_url">Media URL</label>
-                                <input type="text" id="ipt-media" class="form-control form-control-solid">
-
-                            </div>
-                            <div class="mb-3 service-type invites-from-groups" style="display: none;">
-                                <label class="form-label" data-lang="newOrder.groups_per_line">Groups (1 per line)</label>
-                                <textarea id="txa-groups" class="form-control form-control-solid" rows="8"></textarea>
-
-                            </div> <!-- end::Type -->
-                            <div class="mb-3 schedule" style="">
-                                <div class="form-check form-switch">
-                                    <input type="checkbox" id="cb-schedule" class="form-check-input"
-                                        onchange="document.querySelector('.schedule-time').style.display = this.checked ? '' : 'none';">
-                                    <label class="form-check-label"><span class="fw-bold" data-lang="newOrder.schedule">Schedule</span>.
-                                        <span data-lang="newOrder.your_timezone">Your
-                                            timezone</span>: <span class="fw-bolder">+07:00</span></label>
-                                </div>
-
-                            </div>
-                            <div class="mb-3 schedule-time" style="display: none;">
-                                <label class="form-label" data-lang="newOrder.choose_time">Choose time</label>
-                                <input type="text" id="ipt-schedule-time" class="form-control form-control-solid"
-                                    readonly="">
-
-                            </div>
-                            <div class="mb-3 loop" style="">
-                                <div class="form-check form-switch">
-                                    <input type="checkbox" id="cb-loop" class="form-check-input"
-                                        onchange="document.querySelector('.loop-quantity').style.display = this.checked ? '' : 'none';document.querySelector('.loop-spacing').style.display = this.checked ? '' : 'none';">
-                                    <label class="form-check-label"><span class="fw-bold" data-lang="newOrder.loop">Loop</span>.
-                                        <span data-lang="newOrder.loop_desc">Auto
-                                            Re-order when this order has been <span class="fw-bolder">COMPLETED</span>.
-                                            Carefully when to use this
-                                            function. Always make sure balance is enough.</span></label>
-                                </div>
-
-                            </div>
-                            <div class="row g-5">
-                                <div class="col-sm-6 loop-quantity" style="display: none;">
-                                    <div class="mb-3">
-                                        <label for="sl-loop-quantity" class="form-label" data-lang="newOrder.loop_quantity">Loop quantity</label>
-                                        <select id="sl-loop-quantity" class="form-select form-select-solid">
-                                            <option value="1">1</option>
-                                            <option value="2">2</option>
-                                            <option value="3">3</option>
-                                            <option value="4">4</option>
-                                            <option value="5">5</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-sm-6 loop-spacing" style="display: none;">
-                                    <div class="mb-3">
-                                        <label for="sl-loop-spacing" class="form-label" data-lang="newOrder.loop_spacing">Loop spacing (minutes)</label>
-                                        <select id="sl-loop-spacing" class="form-select form-select-solid">
-                                            <option value="0">0</option>
-                                            <option value="1">1</option>
-                                            <option value="2">2</option>
-                                            <option value="3">3</option>
-                                            <option value="4">4</option>
-                                            <option value="5">5</option>
-                                            <option value="6">6</option>
-                                            <option value="7">7</option>
-                                            <option value="8">8</option>
-                                            <option value="9">9</option>
-                                            <option value="10">10</option>
-                                            <option value="11">11</option>
-                                            <option value="12">12</option>
-                                            <option value="13">13</option>
-                                            <option value="14">14</option>
-                                            <option value="15">15</option>
-                                            <option value="16">16</option>
-                                            <option value="17">17</option>
-                                            <option value="18">18</option>
-                                            <option value="19">19</option>
-                                            <option value="20">20</option>
-                                            <option value="21">21</option>
-                                            <option value="22">22</option>
-                                            <option value="23">23</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <button type="button" id="btn-order" class="btn btn-primary w-100 mt-5 text-uppercase"
-                                onclick="_new.on.click.order()" data-lang="newOrder.submit">Submit order</button>
-                            <div class="alert alert-order alert-normal mt-5 mb-5" style="display: none;"></div>
-                            <div class="alert alert-order alert-bulk p-0 pt-5 mb-5" style="display: none;">
-                                <div class="table-responsive">
-                                    <table class="table align-middle table-row-dashed fs-7 gy-1">
-                                        <tbody></tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <div class="alert alert-order alert-confirm bg-light-danger text-center"
-                                style="display: none;">
-                                <div class="mb-3">
-                                    <i class="bi bi-exclamation-circle fs-3tx text-danger"></i>
-                                </div>
-                                <div class="text-center">
-                                    <h2 class="fw-bold mb-3" data-lang="newOrder.rate_alert">Rate alert</h2>
-                                    <div class="separator separator-dashed border-danger opacity-25 mb-3"></div>
-                                    <div class="mb-9 text-dark" data-lang="newOrder.rate_alert_desc">Service
-                                        prices have increased. Please confirm the new price before ordering</div>
-                                    <div class="d-flex flex-center flex-wrap">
-                                        <a href="javascript:;" class="btn btn-danger m-2" data-lang="newOrder.confirm_rate"
-                                            onclick="_new.on.click.confirmRate()">Ok, I
-                                            got it</a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-5">
-                    <div class="card border">
-                        <div class="card-body">
-                            <div class="div-choose-service text-center mb-5">
-                                <p class="fs-2 fw-bolder text-primary mb-0 ls-1" id="svc-display-id">—</p>
-                                <p class="fs-4 fw-semibold mb-0" id="svc-display-name">—</p>
-                            </div>
-                            <div id="advanced-setting" class="mt-2 mb-3" style="display: none;"></div>
-                            @if($data['showAverageTime'] ?? false)
-                            <div id="avg-time-container" class="" style="display:none">
-                                <label class="form-label" data-lang="newOrder.average_time">Average time</label>
-                                <input type="text" id="ipt-average-time" class="form-control form-control-solid"
-                                    disabled="">
-                                <small class="form-text text-muted fst-italic"><span data-lang="newOrder.average_time_tooltip">The average time is
-                                        based on 10 latest completed orders per 1000 quantity</span></small>
-                            </div>
-                            @endif
-                            <div class="border border-3 border-dashed div-description mt-3 p-5" style="">
-                                <ol>
-                                    <li data-list="bullet"><span class="ql-ui"
-                                            contenteditable="false"></span>Recommended quantity to order is 30 50 100 200
-                                        300 500 1000</li>
-                                    <li data-list="bullet"><span class="ql-ui" contenteditable="false"></span>Số lượng
-                                        nên đặt hàng là 30 50 100 200 300 500 1000</li>
-                                </ol>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="modal fade" id="modal-quantity-discount" tabindex="-1">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header py-4">
-                            <h4 class="modal-title" data-lang="newOrder.special_discount">Special Discount</h4>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"
-                                aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <table class="table align-middle table-row-dashed fs-7 gy-2">
-                                <thead>
-                                    <tr class="text-start text-muted bg-light fw-bold fs-7 text-uppercase gs-0">
-                                        <th data-lang="newOrder.quantity">Quantity</th>
-                                        <th data-lang="common.description">Discount</th>
-                                        <th data-lang="newOrder.special_discount_new_rate">New rate</th>
-                                    </tr>
-                                </thead>
-                                <tbody></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {{-- Modal UID Alert --}}
-            <div class="modal fade" id="modal-uid-msg" tabindex="-1" data-bs-backdrop="static">
-                <div class="modal-dialog modal-dialog-centered rounded-4">
-                    <div class="modal-content">
-                        <div class="modal-header bg-danger text-white py-4">
-                            <h4 class="modal-title text-white ls-1">Alert</h4>
-                        </div>
-                        <div class="modal-body py-10 fs-4" style="word-break: break-word;"></div>
-                        <div class="modal-footer text-center py-4">
-                            <button type="button" class="btn btn-sm btn-danger px-4 rounded-4" data-bs-dismiss="modal">Real</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <script>
-                var LABEL_FEATURES = {
-                        "Owner": "danger",
-                        "Exclusive": "danger",
-                        "Provider Direct": "danger",
-                        "New": "success",
-                        "Best seller": "danger",
-                        "Promotion": "success",
-                        "Recommend": "success",
-                        "Instant": "success",
-                        "Super Fast": "success",
-                        "Real": "success",
-                        "Lifetime": "success",
-                        "7 days Refill": "success",
-                        "15 days Refill": "success",
-                        "30 days Refill": "success",
-                        "60 days Refill": "success",
-                        "90 days Refill": "success",
-                        "365 days Refill": "success",
-                        "No refill": "success",
-                        "Auto Refill": "success",
-                        "No refund": "success",
-                        "Refill Button": "success",
-                        "Cancel Button": "success"
-                    },
-                    SERVICES = (function(svcs, cats) {
-                        var catMap = {};
-                        cats.forEach(function(c) {
-                            catMap[c.id] = c;
-                        });
-                        return svcs.map(function(s) {
-                            var cat = catMap[s.category_id] || {};
-                            return {
-                                id: s.id,
-                                catid: s.category_id,
-                                cat: cat.name || '',
-                                cat_display_as: 0,
-                                name: s.name,
-                                image: s.image || '',
-                                rate: s.rate_raw,
-                                rate_formatted: s.rate_formatted,
-                                min: s.min,
-                                max: s.max,
-                                desc: s.description || '',
-                                type: s.type_service || 'Default',
-                                schedule: true,
-                                avg: s.average_time || '',
-                                loop: true,
-                                confirm: false,
-                                platformid: cat.platform_id || -1,
-                                summary: '{}',
-                                feature: [],
-                                attrs: (function(a) {
-                                    if (!a) return [];
-                                    if (Array.isArray(a)) return a;
-                                    try { return JSON.parse(a) || []; } catch(e) { return []; }
-                                })(s.attributes),
-                                advanced_settings: false,
-                                advanced_settings_data: {
-                                    min_balance: '0',
-                                    max_order: '0'
-                                },
-                                quantity_discount: false,
-                                quantity_discount_data: []
-                            };
-                        });
-                    })(@json($data['services']), @json($data['categories']));
-            </script>
         </div>
-        <!--end::Post-->
-    </div>
-@endsection
-
-@push('scripts')
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var _hasFavs = getFavIds().length > 0;
-
-            // Chỉ hiện option "Best for you" khi có favorites
-            if (_hasFavs) {
-                $('#sl-platform option[data-fav="1"]').removeAttr('disabled').show();
+    @endsection
+    @push('scripts')
+        <style>
+            /* Schedule & Loop Styles */
+            .space-y-3 > * + * {
+                margin-top: 0.75rem;
             }
+            .flex {
+                display: flex;
+            }
+            .items-center {
+                align-items: center;
+            }
+            .gap-3 {
+                gap: 0.75rem;
+            }
+            .cursor-pointer {
+                cursor: pointer;
+            }
+            .rounded-lg {
+                border-radius: 0.5rem;
+            }
+            .border {
+                border-width: 1px;
+                border-style: solid;
+            }
+            .border-gray-300 {
+                border-color: #d1d5db;
+            }
+            .dark .dark\:border-gray-600 {
+                border-color: #4b5563;
+            }
+            .px-3 {
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+            }
+            .py-2 {
+                padding-top: 0.5rem;
+                padding-bottom: 0.5rem;
+            }
+            .transition {
+                transition-property: all;
+                transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+                transition-duration: 150ms;
+            }
+            label.flex:hover {
+                border-color: #818cf8;
+            }
+            .dark label.flex:hover {
+                border-color: #6366f1;
+            }
+            .h-4 {
+                height: 1rem;
+            }
+            .w-4 {
+                width: 1rem;
+            }
+            .rounded {
+                border-radius: 0.25rem;
+            }
+            .text-indigo-600 {
+                color: #4f46e5;
+            }
+            .focus\:ring-indigo-500:focus {
+                --tw-ring-color: #6366f1;
+                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5);
+            }
+            .text-sm {
+                font-size: 0.875rem;
+                line-height: 1.25rem;
+            }
+            .font-medium {
+                font-weight: 500;
+            }
+            .text-gray-900 {
+                color: #111827;
+            }
+            .dark .dark\:text-gray-100 {
+                color: #f3f4f6;
+            }
+            .hidden {
+                display: none;
+            }
+            .position-relative {
+                position: relative;
+            }
+            .pl-5 {
+                padding-left: 2.5rem !important;
+            }
+            .font-weight-bold {
+                font-weight: 700;
+            }
+        </style>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const allCategories = @json($data['categories']);
+                const allServices = @json($data['services']);
+                const selectedService = @json($data['selectedService'] ?? null);
+                const serviceCurrencyCode = @json(strtoupper((string) (auth()->user()?->currency ?? 'USD')));
+                let currentPlatformId = 'all';
+                let currentServiceRate = 0;
 
-            var s2opts = {
-                escapeMarkup: function(m) {
-                    return m;
-                },
-                minimumResultsForSearch: -1,
-                templateResult: function(o) {
-                    if (!o.element) return o.text;
-                    // Ẩn option fav nếu không có favorites
-                    if (o.element.getAttribute('data-fav') && !_hasFavs) return null;
-                    var c = o.element.getAttribute('data-content');
-                    return c ? c : o.text;
-                },
-                templateSelection: function(o) {
-                    if (!o.element) return o.text;
-                    var c = o.element.getAttribute('data-content');
-                    return c ? c : o.text;
-                },
-                width: '100%'
-            };
-
-            // s2opts riêng cho sl-platform: templateSelection hardcode "Best for you"
-            var s2PlatformOpts = $.extend(true, {}, s2opts, {
-                templateSelection: function(o) {
-                    if (String(o.id) === '-1') {
-                        return $(
-                            '<span><i class="fa-solid fa-star text-warning me-1"></i> Best for you</span>'
-                            );
+                function parseServiceRate(value) {
+                    let amount = String(value ?? '').replace(/[^\d.,-]/g, '');
+                    if (amount.includes(',')) {
+                        amount = amount.replace(/\./g, '').replace(',', '.');
+                    } else if (/^-?\d{1,3}(?:\.\d{3})+$/.test(amount)) {
+                        amount = amount.replace(/\./g, '');
                     }
-                    if (!o.element) return o.text;
-                    var c = o.element.getAttribute('data-content');
-                    return c ? c : o.text;
-                }
-            });
-
-            var allCategories = @json($data['categories']);
-
-            function iconHtml(img) {
-                if (!img) return '';
-                return (img.indexOf('/') !== -1 || img.indexOf('.') !== -1) ?
-                    '<img src="' + img + '" class="w-15px h-15px me-1" />' :
-                    '<i class="' + img + '"></i> ';
-            }
-
-            // ====================== INIT ALL SELECT2 ======================
-            $('#sl-platform').select2(s2PlatformOpts);
-
-            // Init quick search select2, ẩn placeholder div sau khi init xong
-            $('#sl-quick-search').css('display', '').select2({
-                placeholder: '{{ $langData["addfunds.please_select"] ?? "Please choose" }}',
-                allowClear: false,
-                width: '100%',
-                minimumResultsForSearch: Infinity,
-                escapeMarkup: function(m) { return m; },
-                templateResult: function(o) {
-                    if (!o.element) return o.text;
-                    var c = o.element.getAttribute('data-content');
-                    return c ? $(c) : o.text;
-                },
-                templateSelection: function(o) {
-                    // Luôn hiển thị placeholder, không giữ option đã chọn
-                    return '{{ $langData["addfunds.please_select"] ?? "Please choose" }}';
-                }
-            });
-            $('#qs-placeholder').remove();
-            // ====================== BUILD FUNCTIONS ======================
-            function buildCategories(platformId) {
-                var cats = (platformId == -1 || platformId === 'all') ?
-                    allCategories :
-                    allCategories.filter(c => parseInt(c.platform_id) === parseInt(platformId));
-
-                var $cat = $('#sl-category');
-                if ($cat.hasClass('select2-hidden-accessible')) $cat.select2('destroy');
-                $cat.empty();
-
-                // Giữ lại option "Favorite" nếu đang có favs
-                var favIds = getFavIds();
-                if (favIds.length) {
-                    $cat.append(
-                        $('<option>').val(-1).text('Favorite')
-                        .attr('data-content', '<i class="fa-solid fa-star text-warning me-1"></i> Favorite')
-                        .prop('disabled', true)
-                    );
+                    return parseFloat(amount) || 0;
                 }
 
-                cats.forEach(function(c) {
-                    var content = iconHtml(c.image) + c.name;
-                    $cat.append($('<option>').val(c.id).text(c.name).attr('data-content', content));
-                });
-
-                $cat.select2(s2opts);
-                return cats.length > 0 ? cats[0].id : null;
-            }
-
-            function buildAttributeBadges(attrs) {
-                if (!attrs || !attrs.length) return '';
-                return '<div class="mt-1">' + attrs.map(function(a) {
-                    var color = LABEL_FEATURES[a] || 'secondary';
-                    var style = color === 'danger'
-                        ? 'border:1px solid #f1416c;color:#f1416c;background:transparent;'
-                        : 'border:1px solid #50cd89;color:#50cd89;background:transparent;';
-                    return '<span style="' + style + 'font-size:10px;padding:1px 6px;border-radius:4px;margin-right:3px;display:inline-block;">' + a + '</span>';
-                }).join('') + '</div>';
-            }
-
-            function buildServices(catId) {
-                var svcs = (catId !== null && catId !== undefined) ?
-                    SERVICES.filter(s => parseInt(s.catid) === parseInt(catId)) :
-                    [];
-
-                var $svc = $('#sl-service');
-                if ($svc.hasClass('select2-hidden-accessible')) $svc.select2('destroy');
-                $svc.empty();
-
-                svcs.forEach(function(s) {
-                    var icon = iconHtml(s.image);
-                    var badges = buildAttributeBadges(s.attrs);
-                    var content =
-                        `<div>${icon}<span class="fw-bolder me-1">${s.id}</span> - ${s.name} - <span class="text-primary fw-bolder ms-1">${s.rate_formatted}</span>${badges}</div>`;
-
-                    $svc.append($('<option>')
-                        .val(s.id)
-                        .text(s.name)
-                        .attr('data-rate', s.rate)
-                        .attr('data-min', s.min)
-                        .attr('data-max', s.max)
-                        .attr('data-content', content)
-                    );
-                });
-
-                $svc.select2(s2opts);
-
-                // Log service đang hiển thị sau khi build
-                var firstVal = $svc.val();
-                if (firstVal) {
-                    logService(firstVal);
-                } else {
-                    // Không có service nào — reset panel bên phải
-                    document.getElementById('svc-display-id').textContent = '—';
-                    document.getElementById('svc-display-name').textContent = '—';
-                    document.getElementById('ipt-average-time').value = '';
-                    var avgContainerReset = document.getElementById('avg-time-container');
-                    if (avgContainerReset) avgContainerReset.style.display = 'none';
-                    var descEl = document.querySelector('.div-description');
-                    if (descEl) descEl.style.display = 'none';
+                function formatVndRate(value) {
+                    if (serviceCurrencyCode !== 'VND') return value;
+                    return parseServiceRate(value).toLocaleString('vi-VN', {
+                        maximumFractionDigits: 6
+                    }) + ' VND';
                 }
-            }
 
-            function logService(serviceId) {
-                var svc = SERVICES.find(function(s) {
-                    return parseInt(s.id) === parseInt(serviceId);
-                });
-                if (!svc) return;
-
-                // === Cập nhật UI ===
-                // ID
-                document.getElementById('svc-display-id').textContent = svc.id;
-
-                // Image/icon + name
-                var iconHtml = '';
-                if (svc.image) {
-                    iconHtml = (svc.image.indexOf('/') !== -1 || svc.image.indexOf('.') !== -1) ?
-                        '<img src="' + svc.image + '" class="w-20px h-20px me-1">' :
-                        '<i class="' + svc.image + ' me-1"></i>';
+                if (serviceCurrencyCode === 'VND') {
+                    allServices.forEach(service => {
+                        service.rate_formatted = formatVndRate(service.rate_formatted);
+                    });
                 }
-                document.getElementById('svc-display-name').innerHTML = iconHtml + svc.name;
 
-                // Average time
-                var avgVal = parseFloat(svc.avg);
-                var avgContainer = document.getElementById('avg-time-container');
-                var avgInput = document.getElementById('ipt-average-time');
-                if (avgInput && avgContainer) {
-                    if (svc.avg && avgVal > 0) {
-                        avgInput.value = svc.avg;
-                        avgContainer.style.display = '';
-                    } else {
-                        avgInput.value = '';
-                        avgContainer.style.display = 'none';
+                // ==================== FAVORITES ====================
+                const FAVORITES_CATEGORY_ID = 'favorites';
+                const FAV_LABEL = '{{ __('services.favorite_services') }}';
+
+                function getFavorites() {
+                    try { return JSON.parse(localStorage.getItem('favorite_services')) || []; }
+                    catch (e) { return []; }
+                }
+
+                function buildFavServices() {
+                    const favIds = getFavorites().map(Number);
+                    const favSvcs = allServices.filter(s => favIds.includes(parseInt(s.id)));
+
+                    // Rebuild category select với chỉ 1 option Favorites
+                    categorySelect.innerHTML = '';
+                    const favCatOpt = document.createElement('option');
+                    favCatOpt.value = FAVORITES_CATEGORY_ID;
+                    favCatOpt.textContent = FAV_LABEL;
+                    favCatOpt.setAttribute('data-icon', '<i class="fas fa-star" style="color:#ffc107;"></i>');
+                    categorySelect.appendChild(favCatOpt);
+                    $(categorySelect).trigger('change.select2');
+                    categorySelect.value = FAVORITES_CATEGORY_ID;
+                    $(categorySelect).trigger('change.select2');
+
+                    // Populate service select với favorites
+                    updateServiceSelect(favSvcs);
+                    if (favSvcs.length > 0) {
+                        serviceSelect.value = favSvcs[0].id;
+                        $(serviceSelect).trigger('change.select2');
+                        serviceSelect.dispatchEvent(new Event('change'));
                     }
                 }
 
-                // Min / Max
-                var minEl = document.querySelector('.min');
-                var maxEl = document.querySelector('.max');
-                if (minEl) minEl.textContent = svc.min;
-                if (maxEl) maxEl.textContent = svc.max;
 
-                // Description
-                var descEl = document.querySelector('.div-description');
-                if (descEl) {
-                    if (svc.desc) {
-                        descEl.style.display = '';
-                        descEl.innerHTML = svc.desc;
-                    } else {
-                        descEl.style.display = 'none';
-                    }
-                }
-            }
 
-            // ====================== QUICK SEARCH - FIXED VERSION ======================
-            $('#sl-quick-search').on('change', function() {
-                const selected = $(this).val();
-                if (!selected) return;
+                // Nếu có selectedService từ URL, load nó sau khi DOM sẵn sàng
+                if (selectedService && selectedService.id) {
 
-                const serviceId = parseInt(Array.isArray(selected) ? selected[0] : selected);
-                const service = SERVICES.find(s => parseInt(s.id) === serviceId);
-
-                if (!service) {
-                    console.warn(`Service ID ${serviceId} không tồn tại`);
-                    return;
-                }
-
-                console.clear();
-                console.log('%c=== QUICK SEARCH SELECTED ===', 'color:#0d6efd; font-weight:bold');
-                console.log('Service ID    :', service.id);
-                console.log('Name          :', service.name);
-                console.log('Platform ID   :', service.platformid);
-                console.log('Category ID   :', service.catid);
-
-                // Bước 1: Set Platform trước
-                const platformId = parseInt(service.platformid) || -1;
-                $('#sl-platform').val(platformId).trigger('change.select2');
-
-                // Bước 2: Build Categories theo Platform mới
-                setTimeout(() => {
-                    buildCategories(platformId);
-
-                    // Bước 3: Set Category nếu có
-                    const catId = parseInt(service.catid);
-                    if (catId && $(`#sl-category option[value="${catId}"]`).length > 0) {
-                        $('#sl-category').val(catId).trigger('change.select2');
-                    }
-
-                    // Bước 4: Build Services và set Service
                     setTimeout(() => {
-                        buildServices(catId);
-
-                        $('#sl-service').val(serviceId).trigger('change.select2');
-
-                        // Gọi hàm chính thức của bạn
-                        try {
-                            _new.on.change.service(serviceId);
-                        } catch (e) {
-                            console.warn(' _new.on.change.service error', e);
-                        }
-                    }, 80);
-                }, 80);
-            });
-
-            // ====================== NORMAL EVENTS ======================
-            $('#sl-category').on('change', function() {
-                buildServices($(this).val());
-            });
-
-            $('#sl-service').on('change', function() {
-                const val = $(this).val();
-                if (!val) return;
-                logService(val);
-                try {
-                    _new.on.change.service(val);
-                } catch (e) {}
-            });
-
-            // ====================== FAVORITES FROM localStorage ======================
-            function getFavIds() {
-                try {
-                    return Object.keys(JSON.parse(localStorage.getItem('svc_favorites')) || {}).map(Number);
-                } catch (e) {
-                    return [];
-                }
-            }
-
-            function buildFavServices() {
-                var favIds = getFavIds();
-                var favSvcs = SERVICES.filter(function(s) {
-                    return favIds.indexOf(parseInt(s.id)) !== -1;
-                });
-
-                // Category: chỉ "Favorite"
-                var $cat = $('#sl-category');
-                if ($cat.hasClass('select2-hidden-accessible')) $cat.select2('destroy');
-                $cat.empty().append(
-                    $('<option>').val(-1).text('Favorite')
-                    .attr('data-content', '<i class="fa-solid fa-star text-warning me-1"></i> Favorite')
-                    .attr('data-fav', '1')
-                );
-                $cat.select2(s2opts);
-
-                // Services từ favorites — thêm icon ⭐ vào đầu mỗi service
-                var $svc = $('#sl-service');
-                // Tạm remove onchange để tránh CDN lỗi khi trigger
-                var _onchange = $svc.attr('onchange');
-                $svc.removeAttr('onchange');
-                if ($svc.hasClass('select2-hidden-accessible')) $svc.select2('destroy');
-                $svc.empty();
-                favSvcs.forEach(function(s) {
-                    var badges = buildAttributeBadges(s.attrs);
-                    var content = '<div><i class="fa-solid fa-star text-warning me-1"></i>' +
-                        '<span class="fw-bolder me-1">' + s.id + '</span> - ' +
-                        s.name + ' - <span class="text-primary fw-bolder ms-1">' + s.rate_formatted +
-                        '</span>' + badges + '</div>';
-                    $svc.append($('<option>').val(s.id).text(s.name)
-                        .attr('data-rate', s.rate).attr('data-min', s.min)
-                        .attr('data-max', s.max).attr('data-content', content));
-                });
-                $svc.select2(s2opts);
-                if (favSvcs.length > 0) {
-                    var firstId = favSvcs[0].id;
-                    $svc.val(firstId).trigger('change.select2');
-                    // Restore onchange rồi mới gọi CDN
-                    if (_onchange) $svc.attr('onchange', _onchange);
-                    logService(firstId);
-                    setTimeout(function() {
-                        try {
-                            _new.on.change.service(firstId);
-                        } catch (e) {}
-                    }, 50);
-                } else {
-                    if (_onchange) $svc.attr('onchange', _onchange);
-                }
-            }
-            // Bind trước để INITIAL LOAD có thể trigger
-            $('#sl-platform').on('change', function() {
-                var val = $(this).val();
-                if (val == -1) {
-                    buildFavServices();
-                } else {
-                    var firstCat = buildCategories(val);
-                    buildServices(firstCat);
-                }
-            });
-
-            // ====================== INITIAL LOAD ======================
-            (function() {
-                var favIds = getFavIds();
-
-                @if (!empty($data['selectedService']))
-                // Có ?service= trong URL — load đúng platform > category > service
-                var _sel = @json($data['selectedService']);
-                if (_sel && _sel.id) {
-                    setTimeout(function() {
-                        // Tìm category của service này
-                        var cat = allCategories.find(function(c) { return c.id == _sel.category_id; });
-                        var platformId = cat ? (cat.platform_id || -1) : -1;
-
-                        // Set platform
-                        $('#sl-platform').val(platformId).trigger('change.select2');
-
-                        setTimeout(function() {
-                            // Build categories theo platform
-                            buildCategories(platformId);
-
-                            // Set category
-                            if ($('#sl-category option[value="' + _sel.category_id + '"]').length) {
-                                $('#sl-category').val(_sel.category_id).trigger('change.select2');
-                            }
-
-                            setTimeout(function() {
-                                // Build services theo category
-                                buildServices(_sel.category_id);
-
-                                // Set service
-                                $('#sl-service').val(_sel.id).trigger('change.select2');
-                                logService(_sel.id);
-                                try { _new.on.change.service(_sel.id); } catch(e) {}
-                            }, 80);
-                        }, 80);
+                        loadServiceFromUrl(selectedService);
                     }, 100);
-                    return;
                 }
-                @endif
 
-                if (favIds.length) {
-                    // Có favorites: đặt "Best for you" lên đầu, chọn nó
-                    var $bestOpt = $('#sl-platform option[value="-1"]');
-                    $('#sl-platform').prepend($bestOpt);
-                    if ($('#sl-platform').hasClass('select2-hidden-accessible')) $('#sl-platform').select2('destroy');
-                    $('#sl-platform').select2(s2PlatformOpts);
-                    $('#sl-platform').val('-1').trigger('change.select2');
-                    buildFavServices();
-                } else {
-                    // Không có favorites: load bình thường
-                    var initialPlatform = $('#sl-platform').val() || -1;
-                    var firstCat = buildCategories(initialPlatform);
-                    buildServices(firstCat);
+                // ==================== XỬ LÝ CLICK PLATFORM ====================
+                document.querySelectorAll('.platforms-item button').forEach(button => {
+                    button.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        document.querySelectorAll('.platforms-item button').forEach(b => b.classList
+                            .remove('active'));
+                        this.classList.add('active');
+
+                        currentPlatformId = this.getAttribute('data-platform-id');
+
+
+                        loadCategoriesByPlatform(currentPlatformId);
+                    });
+                });
+
+                // ==================== BẮT SỰ KIỆN CHỌN CATEGORY (CỰC KỲ QUAN TRỌNG) ====================
+                const categorySelect = document.getElementById('orderform-category');
+
+                // Cách 1: Bắt native change (khi dispatch thủ công từ platform)
+                categorySelect.addEventListener('change', handleCategoryChange);
+
+                // Cách 2: Bắt event Select2 - ĐẢM BẢO load service khi chọn từ dropdown
+                $(categorySelect).on('select2:select', function(e) {
+
+                    handleCategoryChange(e);
+                });
+
+                // Hàm xử lý chung khi category thay đổi
+                function handleCategoryChange(e) {
+                    const categoryId = categorySelect.value;
+                    if (!categoryId) return;
+                    if (categoryId === FAVORITES_CATEGORY_ID) {
+                        buildFavServices();
+                    } else {
+                        loadServicesByCategory(categoryId);
+                    }
                 }
-            })();
-        });
-    </script>
-@endpush
 
-@push('scripts')
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            window._new = {
-                _pendingRate: null,
+                // ==================== BẮT SERVICE CHANGE (tùy chọn) ====================
+                const serviceSelect = document.getElementById('orderform-service');
+                serviceSelect.addEventListener('change', function() {
+                    const selectedOption = this.options[this.selectedIndex];
+                    if (selectedOption) {
+                        const data = {
+                            id: selectedOption.getAttribute('data-id'),
+                            name: selectedOption.getAttribute('data-name'),
+                            rate: selectedOption.getAttribute('data-rate_formatted') || selectedOption
+                                .getAttribute('data-rate-formatted'),
+                            min: selectedOption.getAttribute('data-min'),
+                            max: selectedOption.getAttribute('data-max'),
+                            description: selectedOption.getAttribute('data-description') || '',
+                            average_time: selectedOption.getAttribute('data-average-time') || '',
+                            type_service: selectedOption.getAttribute('data-type_service') || selectedOption
+                                .getAttribute('data-type-service') || 'Default'
+                        };
 
-                on: {
-                    input: {
-                        showButton: function(val) {
-                            var isUrl = /^https?:\/\/.+/i.test(val.trim());
-                            var btn = document.getElementById('btn-convert');
-                            var notice = document.querySelector('.link-convert-notice');
-                            if (btn) btn.classList.toggle('d-none', !isUrl);
-                            if (notice) notice.classList.toggle('d-none', !isUrl);
+                        updateServiceInfo(data);
+                        resetInputFields(); // Reset input fields khi chọn service khác
+                        calculateCharge(); // Tính toán charge khi chọn service
+                    }
+                });
+
+                $(serviceSelect).on('select2:select', function() {
+                    serviceSelect.dispatchEvent(new Event('change')); // Đảm bảo trigger native change
+                });
+
+                // ==================== BẮT QUANTITY CHANGE ====================
+                const quantityInput = document.getElementById('field-orderform-fields-quantity');
+                if (quantityInput) {
+                    quantityInput.addEventListener('input', function() {
+                        calculateCharge();
+                    });
+
+                    quantityInput.addEventListener('change', function() {
+                        calculateCharge();
+                    });
+                }
+
+                // ==================== BẮT COMMENT CHANGE - AUTO CALCULATE QUANTITY ====================
+                const commentInput = document.getElementById('field-orderform-fields-comments');
+                if (commentInput) {
+                    commentInput.addEventListener('input', function() {
+                        // Count non-empty lines in comment textarea
+                        const comments = this.value.trim();
+                        const lines = comments ? comments.split('\n').filter(line => line.trim().length > 0) : [];
+                        const lineCount = lines.length;
+
+                        // Update quantity field with line count
+                        if (quantityInput) {
+                            quantityInput.value = lineCount > 0 ? lineCount : '';
+                            // Trigger change event to recalculate charge
+                            quantityInput.dispatchEvent(new Event('change'));
                         }
-                    },
-                    keyup: {
-                        calculatePrice: function(type, selector) {
-                            var svcId = $('#sl-service').val();
-                            var svc = SERVICES.find(s => parseInt(s.id) === parseInt(svcId));
-                            if (!svc) return;
+                    });
+                }
 
-                            var qty = 0;
-                            if (type === 0) {
-                                qty = parseInt(document.getElementById('ipt-quantity')?.value) || 0;
-                            } else if (type === 1 && selector) {
-                                var lines = ($(selector).val() || '').split('\n').filter(l => l.trim());
-                                qty = lines.length;
-                            }
+                // ==================== LOAD CATEGORIES THEO PLATFORM ====================
+                function loadCategoriesByPlatform(platformId) {
+                    const filtered = platformId === 'all' ?
+                        allCategories :
+                        allCategories.filter(cat => cat.platform_id == platformId);
 
-                            var symbolMatch = svc.rate_formatted.match(/[^\d\s.,\-]+/);
-                            var symbol = symbolMatch ? symbolMatch[0] : '$';
-                            var position = svc.rate_formatted.indexOf(symbol) === 0 ? 'before' : 'after';
-                            var rateNumStr = svc.rate_formatted.replace(/[^\d.]/g, '');
-                            var rateNum = parseFloat(rateNumStr) || 0;
-                            var decimalMatch = rateNumStr.match(/\.(\d+)$/);
-                            var decimals = decimalMatch ? decimalMatch[1].length : 2;
-                            var totalCharge = qty > 0 ? (qty / 1000) * rateNum : 0;
-                            var formatted = totalCharge.toFixed(decimals);
-                            var display = position === 'before' ? symbol + formatted : formatted + symbol;
 
-                            document.querySelectorAll('.charge').forEach(function(el) {
-                                el.textContent = display;
-                            });
+
+                    updateCategorySelect(filtered);
+
+                    // Tự động chọn category đầu tiên và trigger load service
+                    if (filtered.length > 0) {
+                        categorySelect.value = filtered[0].id;
+
+                        // Trigger cả 2 event để chắc chắn
+                        categorySelect.dispatchEvent(new Event('change'));
+                        $(categorySelect).trigger('select2:select');
+                    } else {
+                        updateServiceSelect([]);
+                    }
+                }
+
+                // ==================== LOAD SERVICES THEO CATEGORY ====================
+                function loadServicesByCategory(categoryId) {
+                    if (!categoryId) {
+                        updateServiceSelect([]);
+                        // Reset tất cả inputs khi không có service
+                        resetInputFields();
+
+                        const avgTimeInput = document.getElementById('field-orderform-fields-average_time');
+                        const avgTimeContainer = document.getElementById('order_average_time');
+                        if (avgTimeInput && avgTimeContainer) {
+                            avgTimeInput.value = '';
+                            avgTimeInput.placeholder = '{{ __("newOrder.select_service_to_see_average_time") }}';
+                            avgTimeContainer.classList.add('hidden');
                         }
-                    },
-                    change: {
-                        service: function(val) {
-                            var svc = SERVICES.find(s => parseInt(s.id) === parseInt(val));
-                            if (!svc) return;
 
-                            // Update display
-                            document.getElementById('svc-display-id').textContent = svc.id;
-                            var icon = svc.image
-                                ? ((svc.image.indexOf('/') !== -1 || svc.image.indexOf('.') !== -1)
-                                    ? '<img src="' + svc.image + '" class="w-20px h-20px me-1">'
-                                    : '<i class="' + svc.image + ' me-1"></i>')
-                                : '';
-                            document.getElementById('svc-display-name').innerHTML = icon + svc.name;
-                            var _avgVal = parseFloat(svc.avg);
-                            var _avgContainer = document.getElementById('avg-time-container');
-                            var _avgInput = document.getElementById('ipt-average-time');
-                            if (_avgInput && _avgContainer) {
-                                if (svc.avg && _avgVal > 0) {
-                                    _avgInput.value = svc.avg;
-                                    _avgContainer.style.display = '';
-                                } else {
-                                    _avgInput.value = '';
-                                    _avgContainer.style.display = 'none';
-                                }
-                            }
-
-                            var minEl = document.querySelector('.min');
-                            var maxEl = document.querySelector('.max');
-                            if (minEl) minEl.textContent = svc.min.toLocaleString();
-                            if (maxEl) maxEl.textContent = svc.max.toLocaleString();
-
-                            var descEl = document.querySelector('.div-description');
-                            if (descEl) {
-                                descEl.style.display = svc.desc ? '' : 'none';
-                                if (svc.desc) descEl.innerHTML = svc.desc;
-                            }
-
-                            // Show/hide service type fields
-                            document.querySelectorAll('.service-type').forEach(el => el.style.display = 'none');
-                            var type = (svc.type || 'Default').toLowerCase().replace(/\s+/g, '-');
-                            document.querySelectorAll('.service-type.' + type).forEach(el => el.style.display = '');
-
-                            // Reset charge với đúng symbol từ rate_formatted
-                            var symMatch = svc.rate_formatted.match(/[^\d\s.,\-]+/);
-                            var sym = symMatch ? symMatch[0] : '$';
-                            var symPos = svc.rate_formatted.indexOf(sym) === 0 ? 'before' : 'after';
-                            var zeroDisplay = symPos === 'before' ? sym + '0' : '0' + sym;
-                            document.querySelectorAll('.charge').forEach(function(el) {
-                                el.textContent = zeroDisplay;
-                            });
-                        },
-                        link_input_type: function(val) {
-                            var one = document.querySelector('.mb-0:has(#ipt-link)');
-                            var multi = document.querySelector('.mb-0:has(#txa-link)');
-                            if (val === '1') {
-                                if (one) one.style.display = 'none';
-                                if (multi) multi.style.display = '';
-                            } else {
-                                if (one) one.style.display = '';
-                                if (multi) multi.style.display = 'none';
-                            }
+                        const descContainer = document.getElementById('service_description');
+                        const desc = document.querySelector('#service_description .panel-description');
+                        if (descContainer && desc) {
+                            desc.innerHTML = '<br>';
+                            descContainer.classList.add('hidden');
                         }
-                    },
-                    click: {
-                        getUID: function() {
-                            var input = document.getElementById('ipt-link');
-                            var link = input?.value?.trim();
-                            if (!link) return;
-                            showFullScreenLoader('Getting UID...', 'body');
-                            fetch('/api/convert-fb-id?url=' + encodeURIComponent(link))
-                                .then(r => r.json())
-                                .then(d => {
-                                    hideFullScreenLoader();
-                                    if (d.id) {
-                                        input.value = d.id;
-                                        // Ẩn nút và notice vì giờ input là ID, không còn là URL
-                                        _new.on.input.showButton(d.id);
-                                    } else {
-                                        _new._showModal('error', d.error || 'Không thể lấy UID từ link này.');
-                                    }
-                                })
-                                .catch(() => {
-                                    hideFullScreenLoader();
-                                    _new._showModal('error', 'Không thể lấy UID từ link này. Vui lòng kiểm tra lại link.');
-                                });
-                        },
-                        confirmRate: function() {
-                            if (_new._pendingRate) {
-                                _new._pendingRate();
-                                _new._pendingRate = null;
-                            } 
-                            document.querySelector('.alert-order.alert-confirm').style.display = 'none';
-                        },
-                        order: function() {
-                            var btn = document.getElementById('btn-order');
-                            var svcId = $('#sl-service').val();
-                            var svc = SERVICES.find(s => parseInt(s.id) === parseInt(svcId));
 
-                            if (!svc) {
-                                _new._showAlert('normal', 'Please select a service.');
-                                return;
-                            }
+                        // Reset charge và symbol
+                        const chargeInput = document.getElementById('charge');
+                        if (chargeInput) chargeInput.value = '';
 
-                            // Collect form data
-                            var data = {
-                                _token: '{{ csrf_token() }}',
-                                service: svc.id,
-                            };
+                        window.currentCurrencySymbol = '$';
+                        window.symbolPosition = 'before';
 
-                            // Link (single or multi)
-                            var linkType = document.querySelector('input[name="link_input_type"]:checked')?.value || '0';
-                            if (linkType === '1') {
-                                data.link = document.getElementById('txa-link')?.value?.trim().split('\n')[0] || '';
-                            } else {
-                                data.link = document.getElementById('ipt-link')?.value?.trim() || '';
-                            }
+                        currentServiceRate = 0;
+                        return;
+                    }
 
-                            // Quantity / Comments
-                            var type = svc.type || 'Default';
-                            if (type === 'Custom Comments') {
-                                data.comments = document.getElementById('txa-comment')?.value || '';
-                            } else if (type !== 'Package' && type !== 'Subscriptions') {
-                                data.quantity = document.getElementById('ipt-quantity')?.value || '';
-                            }
+                    const filteredServices = allServices.filter(s => s.category_id == categoryId);
 
-                            // Loop — chỉ gửi khi checkbox loop được bật và value >= 1
-                            if (document.getElementById('cb-loop')?.checked) {
-                                var loopQty = parseInt(document.getElementById('sl-loop-quantity')?.value) || 0;
-                                var loopSpacing = parseInt(document.getElementById('sl-loop-spacing')?.value) || 0;
-                                if (loopQty >= 1) data.loop_quantity = loopQty;
-                                if (loopSpacing >= 1) data.loop_spacing = loopSpacing;
-                            }
+                    updateServiceSelect(filteredServices);
 
-                            // Schedule
-                            if (document.getElementById('cb-schedule')?.checked) {
-                                data.schedule_time = document.getElementById('ipt-schedule-time')?.value || '';
-                            }
+                    if (filteredServices.length > 0) {
+                        const firstService = filteredServices[0];
+                        updateServiceInfo({
+                            id: firstService.id,
+                            name: firstService.name,
+                            rate: firstService.rate_formatted,
+                            min: firstService.min,
+                            max: firstService.max,
+                            description: firstService.description || '',
+                            average_time: firstService.average_time || '',
+                            type_service: firstService.type_service || 'Default'
+                        });
 
-                            btn.disabled = true;
-                            showFullScreenLoader('Processing...', 'body');
+                        // Tự động chọn service đầu
+                        serviceSelect.value = firstService.id;
+                        resetInputFields(); // Reset inputs khi load service mới
+                        serviceSelect.dispatchEvent(new Event('change'));
+                        calculateCharge(); // Tính charge cho service đầu tiên
+                    }
+                }
 
-                            fetch('{{ route("clients.orders.store") }}', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                                    'X-Requested-With': 'XMLHttpRequest',
-                                    'Accept': 'application/json'
-                                },
-                                body: JSON.stringify(data)
-                            })
-                            .then(r => r.json())
-                            .then(function(res) {
-                                var order = res.data?.order || {};
+                // ==================== CẬP NHẬT SELECT CATEGORY ====================
+                function updateCategorySelect(categories) {
+                    const fragment = document.createDocumentFragment();
 
-                                if (res.success) {
-                                    // Check rate change
-                                    if (res.data?.confirm) {
-                                        _new._pendingRate = function() { _new.on.click.order(); };
-                                        document.querySelector('.alert-order.alert-confirm').style.display = '';
-                                        return;
-                                    }
+                    categories.forEach(cat => {
+                        const opt = document.createElement('option');
+                        opt.value = cat.id;
+                        opt.textContent = cat.name;
+                        opt.setAttribute('data-platform_id', cat.platform_id);
+                        if (cat.image) {
+                            const icon = (cat.image.includes('.') || cat.image.startsWith('/') || cat.image.match(/^https?:\/\//))
+                                ? `<img src="${cat.image}" alt="${cat.name}" loading="lazy" class="img-responsive btn-group-vertical" style="width:20px;height:20px;object-fit:contain;">`
+                                : `<i class="${cat.image}"></i>`;
+                            opt.setAttribute('data-icon', icon);
+                        }
+                        fragment.appendChild(opt);
+                    });
 
-                                    var msg = 'Order successfully.'
-                                        + (order.id     ? ' ID: '     + order.id     + '.' : '')
-                                        + (order.charge ? ' Charge: ' + order.charge + '.' : '');
-                                    _new._showAlert('normal', msg, 'success');
+                    categorySelect.innerHTML = '';
+                    categorySelect.appendChild(fragment);
+                    $(categorySelect).trigger('change.select2');
+                }
 
-                                    // Reset inputs
-                                    document.getElementById('ipt-link') && (document.getElementById('ipt-link').value = '');
-                                    document.getElementById('ipt-quantity') && (document.getElementById('ipt-quantity').value = '');
-                                    document.getElementById('txa-comment') && (document.getElementById('txa-comment').value = '');
-                                    var _svc = SERVICES.find(s => parseInt(s.id) === parseInt(svc.id));
-                                    var _sym = (_svc?.rate_formatted || '').match(/[^\d\s.,\-]+/);
-                                    var _symStr = _sym ? _sym[0] : '$';
-                                    var _symPos = (_svc?.rate_formatted || '').indexOf(_symStr) === 0 ? 'before' : 'after';
-                                    var _zero = _symPos === 'before' ? _symStr + '0' : '0' + _symStr;
-                                    document.querySelectorAll('.charge').forEach(function(el) { el.textContent = _zero; });
-                                } else {
-                                    var errMsg = res.message || 'An error occurred.';
-                                    if (res.errors) {
-                                        errMsg = Object.values(res.errors).flat().join('<br>');
-                                    }
-                                    _new._showAlert('normal', errMsg, 'danger');
-                                }
-                            })
-                            .catch(function() {
-                                _new._showAlert('normal', 'Network error. Please try again.', 'danger');
-                            })
-                            .finally(function() {
-                                hideFullScreenLoader();
-                                btn.disabled = false;
-                            });
+                // ==================== CẬP NHẬT SELECT SERVICE ====================
+                function updateServiceSelect(services) {
+                    const fragment = document.createDocumentFragment();
+
+                    services.forEach(service => {
+                        const opt = document.createElement('option');
+                        opt.value = service.id;
+                        opt.textContent = service.id + ' - ' + service.name + ' - ' + service.rate_formatted;
+                        ['id', 'name', 'title', 'description', 'min', 'max', 'rate_formatted', 'average_time',
+                            'type_service', 'refill', 'cancel', 'dripfeed'
+                        ].forEach(key => {
+                            if (service[key] != null)
+                                opt.setAttribute('data-' + key.replace(/_/g, '-'), service[key]);
+                        });
+                        fragment.appendChild(opt);
+                    });
+
+                    serviceSelect.innerHTML = '';
+                    serviceSelect.appendChild(fragment);
+                    $(serviceSelect).trigger('change.select2');
+                }
+
+                // ==================== CẬP NHẬT INFO SERVICE ====================
+                function updateServiceInfo(data) {
+                    const rateFormatted = data.rate || '';
+                    currentServiceRate = parseServiceRate(rateFormatted);
+
+                    // Tách symbol và vị trí
+                    const symbolMatch = rateFormatted.match(/[^\d\s.-]+/);
+                    window.currentCurrencySymbol = symbolMatch ? symbolMatch[0] : '$';
+                    window.symbolPosition = rateFormatted.indexOf(window.currentCurrencySymbol) === 0 ? 'before' :
+                        'after';
+
+                    // Cập nhật description
+                    const desc = document.querySelector('#service_description .panel-description');
+                    const descContainer = document.getElementById('service_description');
+                    if (desc) {
+                        if (data.description) {
+                            desc.innerHTML = data.description.replace(/\n/g, '<br>');
+                            descContainer.classList.remove('hidden');
+                        } else {
+                            desc.innerHTML = '<br>';
+                            descContainer.classList.add('hidden');
                         }
                     }
-                },
 
-                _showAlert: function(type, msg, variant) {
-                    var el = document.querySelector('.alert-order.alert-' + type);
-                    if (!el) return;
-                    variant = variant || 'info';
-                    el.className = 'alert alert-order alert-' + type + ' alert-' + variant + ' mt-5 mb-5';
-                    el.innerHTML = msg;
-                    el.style.display = '';
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    if (variant === 'success') setTimeout(() => el.style.display = 'none', 5000);
-                },
+                    // Cập nhật min-max quantity
+                    const minMax = document.querySelector('#order_quantity .min-max');
+                    if (minMax && data.min && data.max) {
+                        minMax.textContent = `Min: ${data.min} - Max: ${data.max}`;
+                    }
 
-                _showModal: function(type, msg) {
-                    var modalEl = document.getElementById('modal-uid-msg');
-                    var isError = type === 'error';
-                    var color = isError ? 'danger' : 'success';
-                    modalEl.querySelector('.modal-header').className = 'modal-header bg-' + color + ' text-white py-4';
-                    modalEl.querySelector('.modal-title').textContent = isError ? 'Alert' : 'Success';
-                    modalEl.querySelector('.modal-body').textContent = msg;
-                    modalEl.querySelector('.modal-footer .btn').className = 'btn btn-sm btn-' + color + ' px-4 rounded-4';
-                    new bootstrap.Modal(modalEl).show();
+                    // Cập nhật average time với format đẹp hơn
+                    const avgTimeInput = document.getElementById('field-orderform-fields-average_time');
+                    const avgTimeContainer = document.getElementById('order_average_time');
+                    if (avgTimeInput && avgTimeContainer) {
+                        const avgVal = parseFloat(data.average_time);
+                        if (data.average_time && avgVal > 0) {
+                            let displayTime = data.average_time;
+                            if (!isNaN(data.average_time)) {
+                                const minutes = parseInt(data.average_time);
+                                if (minutes < 60) {
+                                    displayTime = `${minutes} minutes`;
+                                } else if (minutes < 1440) {
+                                    const hours = Math.floor(minutes / 60);
+                                    const remainingMinutes = minutes % 60;
+                                    displayTime = remainingMinutes > 0 ?
+                                        `${hours}h ${remainingMinutes}m` :
+                                        `${hours} hours`;
+                                } else {
+                                    const days = Math.floor(minutes / 1440);
+                                    const remainingHours = Math.floor((minutes % 1440) / 60);
+                                    displayTime = remainingHours > 0 ?
+                                        `${days}d ${remainingHours}h` :
+                                        `${days} days`;
+                                }
+                            }
+                            avgTimeInput.value = displayTime;
+                            avgTimeInput.setAttribute('title', `Average completion time: ${displayTime}`);
+                            avgTimeContainer.classList.remove('hidden');
+                        } else {
+                            avgTimeInput.value = '';
+                            avgTimeInput.placeholder = '{{ __("newOrder.not_available") }}';
+                            avgTimeContainer.classList.add('hidden');
+                        }
+                    }
+
+                    // ==================== XỬ LÝ HIỂN THỊ/ẨN FIELDS THEO TYPE_SERVICE ====================
+                    const typeService = data.type_service || 'Default';
+
+                    // Ẩn tất cả các fields trước
+                    const allFields = [
+                        'order_link', 'order_quantity', 'order_comment', 'order_username',
+                        'order_min', 'order_posts', 'order_old_posts', 'order_check',
+                        'order_delay'
+                    ];
+                    allFields.forEach(fieldId => {
+                        const field = document.getElementById(fieldId);
+                        if (field) field.classList.add('hidden');
+                    });
+
+                    // Hiển thị fields dựa trên type_service
+                    switch (typeService) {
+                        case 'Custom Comments':
+                            // Custom Comments: link, comment, quantity (readonly)
+                            showField('order_link');
+                            showField('order_comment');
+                            showField('order_quantity');
+                            // Make quantity readonly but NOT disabled for Custom Comments
+                            if (quantityInput) {
+                                quantityInput.disabled = false;
+                                quantityInput.readOnly = true;
+                                quantityInput.style.backgroundColor = '#f5f5f5';
+                                quantityInput.style.cursor = 'not-allowed';
+                            }
+                            break;
+
+                        case 'Package':
+                            // Package: link only
+                            showField('order_link');
+                            // Enable quantity field for other types
+                            if (quantityInput) {
+                                quantityInput.disabled = false;
+                                quantityInput.readOnly = false;
+                                quantityInput.style.backgroundColor = '';
+                                quantityInput.style.cursor = '';
+                            }
+                            break;
+
+                        case 'Subscriptions':
+                            // Subscriptions: username, min/max, delay, posts (optional), old_posts (optional), expiry (optional)
+                            showField('order_username');
+                            showField('order_min');
+                            showField('order_delay'); // delay is required, expiry is inside this field
+                            showField('order_posts');
+                            showField('order_old_posts');
+                            // Enable quantity field for other types
+                            if (quantityInput) {
+                                quantityInput.disabled = false;
+                                quantityInput.readOnly = false;
+                                quantityInput.style.backgroundColor = '';
+                                quantityInput.style.cursor = '';
+                            }
+                            break;
+
+                        case 'Default':
+                        default:
+                            // Default: link, quantity, dripfeed
+                            showField('order_link');
+                            showField('order_quantity');
+                            showField('order_check');
+                            // Enable quantity field for Default type
+                            if (quantityInput) {
+                                quantityInput.disabled = false;
+                                quantityInput.readOnly = false;
+                                quantityInput.style.backgroundColor = '';
+                                quantityInput.style.cursor = '';
+                            }
+                            break;
+                    }
+
+                    // Helper function to show field
+                    function showField(fieldId) {
+                        const field = document.getElementById(fieldId);
+                        if (field) field.classList.remove('hidden');
+                    }
+
                 }
-            };
 
-            // Init first service
-            var initSvcId = $('#sl-service').val();
-            if (initSvcId) {
-                try { _new.on.change.service(initSvcId); } catch(e) {}
-            }
+                // ==================== TÍNH TOÁN CHARGE ====================
+                function calculateCharge() {
+                    const quantityInput = document.getElementById('field-orderform-fields-quantity');
+                    const chargeInput = document.getElementById('charge');
 
-        }); // end DOMContentLoaded
-    </script>
-@endpush
+                    if (!chargeInput) return;
+
+                    let quantity = parseInt(quantityInput?.value) || 1;
+                    const totalCharge = currentServiceRate * quantity / 1000;
+
+                    if (currentServiceRate > 0) {
+                        chargeInput.value = formatChargeWithSymbol(totalCharge);
+                    } else {
+                        chargeInput.value = '';
+                    }
+                }
+
+                // ==================== RESET INPUT FIELDS ====================
+                function resetInputFields() {
+                    // Reset link input
+                    const linkInput = document.getElementById('field-orderform-fields-link');
+                    if (linkInput) linkInput.value = '';
+
+                    // Reset quantity input
+                    const quantityInput = document.getElementById('field-orderform-fields-quantity');
+                    if (quantityInput) quantityInput.value = '';
+                }
+
+                // ==================== FORMAT CHARGE WITH SYMBOL ====================
+                function formatChargeWithSymbol(amount) {
+                    const symbol = window.currentCurrencySymbol || '$';
+                    const position = window.symbolPosition || 'before';
+
+                    // Format số ngắn gọn: loại bỏ số 0 thừa ở cuối
+                    let formattedAmount = parseFloat(amount.toFixed(10)).toString();
+
+                    return position === 'before' ? symbol + formattedAmount : formattedAmount + symbol;
+                }
+
+                // ==================== KHỞI TẠO ====================
+                document.querySelector('.platforms-item button[data-platform-id="all"]').classList.add('active');
+
+                const initFavIds = getFavorites().map(Number);
+                if (initFavIds.length > 0 && !(selectedService && selectedService.id)) {
+                    // Có favorites: enable option + move lên đầu trước khi Select2 init
+                    const favOpt = categorySelect.querySelector('option[data-fav="1"]');
+                    if (favOpt) {
+                        favOpt.removeAttribute('disabled');
+                        favOpt.style.display = '';
+                        categorySelect.insertBefore(favOpt, categorySelect.firstChild);
+                        favOpt.selected = true;
+                    }
+                    // Sau khi Select2 init xong, populate services
+                    setTimeout(() => buildFavServices(), 50);
+                } else {
+                    loadCategoriesByPlatform('all');
+                }
+
+                // Khởi tạo tooltips cho Bootstrap
+                if (typeof $().tooltip === 'function') {
+                    $('[data-toggle="tooltip"]').tooltip();
+                }
+
+                // Khởi tạo charge ban đầu
+                calculateCharge();
+
+                // ==================== XỬ LÝ SUBMIT FORM ====================
+                const orderForm = document.getElementById('order-form');
+                const submitBtn = document.getElementById('submit-btn');
+                const alertErrorDiv = document.getElementById('js-order-alert-error');
+                const alertSuccessDiv = document.getElementById('js-order-alert-success');
+
+                if (orderForm) {
+                    orderForm.addEventListener('submit', function(e) {
+                        e.preventDefault();
+
+                        // Disable submit button
+                        submitBtn.disabled = true;
+
+                        // Hide previous alerts
+                        hideAllAlerts();
+
+                        // Prepare form data
+                        const formData = new FormData(orderForm);
+
+                        // Ensure quantity is included even if readonly
+                        const quantityInput = document.getElementById('field-orderform-fields-quantity');
+                        if (quantityInput && quantityInput.value) {
+                            formData.set('quantity', quantityInput.value);
+                        }
+
+                        // Ensure comments are included for Custom Comments
+                        const commentsInput = document.getElementById('field-orderform-fields-comments');
+                        if (commentsInput && commentsInput.value) {
+                            formData.set('comments', commentsInput.value);
+                        }
+
+                        // Debug log
+                        console.log('Form Data:', {
+                            service: formData.get('service'),
+                            link: formData.get('link'),
+                            quantity: formData.get('quantity'),
+                            comments: formData.get('comments')
+                        });
+
+                        // Send AJAX request
+                        fetch(orderForm.action, {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')
+                                        ?.getAttribute('content') ||
+                                        document.querySelector('input[name="_token"]')?.value
+                                }
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                const orderData = data.data || {};
+                                const order = orderData.order || {};
+                                const errorMessage = orderData.error_message || null;
+                                const hasApiError = orderData.has_api_error || false;
+
+                                // If API returned an error, show error message
+                                if (hasApiError && errorMessage) {
+                                    showAlert('error', errorMessage);
+                                } else if (data.success) {
+                                    // Success - show success message with order details
+                                    let successMessage = `<h4>{{ __("newOrder.order_received") }}</h4>`;
+                                    if (order.id) successMessage += `ID: ${order.id}<br>`;
+                                    if (order.service) successMessage += `Service: ${order.service}<br>`;
+                                    if (order.link) successMessage += `Link: ${order.link}<br>`;
+                                    if (order.quantity) successMessage += `Quantity: ${order.quantity}<br>`;
+                                    if (order.comments) {
+                                        const commentLines = order.comments.split('\n').length;
+                                        successMessage += `Comments: ${commentLines} lines<br>`;
+                                    }
+                                    if (order.charge) successMessage += `Charge: ${order.charge}<br>`;
+                                    if (order.balance) successMessage += `Balance: ${order.balance}<br>`;
+
+                                    showAlert('success', successMessage);
+
+                                    // Reset form inputs
+                                    const linkInput = document.getElementById(
+                                    'field-orderform-fields-link');
+                                    const quantityInput = document.getElementById(
+                                        'field-orderform-fields-quantity');
+                                    const commentsInput = document.getElementById(
+                                        'field-orderform-fields-comments');
+                                    const chargeInput = document.getElementById('charge');
+
+                                    if (linkInput) linkInput.value = '';
+                                    if (quantityInput) quantityInput.value = '';
+                                    if (commentsInput) commentsInput.value = '';
+                                    if (chargeInput) chargeInput.value = '';
+                                } else {
+                                    // Validation error
+                                    let errorMessage = '';
+
+                                    if (data.errors) {
+                                        let errorMessages = [];
+                                        Object.values(data.errors).forEach(errorArray => {
+                                            if (Array.isArray(errorArray)) {
+                                                errorMessages = errorMessages.concat(errorArray);
+                                            } else {
+                                                errorMessages.push(errorArray);
+                                            }
+                                        });
+                                        errorMessage = errorMessages.join('<br>');
+                                    } else {
+                                        errorMessage = data.message ||
+                                            'An error occurred while creating the order.';
+                                    }
+
+                                    showAlert('error', errorMessage);
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Order submission error:', error);
+                                showAlert('error', 'Network error. Please try again.');
+                            })
+                            .finally(() => {
+                                // Re-enable submit button
+                                submitBtn.disabled = false;
+                                submitBtn.textContent = 'Submit';
+                            });
+                    });
+                }
+
+                function hideAllAlerts() {
+                    if (alertErrorDiv) alertErrorDiv.style.display = 'none';
+                    if (alertSuccessDiv) alertSuccessDiv.style.display = 'none';
+                }
+
+                function showAlert(type, message) {
+                    hideAllAlerts();
+
+                    const alertDiv = type === 'success' ? alertSuccessDiv : alertErrorDiv;
+
+                    if (alertDiv) {
+                        const textDiv = alertDiv.querySelector('.text');
+                        if (textDiv) {
+                            textDiv.innerHTML = message;
+                        }
+
+                        alertDiv.style.display = 'block';
+
+                        // Scroll to alert
+                        alertDiv.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center'
+                        });
+
+                        // Auto hide success alerts after 5 seconds
+                        if (type === 'success') {
+                            setTimeout(() => {
+                                alertDiv.style.display = 'none';
+                            }, 5000);
+                        }
+                    }
+                }
+
+                // Handle close button clicks
+                document.addEventListener('click', function(e) {
+                    if (e.target.matches('.close[data-hide="alert"]') || e.target.closest(
+                            '.close[data-hide="alert"]')) {
+                        const alertDiv = e.target.closest('.alert');
+                        if (alertDiv) {
+                            alertDiv.style.display = 'none';
+                        }
+                    }
+                });
+
+
+
+                // ==================== SEARCH FUNCTIONALITY ====================
+                const searchInput = document.getElementById('service-search-input');
+                const searchContainer = document.getElementById('search-container');
+                const searchDropdownWrapper = document.getElementById('search-dropdown-wrapper');
+                const searchResultsList = document.getElementById('search-results-list');
+                const searchClearBtn = document.getElementById('search-clear-btn');
+                let searchTimeout;
+                let isSearchActive = false;
+                function escapeRateHtml(value) {
+                    return String(value).replace(/[&<>"']/g, char => ({
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#039;'
+                    })[char]);
+                }
+
+                function serviceRateMarkup(rate) {
+                    const value = String(rate ?? '');
+                    if (serviceCurrencyCode !== 'VND') {
+                        return escapeRateHtml(value);
+                    }
+
+                    const currencyCode = 'VND';
+                    const amount = value.endsWith(currencyCode)
+                        ? value.slice(0, -currencyCode.length).trim()
+                        : value;
+
+                    return '<strong class="fw-bold text-primary">' + escapeRateHtml(amount) +
+                        '</strong> <small class="fw-bold text-primary" style="font-size:10px;vertical-align:super;">' +
+                        currencyCode + '</small>';
+                }
+
+                if (searchInput) {
+                    // Handle search input
+                    searchInput.addEventListener('input', function() {
+                        const query = this.value.trim();
+
+                        // Show/hide clear button
+                        if (query.length > 0) {
+                            searchClearBtn.style.display = 'block';
+                        } else {
+                            searchClearBtn.style.display = 'none';
+                        }
+
+                        // Clear previous timeout
+                        clearTimeout(searchTimeout);
+
+                        if (query.length === 0) {
+                            hideSearchResults();
+                            return;
+                        }
+
+                        if (query.length >= 1) {
+                            // Show search results immediately for single character
+                            searchTimeout = setTimeout(() => {
+                                performSearch(query);
+                            }, 200);
+                        }
+                    });
+
+                    // Handle focus - show dropdown if there's text
+                    searchInput.addEventListener('focus', function() {
+                        const query = this.value.trim();
+                        if (query.length >= 1) {
+                            performSearch(query);
+                        }
+                    });
+
+                    // Handle blur (hide results after a delay)
+                    searchInput.addEventListener('blur', function() {
+                        setTimeout(() => {
+                            if (!isSearchActive) {
+                                hideSearchResults();
+                            }
+                        }, 200);
+                    });
+
+                    // Handle Enter key
+                    searchInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const firstResult = searchResultsList.querySelector(
+                                '.select2-results__option[data-service-id]');
+                            if (firstResult) {
+                                selectSearchResult(firstResult);
+                            }
+                        }
+
+                        // Handle arrow keys for navigation
+                        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            navigateResults(e.key === 'ArrowDown' ? 'down' : 'up');
+                        }
+                    });
+
+                    // Handle clear button
+                    searchClearBtn.addEventListener('click', function() {
+                        searchInput.value = '';
+                        searchClearBtn.style.display = 'none';
+                        hideSearchResults();
+                        searchInput.focus();
+                    });
+
+                    // Prevent dropdown from closing when clicking inside
+                    searchDropdownWrapper.addEventListener('mousedown', function() {
+                        isSearchActive = true;
+                    });
+
+                    searchDropdownWrapper.addEventListener('mouseup', function() {
+                        setTimeout(() => {
+                            isSearchActive = false;
+                        }, 100);
+                    });
+                }
+
+                function performSearch(query) {
+                    if (!query) {
+                        hideSearchResults();
+                        return;
+                    }
+
+                    // Show loading
+                    showSearchLoading();
+
+                    // Get all services for search
+                    let servicesToSearch = allServices;
+
+                    // Search in service ID, name, and rate (LIKE search)
+                    const searchResults = servicesToSearch.filter(service => {
+                        const searchText = query.toLowerCase();
+                        const serviceId = service.id.toString().toLowerCase();
+                        const serviceName = service.name.toLowerCase();
+                        const serviceRate = service.rate_formatted.toLowerCase();
+
+                        return (
+                            serviceId.includes(searchText) ||
+                            serviceName.includes(searchText) ||
+                            serviceRate.includes(searchText) ||
+                            (service.description && service.description.toLowerCase().includes(searchText))
+                        );
+                    }).slice(0, 20); // Show more results (20)
+
+                    displaySearchResults(searchResults, query);
+                }
+
+                function showSearchLoading() {
+                    searchResultsList.innerHTML = `
+                        <li class="select2-results__option" style="padding: 16px; text-align: center; color: #666;">
+                            <i class="fas fa-spinner fa-spin"></i> Searching...
+                        </li>
+                    `;
+                    showSearchDropdown();
+                }
+
+                function displaySearchResults(results, query) {
+                    // if (results.length === 0) {
+                    //     searchResultsList.innerHTML = `
+            //         <li class="select2-results__option" style="padding: 16px; text-align: center; color: #666; font-style: italic;">
+            //             No services found for "${query}"
+            //         </li>
+            //     `;
+                    //     showSearchDropdown();
+                    //     return;
+                    // }
+
+                    const resultsHtml = results.map((service, index) => {
+                        return `
+                            <li role="listitem" class="select2-results__option"
+                                data-service-id="${service.id}"
+                                data-category-id="${service.category_id}"
+                                style="cursor: pointer;">
+                                <a href="#">
+                                    <span class="select2-selection__id badge badge-secondary badge-pill rounded-pill">
+                                        <span>${service.id}</span>
+                                    </span>
+                                    <span class="select2-selection__text">
+                                        <span class="service-name">${service.name}</span>
+                                        <span class="service-rate">- ${serviceRateMarkup(service.rate_formatted)} per 1000</span>
+                                    </span>
+                                    <!---->
+                                </a>
+                            </li>
+                        `;
+                    }).join('');
+
+                    searchResultsList.innerHTML = resultsHtml;
+                    showSearchDropdown();
+
+                    // Add click handlers to results
+                    searchResultsList.querySelectorAll('.select2-results__option[data-service-id]').forEach(item => {
+                        item.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            selectSearchResult(this);
+                        });
+
+                        // Add hover effects
+                        item.addEventListener('mouseenter', function() {
+                            // Remove highlight from all items
+                            searchResultsList.querySelectorAll('.select2-results__option').forEach(
+                                el => {
+                                    el.classList.remove('select2-results__option--highlighted');
+                                });
+                            // Add highlight to current item
+                            this.classList.add('select2-results__option--highlighted');
+                        });
+                    });
+                }
+
+                function getBadgeColor(serviceId) {
+                    // Generate colors similar to the image
+                    const colors = [
+                        '#6c9bd1', // Light blue
+                        '#7c8db5', // Blue-gray
+                        '#8fa4d3', // Light purple-blue
+                        '#5a9fd4', // Medium blue
+                        '#4a90e2', // Bright blue
+                        '#6fa8dc', // Sky blue
+                    ];
+
+                    return colors[serviceId % colors.length];
+                }
+
+                // ==================== LOAD SERVICE FROM URL ====================
+                function loadServiceFromUrl(service) {
+
+                    // Find the category for this service
+                    const category = allCategories.find(c => c.id == service.category_id);
+                    if (!category) {
+                        console.error(`❌ Category not found for service: ${service.id}`);
+                        return;
+                    }
+
+                    // Find the platform for this category
+                    const platformId = category.platform_id;
+
+                    // Update platform if needed
+                    const targetPlatformButton = document.querySelector(`[data-platform-id="${platformId}"]`);
+                    if (!targetPlatformButton) {
+                        console.error(`❌ Platform button not found for platform ID: ${platformId}`);
+                        return;
+                    }
+
+                    // Switch platform if needed
+                    if (!targetPlatformButton.classList.contains('active')) {
+
+                        document.querySelectorAll('.platforms-item button').forEach(btn => {
+                            btn.classList.remove('active');
+                        });
+                        targetPlatformButton.classList.add('active');
+                        loadCategoriesByPlatform(platformId);
+
+                        // Wait for platform change, then select category and service
+                        setTimeout(() => {
+                            selectCategoryAndService(service.category_id, service.id, service);
+                        }, 300);
+                    } else {
+                        // Platform is already correct, just select category and service
+                        selectCategoryAndService(service.category_id, service.id, service);
+                    }
+                }
+
+                function selectSearchResult(resultItem) {
+                    const serviceId = resultItem.getAttribute('data-service-id');
+                    const categoryId = resultItem.getAttribute('data-category-id');
+
+
+                    // Find the service
+                    const service = allServices.find(s => s.id == serviceId);
+                    if (!service) {
+                        console.error(`❌ Service not found: ${serviceId}`);
+                        return;
+                    }
+
+                    // Find the category
+                    const category = allCategories.find(c => c.id == categoryId);
+                    if (!category) {
+                        console.error(`❌ Category not found: ${categoryId}`);
+                        return;
+                    }
+
+
+
+                    // Update platform if needed
+                    const currentActivePlatform = document.querySelector('.platforms-item button.active');
+                    const targetPlatformButton = document.querySelector(`[data-platform-id="${category.platform_id}"]`);
+
+                    if (!targetPlatformButton) {
+                        console.error(`❌ Platform button not found for platform ID: ${category.platform_id}`);
+                        return;
+                    }
+
+                    // Always update platform to ensure consistency
+                    if (!targetPlatformButton.classList.contains('active')) {
+
+                        // Remove active from all platforms
+                        document.querySelectorAll('.platforms-item button').forEach(btn => {
+                            btn.classList.remove('active');
+                        });
+
+                        // Add active to selected platform
+                        targetPlatformButton.classList.add('active');
+
+                        // Load categories for this platform
+                        loadCategoriesByPlatform(category.platform_id);
+
+                        // Wait longer for platform change
+                        setTimeout(() => {
+                            selectCategoryAndService(categoryId, serviceId, service);
+                        }, 300);
+                    } else {
+                        // Platform is already correct, just select category and service
+                        selectCategoryAndService(categoryId, serviceId, service);
+                    }
+
+                    // Clear search immediately
+                    searchInput.value = '';
+                    searchClearBtn.style.display = 'none';
+                    hideSearchResults();
+                }
+
+                function selectCategoryAndService(categoryId, serviceId, service) {
+
+                    // Select category
+                    if (categorySelect.value !== categoryId) {
+                        categorySelect.value = categoryId;
+                        categorySelect.dispatchEvent(new Event('change'));
+                        $(categorySelect).trigger('select2:select');
+
+                        // Wait for category change to load services
+                        setTimeout(() => {
+                            selectServiceById(serviceId, service);
+                        }, 200);
+                    } else {
+                        // Category is already selected, just select service
+                        selectServiceById(serviceId, service);
+                    }
+                }
+
+                function selectServiceById(serviceId, service) {
+
+                    // Make sure the service exists in the dropdown
+                    const serviceOption = serviceSelect.querySelector(`option[value="${serviceId}"]`);
+                    if (!serviceOption) {
+                        console.error(`❌ Service option not found in dropdown: ${serviceId}`);
+                        // Force update the service select with current category services
+                        const currentCategoryId = categorySelect.value;
+                        const categoryServices = allServices.filter(s => s.category_id == currentCategoryId);
+                        updateServiceSelect(categoryServices);
+
+                        // Try again after update
+                        setTimeout(() => {
+                            const updatedServiceOption = serviceSelect.querySelector(
+                                `option[value="${serviceId}"]`);
+                            if (updatedServiceOption) {
+                                selectServiceFinal(serviceId, service);
+                            } else {
+                                console.error(`❌ Service still not found after update: ${serviceId}`);
+                            }
+                        }, 100);
+                    } else {
+                        selectServiceFinal(serviceId, service);
+                    }
+                }
+
+                function selectServiceFinal(serviceId, service) {
+                    // Select the service
+                    serviceSelect.value = serviceId;
+                    serviceSelect.dispatchEvent(new Event('change'));
+                    $(serviceSelect).trigger('select2:select');
+
+                    // Update service info and calculate charge
+                    updateServiceInfo({
+                        id: service.id,
+                        name: service.name,
+                        rate: service.rate_formatted,
+                        min: service.min,
+                        max: service.max,
+                        description: service.description || '',
+                        average_time: service.average_time || '',
+                        type_service: service.type_service || 'Default'
+                    });
+
+                    calculateCharge();
+
+
+                }
+
+
+                function showSearchDropdown() {
+                    searchContainer.classList.add('select2-container--open');
+                    searchDropdownWrapper.style.display = 'block';
+
+                    // Calculate and adjust dropdown height based on content
+                    const resultsDiv = searchDropdownWrapper.querySelector('.select2-results > div');
+                    const resultsList = searchResultsList;
+
+                    if (resultsDiv && resultsList) {
+                        // Get the number of items
+                        const itemCount = resultsList.querySelectorAll('li').length;
+
+                        // Calculate height: ~40px per item, max 300px
+                        const itemHeight = 40;
+                        const calculatedHeight = Math.min(itemCount * itemHeight, 300);
+
+                        // Set the max-height dynamically
+                        resultsDiv.style.maxHeight = calculatedHeight + 'px';
+                        resultsDiv.style.overflowY = calculatedHeight >= 300 ? 'auto' : 'visible';
+                    }
+                }
+
+                function hideSearchResults() {
+                    searchContainer.classList.remove('select2-container--open');
+                    searchDropdownWrapper.style.display = 'none';
+                }
+
+                function navigateResults(direction) {
+                    const results = searchResultsList.querySelectorAll('.select2-results__option[data-service-id]');
+                    const highlighted = searchResultsList.querySelector('.select2-results__option--highlighted');
+
+                    if (results.length === 0) return;
+
+                    let newIndex = 0;
+                    if (highlighted) {
+                        const currentIndex = Array.from(results).indexOf(highlighted);
+                        if (direction === 'down') {
+                            newIndex = (currentIndex + 1) % results.length;
+                        } else {
+                            newIndex = currentIndex === 0 ? results.length - 1 : currentIndex - 1;
+                        }
+                    }
+
+                    // Remove highlight from all
+                    results.forEach(el => el.classList.remove('select2-results__option--highlighted'));
+
+                    // Add highlight to new item
+                    results[newIndex].classList.add('select2-results__option--highlighted');
+
+                    // Scroll into view
+                    results[newIndex].scrollIntoView({
+                        block: 'nearest'
+                    });
+                }
+
+                // ==================== SCHEDULE & LOOP TOGGLE ====================
+                const scheduleCheckbox = document.getElementById('is_schedule-time');
+                const scheduleContent = document.getElementById('is-schedule-time-content');
+                const loopCheckbox = document.getElementById('is_loop');
+                const loopFields = document.getElementById('loop-fields');
+                const dripfeedCheckbox = document.getElementById('field-orderform-fields-check');
+                const dripfeedOptions = document.getElementById('dripfeed-options');
+
+                // Toggle Schedule Time
+                if (scheduleCheckbox && scheduleContent) {
+                    scheduleCheckbox.addEventListener('change', function() {
+                        if (this.checked) {
+                            scheduleContent.classList.remove('hidden');
+                        } else {
+                            scheduleContent.classList.add('hidden');
+                            document.getElementById('schedule-time').value = '';
+                        }
+                    });
+                }
+
+                // Toggle Loop Fields
+                if (loopCheckbox && loopFields) {
+                    loopCheckbox.addEventListener('change', function() {
+                        if (this.checked) {
+                            loopFields.classList.remove('hidden');
+                        } else {
+                            loopFields.classList.add('hidden');
+                            document.getElementById('loop_quantity').value = '';
+                            document.getElementById('loop_spacing').value = '';
+                        }
+                    });
+                }
+
+                // Toggle Drip-feed Options
+                if (dripfeedCheckbox && dripfeedOptions) {
+                    dripfeedCheckbox.addEventListener('change', function() {
+                        if (this.checked) {
+                            dripfeedOptions.classList.remove('hidden');
+                        } else {
+                            dripfeedOptions.classList.add('hidden');
+                            // Clear drip-feed fields
+                            const runsInput = document.getElementById('field-orderform-fields-runs');
+                            const intervalInput = document.getElementById('field-orderform-fields-interval');
+                            if (runsInput) runsInput.value = '';
+                            if (intervalInput) intervalInput.value = '';
+                        }
+                    });
+                }
+
+                // ==================== KHỞI TẠO SELECT2 VỚI FORMATTER ====================
+                // Formatter function cho category select
+                function formatCategoryOption(item) {
+                    if (!item.id) return item.text;
+
+                    const iconHtml = jQuery(item.element).data('icon') || '';
+
+                    if (iconHtml) {
+                        return jQuery(`<span class="d-flex align-items-center">${iconHtml}${item.text}</span>`);
+                    }
+
+                    return item.text;
+                }
+
+                // Khởi tạo Select2 cho category
+                $(categorySelect).select2({
+                    templateResult: formatCategoryOption,
+                    templateSelection: formatCategoryOption,
+                    allowClear: false,
+                    width: '100%'
+                });
+
+                // Khởi tạo Select2 cho service
+                $(serviceSelect).select2({
+                    allowClear: false,
+                    width: '100%'
+                });
+
+            });
+        </script>
+    @endpush

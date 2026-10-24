@@ -13,7 +13,7 @@ class NewsController extends Controller
         $news = News::where('domain', getDomain())
             ->orderBy('created_at', 'desc')
             ->paginate(50);
-        return view('adminpanel.news.index', compact('news'));
+        return view('admin.news.index', compact('news'));
     }
 
     public function store(Request $request)
@@ -54,7 +54,58 @@ class NewsController extends Controller
 
     public function destroy(News $news)
     {
+        abort_if($news->domain !== getDomain(), 404);
         $news->delete();
         return response()->json(['success' => true]);
     }
+
+    public function get(Request $request)
+    {
+        $news = $this->findNews($request);
+
+        return response()->json([
+            'id' => $news->id,
+            'category' => $news->category,
+            'title' => $news->title,
+            'content' => $news->content ?? '',
+        ]);
+    }
+
+    public function add(Request $request)
+    {
+        $data = $this->validated($request);
+        $data['domain'] = getDomain();
+        News::create($data);
+
+        return response()->json(['success' => adminMessage('add')]);
+    }
+
+    public function updateFromRequest(Request $request)
+    {
+        $this->findNews($request)->update($this->validated($request));
+
+        return response()->json(['success' => adminMessage('update')]);
+    }
+
+    public function deleteNews(Request $request)
+    {
+        $this->findNews($request)->delete();
+
+        return response()->json(['success' => adminMessage('delete')]);
+    }
+
+    private function findNews(Request $request): News
+    {
+        return News::where('domain', getDomain())->findOrFail((int) $request->input('id'));
+    }
+
+    private function validated(Request $request): array
+    {
+        return $request->validate([
+            'category' => ['required', 'in:Notification,New service,Change service'],
+            'title' => ['required', 'string', 'max:500'],
+            'content' => ['nullable', 'string'],
+        ]);
+    }
 }
+

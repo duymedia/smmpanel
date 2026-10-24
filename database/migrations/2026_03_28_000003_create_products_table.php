@@ -20,23 +20,23 @@ return new class extends Migration
             // Category & Group
             $table->foreignId('product_category_id')->nullable()->constrained('product_categories')->nullOnDelete();
             $table->foreignId('product_group_id')->nullable()->constrained('product_groups')->nullOnDelete();
-            $table->string('group_tag')->nullable(); // Tên nhãn trong nhóm
+            $table->string('group_tag')->nullable(); // TÃƒÆ’Ã‚Âªn nhÃƒÆ’Ã‚Â£n trong nhÃƒÆ’Ã‚Â³m
 
             // Connection type: Manual | Api
             $table->enum('type', ['Manual', 'Api'])->default('Manual');
 
             // API fields (khi type = Api)
             $table->unsignedBigInteger('api_provider_id')->nullable();
-            $table->string('api_service_id')->nullable(); // ID dịch vụ bên provider
+            $table->string('api_service_id')->nullable(); // ID dÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch vÃƒÂ¡Ã‚Â»Ã‚Â¥ bÃƒÆ’Ã‚Âªn provider
 
             // Processing type (khi type = Manual)
             $table->string('process_type')->nullable(); // e.g. key, account, file...
 
             // Pricing
-            $table->decimal('cost_price', 20, 10)->default(0);   // Giá vốn
-            $table->decimal('price', 20, 10)->default(0);         // Giá bán lẻ
-            $table->decimal('price_1', 20, 10)->default(0);       // Giá đại lý
-            $table->decimal('price_2', 20, 10)->default(0);       // Giá nhà phân phối
+            $table->decimal('cost_price', 20, 10)->default(0);   // GiÃƒÆ’Ã‚Â¡ vÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœn
+            $table->decimal('price', 20, 10)->default(0);         // GiÃƒÆ’Ã‚Â¡ bÃƒÆ’Ã‚Â¡n lÃƒÂ¡Ã‚ÂºÃ‚Â»
+            $table->decimal('price_1', 20, 10)->default(0);       // GiÃƒÆ’Ã‚Â¡ Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â¡i lÃƒÆ’Ã‚Â½
+            $table->decimal('price_2', 20, 10)->default(0);       // GiÃƒÆ’Ã‚Â¡ nhÃƒÆ’Ã‚Â  phÃƒÆ’Ã‚Â¢n phÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi
 
             // Price percent helpers
             $table->decimal('price_percent', 8, 2)->default(110);

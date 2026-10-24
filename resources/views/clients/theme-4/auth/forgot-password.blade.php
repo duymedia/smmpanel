@@ -1,150 +1,177 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html id="theme_{{ $config->interface_default ?? 'default' }}" lang="{{ str_replace('_', '-', app()->getLocale()) }}"
+    style="height: 100%;">
+
 <head>
     <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Forgot Password - {{ config('app.name') }}</title>
-    <link rel="shortcut icon" href="/assets/media/favicon.ico">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700">
-    <link href="https://cdn.whoispanel.com/1/plugins/global/plugins.bundle.css" rel="stylesheet">
-    <link href="https://cdn.whoispanel.com/1/css/style.bundle.css" rel="stylesheet">
-     <style>
-        .form-control:focus,
-        .input-group-text:focus {
-            box-shadow: none;
+    <title>Quên mật khẩu - {{ $config->title ?? 'Panel' }}</title>
+    <meta name="format-detection" content="telephone=no">
+
+    <link rel="shortcut icon" type="image/ico" href="https://storage.perfectcdn.com/ptbsev/el8cc6e7wkjx3kxy.ico">
+    <link rel="stylesheet" type="text/css" href="https://storage.perfectcdn.com/global/b4rxa0pklsh0lw5q.css">
+    <link rel="stylesheet" type="text/css" href="https://storage.perfectcdn.com/ptbsev/iuos9mpiak6cw8rt.css">
+
+    <style>
+        body {
+            transition: opacity ease-in 0.2s;
         }
 
-        .fullscreen-loader-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.42);
-            backdrop-filter: blur(3px);
-            z-index: 9998;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        .fullscreen-loader {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 9999;
-            animation: slideUp 0.5s ease-out;
-        }
-
-        .fullscreen-loader-overlay.d-none,
-        .fullscreen-loader.d-none {
-            display: none !important;
-        }
-
-        .fullscreen-loader-overlay.fade-out,
-        .fullscreen-loader.fade-out {
-            animation: fadeOut 0.3s ease-in-out forwards;
+        body[unresolved] {
+            opacity: 0;
+            display: block;
+            overflow: hidden;
+            position: relative;
         }
     </style>
 </head>
-<body id="kt_body" class="app-blank" data-theme="light">
-<div class="d-flex flex-column flex-root" id="kt_app_root">
-    <div class="d-flex flex-column flex-lg-row flex-column-fluid">
 
-        <div class="d-flex flex-column flex-lg-row-fluid w-lg-50 order-2 order-lg-1">
-            <div class="d-flex flex-center flex-column flex-lg-row-fluid">
-                <div class="w-lg-500px p-10">
+<body class="body body-public" style="position: relative; min-height: 100%; top: 0px;">
+    <div class="wrapper wrapper-navbar">
 
-                    {{-- Flash messages via Modal --}}
-                    @if(session('error'))
-                    <div class="modal fade" id="modal-auth-alert" tabindex="-1" data-bs-backdrop="static">
-                        <div class="modal-dialog modal-dialog-centered rounded-4">
-                            <div class="modal-content">
-                                <div class="modal-header bg-danger text-white py-4">
-                                    <h4 class="modal-title text-white ls-1">Alert</h4>
-                                </div>
-                                <div class="modal-body py-10 fs-4" style="word-break: break-word;">{{ session('error') }}</div>
-                                <div class="modal-footer text-center py-4">
-                                    <button type="button" class="btn btn-sm btn-danger px-4 rounded-4" data-bs-dismiss="modal">OK</button>
-                                </div>
+        {{-- Navbar --}}
+        <div id="block_56">
+            <div class="block-wrapper">
+                <div class="component_navbar">
+                    <div class="component-navbar__wrapper">
+                        <div
+                            class="sidebar-block__top component-navbar component-navbar__navbar-public editor__component-wrapper">
+                            <div>
+                                <nav class="navbar navbar-expand-lg navbar-light container-lg">
+                                    <div class="navbar-public__header">
+                                        <div class="sidebar-block__top-brand">
+                                            <a href="{{ route('login') }}">
+                                                @if ($config?->logo)
+                                                    <img src="{{ $config->logo }}" alt="{{ $config->title ?? 'Logo' }}"
+                                                        style="max-height: 40px; width: auto;">
+                                                @else
+                                                    <p><span
+                                                            style="text-transform:uppercase;letter-spacing:1.7px;font-size:24px">
+                                                            <strong>{{ $config->title ?? 'LOGO' }}</strong>
+                                                        </span></p>
+                                                @endif
+                                            </a>
+                                        </div>
+                                        <button class="navbar-toggler" type="button" data-toggle="collapse"
+                                            data-target="#navbar-collapse-fp" aria-controls="navbar-collapse-fp"
+                                            aria-expanded="false" aria-label="Toggle navigation">
+                                            <span class="navbar-burger"><span class="navbar-burger-line"></span></span>
+                                        </button>
+                                    </div>
+                                    <div class="navbar-collapse collapse" id="navbar-collapse-56" style="">
+                                        <div class="component-navbar-collapse-divider"></div>
+                                        <div class="d-flex component-navbar-collapse">
+                                            <ul class="navbar-nav">
+                                                <li
+                                                    class="nav-item component-navbar-nav-item component_navbar component-navbar-public-nav-item">
+                                                    <a class="component-navbar-nav-link component-navbar-nav-link__navbar-public "
+                                                        href="/"><i class="navbar-icon fas fa-sign-in-alt"></i>
+                                                        Sign in</a>
+                                                </li>
+                                                <li
+                                                    class="nav-item component-navbar-nav-item component_navbar component-navbar-public-nav-item">
+                                                    <a class="component-navbar-nav-link component-navbar-nav-link__navbar-public "
+                                                        href="/services"><i class="navbar-icon fas fa-store-alt"></i>
+                                                        Services</a>
+                                                </li>
+                                                <li
+                                                    class="nav-item component-navbar-nav-item component_navbar component-navbar-public-nav-item">
+                                                    <a class="component-navbar-nav-link component-navbar-nav-link__navbar-public "
+                                                        href="/api"><i class="navbar-icon fas fa-code"></i> API</a>
+                                                </li>
+                                                <li
+                                                    class="nav-item component-navbar-nav-item component_navbar component-navbar-public-nav-item">
+                                                    <a class="component-navbar-nav-link component-navbar-nav-link__navbar-public "
+                                                        href="/signup"><i class="navbar-icon fas fa-user-plus"></i> Sign
+                                                        up</a>
+                                                </li>
+                                                <li
+                                                    class="nav-item component-navbar-nav-item component_navbar component-navbar-public-nav-item">
+                                                    <a class="component-navbar-nav-link component-navbar-nav-link__navbar-public "
+                                                        href="/blog"><i class="navbar-icon fab fa-blogger-b"></i>
+                                                        Blog</a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </nav>
                             </div>
                         </div>
                     </div>
-                    @endif
-                    @if(session('status'))
-                    <div class="modal fade" id="modal-auth-alert" tabindex="-1" data-bs-backdrop="static">
-                        <div class="modal-dialog modal-dialog-centered rounded-4">
-                            <div class="modal-content">
-                                <div class="modal-header bg-success text-white py-4">
-                                    <h4 class="modal-title text-white ls-1">Success</h4>
-                                </div>
-                                <div class="modal-body py-10 fs-4" style="word-break: break-word;">{{ session('status') }}</div>
-                                <div class="modal-footer text-center py-4">
-                                    <button type="button" class="btn btn-sm btn-success px-4 rounded-4" data-bs-dismiss="modal">OK</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    @endif
-
-                    <form method="POST" action="{{ route('password.email') }}" class="form w-100">
-                        @csrf
-
-                        <div class="text-center mb-11">
-                            <h1 class="text-dark fw-bolder mb-3">Forgot Password?</h1>
-                            <div class="text-gray-500 fw-semibold fs-6">Enter your email to reset your password.</div>
-                        </div>
-
-                        <div class="fv-row mb-8">
-                            <input type="email" name="email" value="{{ old('email') }}"
-                                class="form-control form-control-solid @error('email') is-invalid @enderror"
-                                placeholder="Email" autofocus>
-                            @error('email')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        <div class="d-grid mb-10">
-                            <button type="submit" class="btn btn-primary">Send Reset Link</button>
-                        </div>
-
-                        <div class="text-gray-500 text-center fw-semibold fs-6">
-                            <a href="{{ route('login') }}" class="link-primary">Back to Sign In</a>
-                        </div>
-                    </form>
-
                 </div>
             </div>
         </div>
 
-        <div class="d-flex flex-lg-row-fluid w-lg-50 bgi-size-cover bgi-position-center order-1 order-lg-2"
-            style="background-image: url(https://cdn.whoispanel.com/1/media/misc/auth-bg.png)">
-            <div class="d-flex flex-column flex-center py-7 py-lg-15 px-5 px-md-15 w-100">
-                <a href="/" class="mb-0 mb-lg-12">
-                    <img alt="Logo" src="/assets/media/logo_1773336732.jpg" class="h-60px h-lg-75px">
-                </a>
-                <h1 class="d-none d-lg-block text-white fs-2qx fw-bolder text-center mb-7">
-                    World's Best Cheap &amp; Easy SMM Panel
-                </h1>
+        {{-- Content --}}
+        <div class="wrapper-content">
+            <div class="wrapper-content__body">
+                <!-- Main variables *content* -->
+                <div id="block_45">
+                    <div class="block-bg"></div>
+                    <div class="container-fluid">
+                        <div class="reset-password-form">
+                            <div class="row reset-password-form__alignment">
+                                <div class="col-lg-4">
+                                    <div class="component_card">
+                                        <div class="card">
+                                            <form method="post" action="">
+                                                <div class="component_form_group">
+                                                    <div class="">
+                                                        <div class="form-group">
+                                                            <label for="email" class="control-label">Email</label>
+                                                            <input type="email" class="form-control" id="email"
+                                                                name="ResetPasswordForm[email]">
+                                                        </div>
+                                                    </div>
+                                                    <input type="hidden" name="_csrf"
+                                                        value="sD1vFOyIm_iZAx3amuUBXm2cUL7N33FEFRaME77xEyrlSkJhutzckvRsS4Xok0oRA8wdzLe9FTFcWt5V2oRSQw==">
+                                                    <div class="component_button_submit">
+                                                        <div class="">
+                                                            <button type="submit"
+                                                                class="btn btn-block btn-big-primary">Send</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
     </div>
-</div>
-<script src="https://cdn.whoispanel.com/1/plugins/global/plugins.bundle.js"></script>
-<script src="https://cdn.whoispanel.com/1/js/scripts.bundle.js"></script>
-<script src="{{ asset('js/loader.js') }}"></script>
-<script>
-document.querySelector('form').addEventListener('submit', function () {
-    var btn = this.querySelector('button[type="submit"]');
-    if (btn) btn.disabled = true;
-    showFullScreenLoader('Sending reset link...');
-});
-var modalAlert = document.getElementById('modal-auth-alert');
-if (modalAlert) {
-    var bsModal = new bootstrap.Modal(modalAlert);
-    bsModal.show();
-    if (modalAlert.querySelector('.bg-success')) {
-        setTimeout(function() { bsModal.hide(); }, 2000);
-    }
-}
-</script>
+    <div class="wrapper-content__footer">
+        <div id="block_41">
+            <div class="block-bg"></div>
+            <div class="container-fluid">
+                <div class="footer ">
+                    <div class="component-footer__public-copyright text-center position-relative">
+                        <p class="text-center"><span style="text-align: CENTER">© Copyright. All Rights
+                                Reserved.</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    </div>
+    <!-- Notifications wrapper -->
+    <div id="notify-wrapper" class="alert alert-success mb-3 hidden" style="display: none;"></div>
+
+    <script type="text/javascript" src="https://storage.perfectcdn.com/global/wxsqj274j2fljwqh.js"></script>
+    <script type="text/javascript" src="https://storage.perfectcdn.com/global/ueokzc34y7ofrqqg.js"></script>
+    <script type="text/javascript" src="https://storage.perfectcdn.com/global/nfjxywl5k0s161d5.js"></script>
+    <script type="text/javascript" src="https://storage.perfectcdn.com/global/3u30z1np32rdiw54.js"></script>
+    <script type="text/javascript">
+        window.modules.user_app_show_config = [];
+    </script>
+    <script type="text/javascript"></script>
 </body>
+
 </html>

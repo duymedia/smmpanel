@@ -1,121 +1,163 @@
 @extends('clients.theme-4.layouts.app')
-@section('title', 'Child Panel')
+
+@section('title', __('childPanel.title'))
 
 @section('content')
-    <div class="content flex-column-fluid" id="kt_content">
-        @include('clients.theme-4.layouts.toolbar', ['title' => 'Child Panel', 'langKey' => 'childPanel.title'])
-        <div class="post" id="kt_post">
-            <div class="alert alert-primary">
-                <p class="m-0" data-lang="childPanel.dns_notice">If you have a domain, change the nameservers and point it to:</p>
-                <p class="m-0 fw-bolder">{{ $config->namesv1 ?? '' }}</p>
-                <p class="m-0 fw-bolder">{{ $config->namesv2 ?? '' }}</p>
-            </div>
-            <div class="alert alert-danger" data-lang="childPanel.login_notice">Use your current account on this website to log in to your panel admin.</div>
+    <div id="block_55">
+        <div class="block-bg"></div>
+        <div class="container">
+            <div class="order-child-form">
+                <div class="row">
+                    <div class="col-lg-12">
+                        <!-- Alert -->
+                        <div id="alert-container"></div>
 
-            <div class="card mb-5">
-                <div class="card-body">
-                    <label class="form-label" data-lang="childPanel.domain">Domain</label>
-                    <div class="input-group input-group-solid">
-                        <span class="input-group-text fw-bold">{{ $costFormatted }}</span>
-                        <input type="text" id="ipt-domain" class="form-control" placeholder="example.com">
-                        <button type="button" id="btn-create" class="btn btn-primary" data-lang="childPanel.create_btn"
-                            onclick="_childpanel.on.click.create()">Create child panel</button>
-                    </div>
-                </div>
-            </div>
+                        <div class="component_card"></div>
+                            <div class="card">
+                                <form id="child-panel-form" method="post" class="component_form_group">
+                                    @csrf
+                                    <div class="form-group">
+                                        <label for="domain" class="control-label">{{ __('childPanel.domain') }}</label>
+                                        <input type="text" class="form-control" id="domain" name="domain" required>
+                                    </div>
 
-            {{-- Feature cards --}}
-            <div class="row g-5">
-                @foreach ([
-                    ['icon'=>'la-shopping-cart', 'title'=>'childPanel.unlimited_orders',   'desc'=>'childPanel.unlimited_orders_desc'],
-                    ['icon'=>'la-universal-access','title'=>'childPanel.white_label',       'desc'=>'childPanel.white_label_desc'],
-                    ['icon'=>'la-credit-card',    'title'=>'childPanel.unlimited_payments', 'desc'=>'childPanel.unlimited_payments_desc'],
-                    ['icon'=>'la-rocket',         'title'=>'childPanel.auto_processing',    'desc'=>'childPanel.auto_processing_desc'],
-                ] as $f)
-                <div class="col-sm-6 col-xl-3 mb-xl-10">
-                    <div class="card h-lg-100">
-                        <div class="card-body d-flex justify-content-between align-items-center flex-column p-5">
-                            <div class="m-0 text-center"><i class="las {{ $f['icon'] }} fs-3hx text-gray-600"></i></div>
-                            <div class="d-flex flex-column my-5 text-center">
-                                <span class="fw-semibold fs-2 text-gray-800 ls-1" data-lang="{{ $f['title'] }}"></span>
-                                <span class="fw-semibold fs-7 text-gray-500" data-lang="{{ $f['desc'] }}"></span>
+                                    <div class="component_alert_dns">
+                                        <div class="alert alert-info">
+                                            <div>{{ __('childPanel.dns_notice') }}</div>
+                                            <ul style="padding-left: 20px">
+                                                <li>{{ $config->namesv1 ?? 'ns1.example.com' }}</li>
+                                                <li>{{ $config->namesv2 ?? 'ns2.example.com' }}</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="control-label" for="currency">{{ __('childPanel.currency') }}</label>
+                                        <select id="currency" class="form-control" name="currency" required
+                                            data-select="true"
+                                            data-select-search="true"
+                                            data-select-search-placeholder="{{ __('newOrder.search') }}"
+                                            data-select-container="#select-currency-container">
+                                            @if(isset($currencies) && $currencies->count())
+                                                @foreach($currencies as $cur)
+                                                    <option value="{{ $cur->code }}">{{ $cur->name }} ({{ $cur->code }})</option>
+                                                @endforeach
+                                            @else
+                                                <option value="USD">United States Dollars (USD)</option>
+                                                <option value="EUR">Euro (EUR)</option>
+                                                <option value="VND">Vietnamese đồng (VND)</option>
+                                                <option value="RUB">Russian Rubles (RUB)</option>
+                                                <option value="THB">Thai Baht (THB)</option>
+                                                <option value="IDR">Indonesian Rupiah (IDR)</option>
+                                                <option value="CNY">Chinese Yuan (CNY)</option>
+                                                <option value="INR">Indian Rupee (INR)</option>
+                                            @endif
+                                        </select>
+                                        <div id="select-currency-container" class="position-relative"></div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="control-label" for="username">{{ __('childPanel.admin_username') }}</label>
+                                        <input type="text" id="username" class="form-control" name="username" required>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="control-label" for="password">{{ __('childPanel.admin_password') }}</label>
+                                        <input type="password" id="password" class="form-control" name="password" required>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="control-label" for="password_confirmation">{{ __('childPanel.confirm_password') }}</label>
+                                        <input type="password" id="password_confirmation" class="form-control" name="password_confirmation" required>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="price" class="control-label">{{ __('childPanel.price_per_month') }}</label>
+                                        <input type="text" class="form-control" id="price" value="{{ $costFormatted }}" readonly>
+                                    </div>
+
+                                    <div class="component_button_submit">
+                                        <button class="btn btn-block btn-big-primary" type="submit" id="submit-btn">
+                                            {{ __('childPanel.submit_order') }}
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                     </div>
                 </div>
-                @endforeach
             </div>
-
-            {{-- Steps --}}
-            <div class="row g-5">
-                @foreach ([
-                    [1, 'childPanel.step_buy_domain',  'childPanel.step_buy_domain_desc'],
-                    [2, 'childPanel.step_nameservers', 'childPanel.step_nameservers_desc'],
-                    [3, 'childPanel.step_order',       'childPanel.step_order_desc'],
-                    [4, 'childPanel.step_import',      'childPanel.step_import_desc'],
-                    [5, 'childPanel.step_payments',    'childPanel.step_payments_desc'],
-                    [6, 'childPanel.step_money',       'childPanel.step_money_desc'],
-                ] as [$n, $title, $desc])
-                <div class="col-sm-6 col-xl-2 mb-xl-10">
-                    <div class="card border border-primary h-lg-100">
-                        <div class="card-body d-flex justify-content-between align-items-start flex-column py-1">
-                            <div class="d-flex flex-column my-7">
-                                <span class="fw-semibold fs-3x text-primary lh-1 ls-n2">{{ $n }}{{ $n < 6 ? ' →' : '' }}</span>
-                                <span class="fw-semibold fs-6 text-gray-600" data-lang="{{ $title }}"></span>
-                                <span class="fw-semibold fs-7 text-gray-500" data-lang="{{ $desc }}"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @endforeach
-            </div>
-
-            {{-- FAQ --}}
-            <div class="row g-5">
-                @php
-                $faqs = [
-                    ['childPanel.faq_smm',       'childPanel.faq_smm_ans',       'kt_acc_1'],
-                    ['childPanel.faq_child',      'childPanel.faq_child_ans',     'kt_acc_2'],
-                    ['childPanel.faq_providers',  'childPanel.faq_providers_ans', 'kt_acc_3'],
-                    ['childPanel.faq_services',   'childPanel.faq_services_ans',  'kt_acc_4'],
-                    ['childPanel.faq_manage',     'childPanel.faq_manage_ans',    'kt_acc_5'],
-                    ['childPanel.faq_customers',  'childPanel.faq_customers_ans', 'kt_acc_6'],
-                ];
-                @endphp
-                <div class="col-lg-6">
-                    <div class="accordion">
-                        @foreach (array_slice($faqs, 0, 3) as [$q, $a, $id])
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button fs-4 fw-semibold collapsed" type="button"
-                                    data-bs-toggle="collapse" data-bs-target="#{{ $id }}"
-                                    data-lang="{{ $q }}"></button>
-                            </h2>
-                            <div id="{{ $id }}" class="accordion-collapse collapse">
-                                <div class="accordion-body" data-lang="{{ $a }}"></div>
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="accordion">
-                        @foreach (array_slice($faqs, 3) as [$q, $a, $id])
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button fs-4 fw-semibold collapsed" type="button"
-                                    data-bs-toggle="collapse" data-bs-target="#{{ $id }}"
-                                    data-lang="{{ $q }}"></button>
-                            </h2>
-                            <div id="{{ $id }}" class="accordion-collapse collapse">
-                                <div class="accordion-body" data-lang="{{ $a }}"></div>
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-
         </div>
     </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('child-panel-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const alertContainer = document.getElementById('alert-container');
+    const originalBtnText = submitBtn.textContent;
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating...';
+        alertContainer.innerHTML = '';
+
+        fetch('{{ route("clients.childpanel.store") }}', {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+                'Accept': 'application/json'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            const alertType = data.success ? 'success' : 'danger';
+
+            alertContainer.innerHTML = `
+                <div class="">
+                    <div class="alert alert-dismissible alert-${alertType} mb-3">
+                        <button type="button" class="close" data-dismiss="alert">×</button>
+                        ${data.message}
+                    </div>
+                </div>
+            `;
+
+            alertContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            if (data.success) {
+                form.reset();
+                setTimeout(() => window.location.reload(), 3000);
+            }
+
+            setTimeout(() => {
+                const alert = alertContainer.querySelector('.alert');
+                if (alert && !data.success) {
+                    alert.style.transition = 'opacity 0.3s';
+                    alert.style.opacity = '0';
+                    setTimeout(() => alert.remove(), 300);
+                }
+            }, 10000);
+        })
+        .catch(() => {
+            alertContainer.innerHTML = `
+                <div class="">
+                    <div class="alert alert-dismissible alert-danger mb-3">
+                        <button type="button" class="close" data-dismiss="alert">×</button>
+                        Network error. Please try again.
+                    </div>
+                </div>
+            `;
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+        });
+    });
+});
+</script>
+@endpush

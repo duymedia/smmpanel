@@ -10,26 +10,24 @@ class ConfigController extends Controller
 {
     public function index(Request $request)
     {
-        $config = Config::where('domain', $request->getHost())->first() ?? Config::create(['domain' => $request->getHost()]);
+        $config = $this->configFor($request);
         return response()->json(['success' => true, 'data' => $config]);
     }
 
     public function store(Request $request)
     {
-        // Config is singleton per domain, so we update existing or create new
-        $config = Config::where('domain', $request->getHost())->first() ?? Config::create(['domain' => $request->getHost()]);
         return $this->update($request);
     }
 
     public function show(Request $request, $id)
     {
-        $config = Config::where('domain', $request->getHost())->first() ?? Config::create(['domain' => $request->getHost()]);
+        $config = $this->configFor($request);
         return response()->json(['success' => true, 'data' => $config]);
     }
 
     public function update(Request $request)
     {
-        $config = Config::where('domain', $request->getHost())->first() ?? Config::create(['domain' => $request->getHost()]);
+        $config = $this->configFor($request);
 
         $config->update($request->validate([
             'title' => 'nullable|string|max:255',
@@ -97,6 +95,11 @@ class ConfigController extends Controller
         }
 
         return response()->json(['success' => true, 'message' => 'Config reset successfully']);
+    }
+
+    private function configFor(Request $request): Config
+    {
+        return Config::firstOrCreate(['domain' => $request->getHost()]);
     }
 
 

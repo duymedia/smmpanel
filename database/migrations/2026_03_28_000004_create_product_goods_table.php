@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Kho sản phẩm (warehouse) - danh sách kho
+        // Kho sÃƒÂ¡Ã‚ÂºÃ‚Â£n phÃƒÂ¡Ã‚ÂºÃ‚Â©m (warehouse) - danh sÃƒÆ’Ã‚Â¡ch kho
         Schema::create('product_warehouses', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -19,11 +19,11 @@ return new class extends Migration
             $table->index('domain');
         });
 
-        // Hàng tồn kho - từng item trong kho
+        // HÃƒÆ’Ã‚Â ng tÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“n kho - tÃƒÂ¡Ã‚Â»Ã‚Â«ng item trong kho
         Schema::create('product_goods', function (Blueprint $table) {
             $table->id();
             $table->foreignId('warehouse_id')->constrained('product_warehouses')->onDelete('cascade');
-            $table->text('content'); // Nội dung sản phẩm (key, account, link...)
+            $table->text('content'); // NÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i dung sÃƒÂ¡Ã‚ÂºÃ‚Â£n phÃƒÂ¡Ã‚ÂºÃ‚Â©m (key, account, link...)
             $table->boolean('used')->default(false);
             $table->timestamps();
 

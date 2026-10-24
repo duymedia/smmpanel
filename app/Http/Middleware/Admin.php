@@ -2,24 +2,23 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class Admin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (!Auth::check()) {
+        if (! $user = $request->user()) {
             return redirect()->route('login');
         }
 
-        $user = Auth::user();
-        $site = $request->attributes->get('site_config');
+        abort_unless((int) $user->role === User::ROLE_ADMIN, 403);
 
-        if ($user->role !== 'admin' || ($site && (int) $site->user_id !== $user->id)) {
-            abort(403);
+        if (isChildPanel() && ! panelCanAccess($request->path())) {
+            abort(403, 'This page is not available for the child panel.');
         }
 
         return $next($request);

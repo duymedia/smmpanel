@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Category extends Model
 {
-    protected $fillable = ['platform_id', 'name', 'image', 'position', 'status', 'domain'];
+    protected $fillable = ['platform_id', 'name', 'image', 'display', 'position', 'status', 'domain'];
 
     protected $casts = [
         'name' => 'json',
+        'display' => 'integer',
         'status' => 'boolean',
         'position' => 'integer'
     ];

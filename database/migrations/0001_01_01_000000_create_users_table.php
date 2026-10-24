@@ -21,32 +21,32 @@ return new class extends Migration
             $table->string('password');
             $table->decimal('balance', 15, 8)->default(4);
             $table->decimal('spent', 15, 8)->default(4);
+            $table->unsignedInteger('percent_bonus')->default(0);
             $table->string('api_key')->unique()->nullable();
             $table->boolean('is_active')->default(true);
             $table->integer('timezone')->default(14400);
             $table->string('lang')->default('en');
             $table->string('currency')->default('USD');
-            
-            // User level and role
-            $table->enum('level', ['retail', 'agent', 'distributor'])->default('retail');
-            $table->enum('role', ['member', 'admin'])->default('member');
-            
+
+            // 0: retail, 1: admin, 4: agent, 5: distributor, 6: staff
+            $table->unsignedTinyInteger('role')->default(0)->index();
+
             // Transfer code for money transfers
             $table->string('transfer_code')->unique()->nullable();
-            
+
             // Referral code
             $table->string('referral_code')->unique()->nullable();
-            
+
             // 2FA Authentication
             $table->boolean('two_factor_enabled')->default(false);
             $table->string('two_factor_secret')->nullable();
             $table->text('two_factor_recovery_codes')->nullable();
             $table->timestamp('two_factor_confirmed_at')->nullable();
-            
+
             $table->rememberToken();
             $table->timestamps();
             $table->string('domain')->nullable();
-            
+
             // Indexes for performance
             $table->index('email');
             $table->index('username');

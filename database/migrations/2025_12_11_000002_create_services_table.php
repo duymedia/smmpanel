@@ -40,10 +40,20 @@ return new class extends Migration
             $table->boolean('sync_min_max')->default(false);
             $table->boolean('sync_refill')->default(false);
             $table->boolean('sync_cancel')->default(false);
-            $table->boolean('sync_status')->default(false);
+            $table->boolean('sync_status')->default(true);
             
             $table->integer('min')->default(1);
             $table->integer('max')->default(10000);
+            $table->integer('overflow')->default(0);
+            $table->boolean('quantity_discount')->default(false);
+            $table->json('quantity_discount_data')->nullable();
+            $table->boolean('advanced_settings')->default(false);
+            $table->json('advanced_settings_data')->nullable();
+            $table->boolean('check_count')->default(false);
+            $table->json('check_count_data')->nullable();
+            $table->boolean('hidden_api')->default(false);
+            $table->boolean('change_provider')->default(false);
+            $table->json('summaries')->nullable();
             $table->string('service_api')->nullable();
             $table->string('provider_name')->nullable();
             $table->unsignedBigInteger('provider_id')->nullable();

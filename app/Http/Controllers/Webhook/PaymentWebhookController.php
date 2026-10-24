@@ -6,18 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\{Payment, User, Currency, PaymentMethod};
 use Illuminate\Http\{Request, JsonResponse};
 use Illuminate\Support\Facades\{DB, Log};
+use Illuminate\Support\Str;
 
 class PaymentWebhookController extends Controller
 {
     public function handlePayment(Request $request): JsonResponse
     {
         try {
-            // Get PaymentMethod from query parameter (type = payment_method_id)
-            $paymentMethodId = $request->query('type');
-            $paymentMethod = PaymentMethod::find($paymentMethodId);
+            $paymentMethod = PaymentMethod::find($request->query('type'));
 
             if (!$paymentMethod) {
-                Log::warning('Webhook: Payment method not found', ['method_id' => $paymentMethodId]);
                 return response()->json(['status' => false, 'msg' => 'Payment method not found'], 404);
             }
 
@@ -25,212 +23,133 @@ class PaymentWebhookController extends Controller
                 return response()->json(['status' => true, 'msg' => 'OK']);
             }
 
-            Log::info('Webhook received', ['url' => $request->fullUrl(), 'body' => $request->all()]);
+            Log::info('Webhook received', ['body' => $request->all()]);
 
-            return response()->json($this->processTransactions($paymentMethod, $request));
+            // Lấy transactions (hỗ trợ nhiều key + single transaction)
+            $transactions = $request->input('transactions') ?? $request->input('data') ?? [];
+            if (isset($transactions['transactionID']) || isset($transactions['transaction_id'])) {
+                $transactions = [$transactions];
+            }
+
+            if (empty($transactions)) {
+                return response()->json(['status' => false, 'msg' => 'No transactions']);
+            }
+
+            $processed = 0;
+
+            foreach ($transactions as $raw) {
+                // Normalize fields từ nhiều format bank
+                $txnId       = (string) ($raw['transactionID'] ?? $raw['transaction_id'] ?? $raw['id'] ?? '');
+                $amount      = (float)  ($raw['amount'] ?? $raw['money'] ?? $raw['value'] ?? 0);
+                $description = trim((string) ($raw['description'] ?? $raw['desc'] ?? $raw['content'] ?? $raw['memo'] ?? ''));
+                $type        = strtoupper($raw['type'] ?? $raw['transferType'] ?? '');
+
+                // Normalize type
+                if (in_array($type, ['CREDIT', 'CR', '+'])) $type = 'IN';
+                if (in_array($type, ['DEBIT', 'DR', '-'])) $type = 'OUT';
+
+                // Chỉ xử lý tiền VÀO + có đủ data
+                if ($type !== 'IN' || !$txnId || !$amount || !$description) continue;
+
+                // Tìm user từ description
+                $user = $this->findUser($description);
+                if (!$user) {
+                    Log::warning('Webhook: User not found', ['desc' => $description]);
+                    continue;
+                }
+
+                // Check trùng
+                if (Payment::where('transaction_id', $txnId)->where('user_id', $user->id)->exists()) continue;
+
+                // Xử lý nạp tiền
+                DB::transaction(function () use ($user, $paymentMethod, $amount, $txnId, $description) {
+                    $vndRate = Currency::where('code', 'VND')->where('status', 1)->value('exchange_rate') ?? 26000;
+                    $amountUSD = $amount / $vndRate;
+
+                    // Bonus
+                    $bonus = $this->getBonus($amount, $paymentMethod);
+                    $bonusUSD = $bonus['amount'] / $vndRate;
+
+                    // Cộng balance + đổi transfer_code
+                    $user->balance += $amountUSD + $bonusUSD;
+                    $user->transfer_code = Str::random(8);
+                    $user->save();
+
+                    // Tạo record
+                    Payment::create([
+                        'user_id' => $user->id,
+                        'payment_method_id' => $paymentMethod->id,
+                        'transaction_id' => $txnId,
+                        'amount' => $amount,
+                        'bonus_amount' => $bonus['amount'],
+                        'total_amount' => $amount + $bonus['amount'],
+                        'currency' => 'VND',
+                        'exchange_rate' => $vndRate,
+                        'status' => 'completed',
+                        'note' => $description,
+                        'payment_info' => ['bonus_percent' => $bonus['percent'], 'webhook' => true],
+                        'domain' => getDomain()
+                    ]);
+
+                    // Affiliate
+                    if (class_exists('App\Services\AffiliateService')) {
+                        \App\Services\AffiliateService::handleDeposit($user->id, $amountUSD, $txnId);
+                    }
+
+                    Log::info('Webhook: Deposit OK', ['user' => $user->id, 'txn' => $txnId, 'vnd' => $amount]);
+                });
+
+                $processed++;
+            }
+
+            return response()->json(['status' => true, 'msg' => 'OK', 'processed' => $processed]);
         } catch (\Exception $e) {
-            Log::error('Webhook error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            Log::error('Webhook error', ['error' => $e->getMessage()]);
             return response()->json(['status' => false, 'msg' => 'Internal server error'], 500);
         }
     }
 
-    private function processTransactions(PaymentMethod $paymentMethod, Request $request): array
+    /**
+     * Tìm user bằng transfer_code trong description
+     */
+    private function findUser(string $description): ?User
     {
-        $transactions = $request->input('transactions', []);
-
-        if (!is_array($transactions) || empty($transactions)) {
-            Log::warning('Webhook: Invalid data format - empty transactions');
-            return ['status' => false, 'msg' => 'Invalid data format'];
+        foreach (preg_split('/[\s\-\/]+/', $description) as $word) {
+            if (strlen($word) < 4) continue;
+            $user = User::where('transfer_code', $word)->first();
+            if ($user) return $user;
         }
-
-        $processed = 0;
-        $failed = 0;
-
-        DB::transaction(function () use ($paymentMethod, $transactions, &$processed, &$failed) {
-            foreach ($transactions as $txn) {
-                try {
-                    if ($this->handleTransaction($paymentMethod, $txn)) {
-                        $processed++;
-                    } else {
-                        $failed++;
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Transaction processing error', [
-                        'transaction_id' => $txn['transactionID'] ?? 'unknown',
-                        'error' => $e->getMessage()
-                    ]);
-                    $failed++;
-                }
-            }
-        });
-
-        // Log summary
-        Log::info('Webhook: Batch processing completed', [
-            'processed' => $processed,
-            'failed' => $failed,
-            'total' => count($transactions)
-        ]);
-
-        // Return simple response format matching bank's format
-        return [
-            'status' => true,
-            'msg' => 'OK'
-        ];
-    }
-
-    private function handleTransaction(PaymentMethod $paymentMethod, array $data): bool
-    {
-        // Validate required fields
-        if (!isset($data['type'], $data['transactionID'], $data['amount'], $data['description'])) {
-            Log::warning('Webhook: Missing required fields', ['data' => $data]);
-            return false;
-        }
-
-        // Only process incoming transactions
-        if ($data['type'] !== 'IN') {
-            return false;
-        }
-
-        // Extract transfer code from description
-        // Format: "NAP14838 GD 941234-010624 16:56:30" or "IB NAP1531"
-        // Transfer code is the first word starting with NAP
-        $transferCode = $this->extractTransferCode($data['description']);
-
-        if (!$transferCode) {
-            Log::warning('Webhook: Could not extract transfer code', ['description' => $data['description']]);
-            return false;
-        }
-
-        // Find user by transfer code
-        $user = User::where('transfer_code', $transferCode)->first();
-
-        if (!$user) {
-            Log::warning('Webhook: User not found', ['transfer_code' => $transferCode]);
-            return false;
-        }
-
-        // Check if transaction already processed
-        if (Payment::where('transaction_id', $data['transactionID'])->where('user_id', $user->id)->exists()) {
-            Log::info('Webhook: Transaction already processed', ['transaction_id' => $data['transactionID']]);
-            return false;
-        }
-
-        // Process the deposit
-        $this->processDeposit($user, $paymentMethod, (float) $data['amount'], $data['transactionID'], $data['description']);
-
-        return true;
-    }
-
-    private function extractTransferCode(string $description): ?string
-    {
-        // Extract transfer code from description
-        // Look for pattern like "NAP14838" or similar
-        $parts = explode(' ', trim($description));
-
-        foreach ($parts as $part) {
-            $part = trim($part);
-            // Transfer code typically starts with NAP or similar prefix
-            if (preg_match('/^NAP\d+$/i', $part)) {
-                return strtoupper($part);
+        // Legacy NAP format
+        foreach (preg_split('/[\s\-\/]+/', $description) as $word) {
+            if (preg_match('/^NAP\d+$/i', $word)) {
+                $user = User::where('transfer_code', strtoupper($word))->first();
+                if ($user) return $user;
             }
         }
-
-        // Fallback: try first word if it looks like a code
-        $firstWord = trim($parts[0] ?? '');
-        if (!empty($firstWord) && strlen($firstWord) >= 3) {
-            return strtoupper($firstWord);
-        }
-
         return null;
     }
 
-    private function processDeposit(User $user, PaymentMethod $paymentMethod, float $amountVND, string $transactionId, string $description): void
+    /**
+     * Tính bonus từ payment method config
+     */
+    private function getBonus(float $amount, PaymentMethod $paymentMethod): array
     {
-        // Get VND exchange rate
-        $vndCurrency = Currency::where('code', 'VND')->where('status', 1)->first();
-        $vndRate = $vndCurrency?->exchange_rate ?? 26000;
+        $config = $paymentMethod->config ? json_decode($paymentMethod->config, true) : null;
+        $json = $config['bonus'] ?? $paymentMethod->bonus ?? null;
+        $tiers = is_string($json) ? json_decode($json, true) : (is_array($json) ? $json : null);
 
-        // Convert VND to base currency (USD)
-        $amountUSD = $amountVND / $vndRate;
+        if (!is_array($tiers)) return ['amount' => 0, 'percent' => 0];
 
-        // Calculate bonus based on payment method's bonus tiers
-        $bonusData = $this->calculateBonus($amountVND, $paymentMethod->bonus);
-        $bonusAmountVND = $bonusData['bonus_amount'];
-        $bonusAmountUSD = $bonusAmountVND / $vndRate;
-
-        // Update user balance
-        $user->balance += $amountUSD + $bonusAmountUSD;
-        $user->save();
-
-        // Create payment record
-        Payment::create([
-            'user_id' => $user->id,
-            'payment_method_id' => $paymentMethod->id,
-            'transaction_id' => $transactionId,
-            'amount' => $amountVND,
-            'bonus_amount' => $bonusAmountVND,
-            'total_amount' => $amountVND + $bonusAmountVND,
-            'currency' => 'VND',
-            'exchange_rate' => $vndRate,
-            'status' => 'completed',
-            'note' => $description,
-            'payment_info' => [
-                'vnd_amount' => $amountVND,
-                'bonus_percent' => $bonusData['bonus_percent'],
-                'webhook' => true,
-                'type' => 'bank_transfer'
-            ],
-            'domain' => getDomain()
-        ]);
-
-        // Handle affiliate commission (only on deposit amount, not bonus)
-        if (class_exists('App\Services\AffiliateService')) {
-            \App\Services\AffiliateService::handleDeposit($user->id, $amountUSD, $transactionId);
+        $percent = 0;
+        foreach ($tiers as $tier) {
+            if (isset($tier['min'], $tier['percent']) && $amount >= $tier['min']) {
+                $percent = $tier['percent'];
+            }
         }
 
-        Log::info('Webhook: Deposit processed successfully', [
-            'user_id' => $user->id,
-            'transaction_id' => $transactionId,
-            'amount_vnd' => $amountVND,
-            'amount_usd' => $amountUSD,
-            'bonus_vnd' => $bonusAmountVND
-        ]);
-    }
-
-    private function calculateBonus(float $amount, ?string $bonusJson): array
-    {
-        $bonusAmount = 0;
-        $bonusPercent = 0;
-
-        if (!$bonusJson) {
-            return ['bonus_amount' => 0, 'bonus_percent' => 0];
-        }
-
-        try {
-            $bonusTiers = json_decode($bonusJson, true);
-            if (!is_array($bonusTiers)) {
-                return ['bonus_amount' => 0, 'bonus_percent' => 0];
-            }
-
-            // Find the highest tier that matches the amount
-            foreach ($bonusTiers as $tier) {
-                if (isset($tier['min'], $tier['percent']) && $amount >= $tier['min']) {
-                    $bonusPercent = $tier['percent'];
-                }
-            }
-
-            // Calculate bonus amount
-            if ($bonusPercent > 0) {
-                $bonusAmount = ($amount * $bonusPercent) / 100;
-            }
-
-            return [
-                'bonus_amount' => $bonusAmount,
-                'bonus_percent' => $bonusPercent,
-            ];
-        } catch (\Exception $e) {
-            Log::error('Bonus calculation error', ['error' => $e->getMessage()]);
-            return ['bonus_amount' => 0, 'bonus_percent' => 0];
-        }
+        return [
+            'amount' => $percent > 0 ? ($amount * $percent / 100) : 0,
+            'percent' => $percent,
+        ];
     }
 }

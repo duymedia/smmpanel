@@ -20,6 +20,7 @@ class Payment extends Model
         'currency',
         'exchange_rate',
         'status',
+        'note',
         'payment_info',
         'domain',
         'binance_order_id',
@@ -32,9 +33,9 @@ class Payment extends Model
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
-        'bonus_amount' => 'decimal:2',
-        'total_amount' => 'decimal:2',
+        'amount' => 'decimal:8',
+        'bonus_amount' => 'decimal:8',
+        'total_amount' => 'decimal:8',
         'exchange_rate' => 'decimal:4',
         'payment_info' => 'array',
         'binance_amount' => 'decimal:8',

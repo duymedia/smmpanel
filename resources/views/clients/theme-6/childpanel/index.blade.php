@@ -38,7 +38,13 @@
                                                 data-select-search-placeholder="{{ __('newOrder.search') }}"
                                                 data-select-container="#select-currency-container">
                                                 @if(isset($currencies) && $currencies->count())
-                                                    @foreach($currencies as $cur)
+                                                    @php
+                                                        // Keep USD as the first choice in the child-panel currency list.
+                                                        $orderedCurrencies = $currencies->sortBy(function ($cur) {
+                                                            return strtoupper((string) $cur->code) === 'USD' ? 0 : 1;
+                                                        });
+                                                    @endphp
+                                                    @foreach($orderedCurrencies as $cur)
                                                         <option value="{{ $cur->code }}">{{ $cur->name }} ({{ $cur->code }})</option>
                                                     @endforeach
                                                 @else

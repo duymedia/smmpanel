@@ -2,16 +2,12 @@
 
 namespace App\Http\Middleware;
 
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Middleware;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 
-/**
- * CSRF Token verification.
- * Loại trừ: webhook routes, API routes có bearer token.
- */
-class VerifyCsrfToken extends Middleware
+class VerifyCsrfToken extends ValidateCsrfToken
 {
     protected $except = [
         'webhook/*',
-        'api/*',
+        'request',
     ];
 }

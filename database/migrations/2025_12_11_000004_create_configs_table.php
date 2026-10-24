@@ -42,9 +42,9 @@ return new class extends Migration {
             $table->string('announcement_position')->default('page'); // modal, page, page_and_modal
             $table->string('announcement_content')->nullable();
             $table->boolean('announcement_status')->default(true);
+            $table->text('announcement_payment')->nullable();
+            $table->boolean('announcement_payment_status')->default(false);
 
-            // Terms Content
-            $table->string('addfund_content')->nullable();
             $table->string('terms_content')->nullable();
 
             // Keep Orders
@@ -58,9 +58,18 @@ return new class extends Migration {
             $table->string('link_telegram')->nullable();
             $table->string('link_whatsapp')->nullable();
 
+            // Support Settings
+            $table->string('phone_admin', 50)->nullable();
+            $table->text('other_contact')->nullable();
+            $table->boolean('direct_message_chatbox')->default(true);
+            $table->json('quick_chat_messages')->nullable();
+
             // Affiliate Settings
             $table->boolean('affiliate_allow_convert')->default(false);
             $table->boolean('affiliate_allow_withdraw')->default(false);
+            $table->boolean('affiliate_auto_convert')->default(false);
+            $table->decimal('affiliate_min_convert', 15, 4)->default(0);
+            $table->decimal('affiliate_min_withdraw', 15, 4)->default(0);
             $table->decimal('affiliate_percent', 5, 2)->default(10);
             $table->decimal('affiliate_min', 15, 4)->default(0);
             $table->decimal('affiliate_max', 15, 4)->default(0);
@@ -97,6 +106,10 @@ return new class extends Migration {
             $table->string('smtp_username')->nullable();
             $table->string('smtp_password')->nullable();
             $table->string('smtp_from_name')->nullable();
+            $table->boolean('smtp_status')->default(false);
+            $table->boolean('smtp_verify_account')->default(false);
+            $table->boolean('smtp_forget_password')->default(false);
+            $table->boolean('smtp_warning_login')->default(false);
 
             // Cloudflare Settings
             $table->string('cloudflare_email')->nullable();
@@ -137,6 +150,8 @@ return new class extends Migration {
             $table->boolean('module_coupon')->default(false);
             $table->boolean('module_crisp_chat')->default(false);
             $table->string('module_crisp_chat_id')->nullable();
+            $table->boolean('google_analytics_status')->default(false);
+            $table->string('google_analytics_id')->nullable();
             $table->boolean('member_level_status')->default(false);
             $table->json('member_levels')->nullable(); // [{"name":"VIP","min_deposit":1000,"bonus_percent":5}, ...]
 
@@ -145,13 +160,13 @@ return new class extends Migration {
             $table->string('domain')->nullable();
 
             // Registration & Login Settings
-            $table->boolean('allow_register')->default(true);
-            $table->boolean('allow_multi_device_login')->default(false);
+            $table->boolean('enable_signup')->default(true);
+            $table->boolean('multiple_login_status')->default(false);
 
             // Google reCAPTCHA
-            $table->string('recaptcha_site_key')->nullable();
-            $table->string('recaptcha_secret_key')->nullable();
-            $table->boolean('recaptcha_status')->default(false);
+            $table->string('gcaptcha_site_key')->nullable();
+            $table->string('gcaptcha_secret_key')->nullable();
+            $table->boolean('gcaptcha_status')->default(false);
 
             // IP Blacklist (blocked IPs, stored as JSON array)
             $table->json('blocked_ips')->nullable();

@@ -18,8 +18,8 @@ return new class extends Migration
             $table->string('type')->default('other');
             $table->string('image')->nullable();
             $table->string('currency', 10)->default('USD');
-            $table->decimal('min', 15, 2)->default(0);
-            $table->decimal('max', 15, 2)->default(0);
+            $table->unsignedInteger('min')->default(0);
+            $table->unsignedInteger('max')->default(0);
             $table->integer('max_transactions')->default(0);
             $table->decimal('max_total_funds', 15, 2)->default(0);
             $table->json('bonus')->nullable();
@@ -29,7 +29,7 @@ return new class extends Migration
             $table->boolean('status')->default(true);
             $table->string('domain')->nullable();
             $table->timestamps();
-            
+
             $table->index('status');
             $table->index(['status', 'position']);
             $table->index('currency');

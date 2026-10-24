@@ -179,6 +179,7 @@
     "orders.all": "All",
     "orders.pending": "Pending",
     "orders.processing": "Processing",
+    "orders.in_progress": "In progress",
     "orders.completed": "Completed",
     "orders.partial": "Partial",
     "orders.canceled": "Canceled",

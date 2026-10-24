@@ -33,12 +33,5 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
-    ],
-
-    'binance' => [
-        'id' => env('BINANCE_ID'),
-        'key' => env('BINANCE_API_KEY'),
-        'secret' => env('BINANCE_API_SECRET'),
-    ],
-
+    ]
 ];

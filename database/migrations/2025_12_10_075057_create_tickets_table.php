@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Tạo bảng ticket_subjects
+        // TÃƒÂ¡Ã‚ÂºÃ‚Â¡o bÃƒÂ¡Ã‚ÂºÃ‚Â£ng ticket_subjects
         Schema::create('ticket_subjects', function (Blueprint $table) {
             $table->id();
             $table->string('category');
@@ -27,7 +27,7 @@ return new class extends Migration
             $table->index('sort_order');
         });
 
-        // Tạo bảng tickets
+        // TÃƒÂ¡Ã‚ÂºÃ‚Â¡o bÃƒÂ¡Ã‚ÂºÃ‚Â£ng tickets
         Schema::create('tickets', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');

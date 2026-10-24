@@ -1,5 +1,12 @@
 <?php
 
+use App\Http\Middleware\Admin;
+use App\Http\Middleware\ApiToken;
+use App\Http\Middleware\Client;
+use App\Http\Middleware\ClientThemePreview;
+use App\Http\Middleware\SetLocale;
+use App\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -8,10 +15,7 @@ use Illuminate\Support\Facades\Route;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: [
-            // Web (client / public)
             __DIR__ . '/../routes/web.php',
-
-            // Admin (đã tự prefix + middleware bên trong)
             __DIR__ . '/../routes/admin.php',
         ],
         api: __DIR__ . '/../routes/api.php',
@@ -19,32 +23,38 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__ . '/../routes/console.php',
         health: '/up',
         then: function () {
-            // Webhook routes without middleware
             Route::middleware([])->group(base_path('routes/webhook.php'));
-            
-            // Cron routes
             Route::prefix('cron')->group(base_path('routes/crons.php'));
         }
     )
     ->withMiddleware(function (Middleware $middleware): void {
 
-        // Alias middleware (clean & explicit)
+        $middleware->redirectGuestsTo(fn () => route('login'));
         $middleware->alias([
-            'auth' => \App\Http\Middleware\VerifyAuth::class,
-            'client' => \App\Http\Middleware\Client::class,
-            'admin'  => \App\Http\Middleware\Admin::class,
-            'locale' => \App\Http\Middleware\SetLocale::class,
+            'admin' => Admin::class,
+            'api.token' => ApiToken::class,
+            'client' => Client::class,
+            'client.theme.preview' => ClientThemePreview::class,
         ]);
 
-        // Add optimization middleware
-        $middleware->append(\App\Http\Middleware\OptimizeResponse::class);
-        
-        // Add locale middleware to web group
-        $middleware->web(append: [
-            \App\Http\Middleware\SetLocale::class,
-        ]);
+        $middleware->web(
+            append: [SetLocale::class],
+            replace: [
+                \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class
+                    => VerifyCsrfToken::class,
+            ],
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+
+        $exceptions->render(function (QueryException $e) {
+            return response('Vui lòng kết nối Database', 500)
+                ->header('Content-Type', 'text/plain; charset=UTF-8');
+        });
+
+        $exceptions->render(function (\PDOException $e) {
+            return response('Vui lòng kết nối Database', 500)
+                ->header('Content-Type', 'text/plain; charset=UTF-8');
+        });
     })
     ->create();

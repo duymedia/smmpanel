@@ -12,15 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 class AffiliateService
 {
-    /**
-     * Xử lý hoa hồng cho referrer khi referred_id được update balance.
-     *
-     * Điều kiện:
-     *  - config.affiliate_status = true
-     *  - Tồn tại bản ghi affiliates có referred_id = depositUserId, status = active
-     *  - commission = depositAmount * affiliate_percent / 100
-     *  - Chỉ thực hiện nếu affiliate_min <= commission <= affiliate_max (khi min/max > 0)
-     */
+ 
     public static function handleDeposit(int $depositUserId, float $depositAmount, string $transactionId): void
     {
         try {

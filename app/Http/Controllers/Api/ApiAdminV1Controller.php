@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -14,38 +15,19 @@ use Exception;
 
 class ApiAdminV1Controller extends Controller
 {
-    private const STATUS_MAP = [
-        'Processing'  => 'processing',
-        'In progress' => 'in_progress',
-        'Completed'   => 'completed',
-        'Canceled'    => 'canceled',
-        'Partial'     => 'partial',
-    ];
-
-    private function domain(): string
+    public function orderQuery(): Builder
     {
-        return getDomain();
+        return Order::with(['user', 'service'])->where('domain', getDomain());
     }
 
-    private function orderQuery(): \Illuminate\Database\Eloquent\Builder
-    {
-        return Order::where('domain', $this->domain());
-    }
-
-    private function validateKey(string $key): bool
-    {
-        return User::where('api_key', $key)
-            ->where('role', 'admin')
-            ->where('domain', $this->domain())
-            ->exists();
-    }
-
-    private function formatOrder(Order $o): array
+    public function formatOrder(Order $o): array
     {
         $data = [
             'id'       => $o->id,
             'link'     => $o->link,
             'quantity' => $o->quantity,
+            'status'   => orderStatusToDisplay($o->status),
+            'rate'     => $o->service ? getUserServiceRate($o->user, $o->service) : 0,
         ];
 
         // Chỉ thêm comment nếu có giá trị
@@ -59,27 +41,36 @@ class ApiAdminV1Controller extends Controller
 
     public function handleAction(Request $request): JsonResponse
     {
-        $key = $request->input('key');
-        if (!$key || !$this->validateKey($key)) {
-            return response()->json(['error' => 'Invalid API key']);
+        $key = $request->input('key', $request->input('api_key'));
+        $user = $key ? User::where([
+            'api_key' => $key,
+            'role' => User::ROLE_ADMIN,
+            'domain' => getDomain(),
+        ])->first() : null;
+        if (!$user) {
+            return response()->json(['error' => 'Incorrect request']);
         }
 
+        $request->merge(['key' => $key, 'api_key' => $key]);
+        $request->attributes->set('api_user', $user);
+        $request->setUserResolver(fn () => $user);
+
         return match ($request->input('action')) {
-            'getOrder'      => $this->getOrder($request),
-            'getOrders'     => $this->getOrders($request),
-            'updateOrders'  => $this->updateOrders($request),
-            'setStatus'     => $this->setStatus($request),
+            'getOrder' => $this->getOrder($request),
+            'getOrders' => $this->getOrders($request),
+            'updateOrders' => $this->updateOrders($request),
+            'setStatus' => $this->setStatus($request),
             'setStartCount' => $this->setStartCount($request),
-            'setRemains'    => $this->setRemains($request),
-            'addFund'       => $this->addFund($request),
-            default         => response()->json(['error' => 'Invalid action']),
+            'setRemains' => $this->setRemains($request),
+            'addFund' => $this->addFund($request),
+            default         => response()->json(['error' => 'Incorrect request']),
         };
     }
 
-    private function getOrder(Request $request): JsonResponse
+    public function getOrder(Request $request): JsonResponse
     {
         try {
-            $query = $this->orderQuery()->where('status', $request->input('status', 'pending'));
+            $query = $this->orderQuery()->where('status', orderStatusToDatabase($request->input('status', 'pending')));
             if ($request->filled('type')) $query->where('service_id', (int) $request->type);
 
             $order = $query->oldest()->first();
@@ -92,10 +83,10 @@ class ApiAdminV1Controller extends Controller
         }
     }
 
-    private function getOrders(Request $request): JsonResponse
+    public function getOrders(Request $request): JsonResponse
     {
         try {
-            $query = $this->orderQuery()->where('status', $request->input('status', 'pending'));
+            $query = $this->orderQuery()->where('status', orderStatusToDatabase($request->input('status', 'pending')));
             if ($request->filled('type')) $query->where('service_id', (int) $request->type);
 
             $orders = $query->oldest()->limit(100)->get()->map(fn($o) => $this->formatOrder($o));
@@ -106,7 +97,7 @@ class ApiAdminV1Controller extends Controller
         }
     }
 
-    private function updateOrders(Request $request): JsonResponse
+    public function updateOrders(Request $request): JsonResponse
     {
         try {
             $items = json_decode($request->input('orders', '[]'), true);
@@ -127,7 +118,7 @@ class ApiAdminV1Controller extends Controller
 
                 $update = [];
                 if (isset($item['status'])) {
-                    $dbStatus         = self::STATUS_MAP[$item['status']] ?? strtolower($item['status']);
+                    $dbStatus         = orderStatusToDatabase($item['status']);
                     $update['status'] = $dbStatus;
                     if ($dbStatus === 'completed') $update['remains'] = 0;
                 }
@@ -135,7 +126,7 @@ class ApiAdminV1Controller extends Controller
                 if (isset($item['remains']))      $update['remains']     = (int) $item['remains'];
 
                 $order->update($update);
-                $results[(string) $id] = ['status' => $item['status'] ?? ucfirst($order->status)];
+                $results[(string) $id] = ['status' => $item['status'] ?? orderStatusToDisplay($order->status)];
             }
 
             return response()->json($results);
@@ -145,7 +136,7 @@ class ApiAdminV1Controller extends Controller
         }
     }
 
-    private function setStatus(Request $request): JsonResponse
+    public function setStatus(Request $request): JsonResponse
     {
         try {
             if (!$request->filled('id') || !$request->filled('status')) {
@@ -155,7 +146,7 @@ class ApiAdminV1Controller extends Controller
             $order = $this->orderQuery()->where('id', $request->id)->first();
             if (!$order) return response()->json(['error' => 'Order not found']);
 
-            $dbStatus = self::STATUS_MAP[$request->status] ?? strtolower($request->status);
+            $dbStatus = orderStatusToDatabase($request->status);
             $update   = ['status' => $dbStatus];
             if ($dbStatus === 'completed') $update['remains'] = 0;
             if ($dbStatus === 'partial' && $request->filled('remains')) $update['remains'] = (int) $request->remains;
@@ -168,7 +159,7 @@ class ApiAdminV1Controller extends Controller
         }
     }
 
-    private function setStartCount(Request $request): JsonResponse
+    public function setStartCount(Request $request): JsonResponse
     {
         try {
             if (!$request->filled('id') || !$request->has('start_count')) {
@@ -186,7 +177,7 @@ class ApiAdminV1Controller extends Controller
         }
     }
 
-    private function setRemains(Request $request): JsonResponse
+    public function setRemains(Request $request): JsonResponse
     {
         try {
             if (!$request->filled('id') || !$request->has('remains')) {
@@ -204,7 +195,7 @@ class ApiAdminV1Controller extends Controller
         }
     }
 
-    private function addFund(Request $request): JsonResponse
+    public function addFund(Request $request): JsonResponse
     {
         try {
             if (!$request->filled('amount') || !$request->filled('user')) {
@@ -212,7 +203,7 @@ class ApiAdminV1Controller extends Controller
             }
 
             $user = User::where('username', $request->user)
-                ->where('domain', $this->domain())
+                ->where('domain', getDomain())
                 ->first();
             if (!$user) return response()->json(['error' => 'User not found']);
 
@@ -221,7 +212,7 @@ class ApiAdminV1Controller extends Controller
 
             if ($request->filled('details')) {
                 $exists = Payment::where('note', $request->details)
-                    ->where('domain', $this->domain())
+                    ->where('domain', getDomain())
                     ->exists();
                 if ($exists) return response()->json(['error' => 'Duplicate transaction']);
             }
@@ -237,7 +228,7 @@ class ApiAdminV1Controller extends Controller
                 'exchange_rate'     => 1,
                 'status'            => 'completed',
                 'note'              => $request->input('details', 'Admin addFund'),
-                'domain'            => $this->domain(),
+                'domain'            => getDomain(),
             ]);
 
             $user->increment('balance', $amount);
