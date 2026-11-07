@@ -6,6 +6,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    @include('auth.theme-6.partials.language-bootstrap')
     <title>Two Step Verification - {{ $settings['title'] ?? config('app.name') }}</title>
     <link rel="manifest" href="{{ route('manifest') }}">
     <link rel="canonical" href="{{ route('2fa.show') }}">
@@ -88,6 +89,7 @@
     <script src="{{ asset('cdn.whoispanel.com/dashboard/5/plugins/global/plugins.bundle.js') }}"></script>
     <script src="{{ asset('cdn.whoispanel.com/dashboard/5/js/scripts.bundle.js') }}"></script>
     <script src="{{ asset('cdn.whoispanel.com/libs/jquery.blockUI/2.70/jquery.blockUI.min.js') }}"></script>
+    @include('auth.theme-default.partials.language')
     <script src="{{ asset('assets/app.js') }}?v=16.8"></script>
     <script src="{{ asset('assets/client/auth.js') }}?v=16.9"></script>
 </body>

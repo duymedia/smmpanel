@@ -24,13 +24,16 @@ use App\Models\ProductGroup;
 use App\Models\ActivityLog;
 use App\Models\UserCustomRate;
 use App\Models\User;
+use App\Services\HeleketCheckoutService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
@@ -110,7 +113,6 @@ class ViewController extends Controller
                 'exchange_rate' => 1
             ];
         }
-
         // Get statistics
         $userOrders = Order::where('user_id', $user->id);
         $totalOrders = $userOrders->count();
@@ -335,6 +337,12 @@ class ViewController extends Controller
                     $averageTime = json_encode($averageTime);
                 }
                 $averageTime = (string) $averageTime;
+                $averageTimeV2 = (string) ($svc->average_time_v2 ?? '');
+                $legacyAverageTimeData = json_decode($averageTime, true);
+                if (is_array($legacyAverageTimeData) && ($legacyAverageTimeData['v'] ?? null) === 2) {
+                    $averageTimeV2 = $averageTimeV2 ?: json_encode($legacyAverageTimeData['items'] ?? []);
+                    $averageTime = (string) max(0, (int) ($legacyAverageTimeData['legacy_seconds'] ?? 0));
+                }
 
                 $title = $svc->title ?? '';
                 if (is_array($title)) {
@@ -371,6 +379,7 @@ class ViewController extends Controller
                     'desc' => $description,
                     'note' => $note,
                     'avg' => $averageTime,
+                    'avg_v2' => $averageTimeV2,
                     'min' => $svc->min ?? 1,
                     'max' => $svc->max ?? 100000,
                     'rate' => (float) $rate,
@@ -448,6 +457,7 @@ class ViewController extends Controller
         $user = Auth::user();
         $userRole = userRole($user);
         $currency_code = $user?->currency ?? 'USD';
+        $showMultiRate = (int) ($config->show_multi_rate ?? 0) === 1;
 
         // Ưu tiên: request param ?lang= (từ localStorage truyền lên) → user->lang → config->default_lang → 'en'
         $allowed = ['en', 'vi', 'af', 'al'];
@@ -509,6 +519,19 @@ class ViewController extends Controller
                 : $rate . ($currency->symbol ?? '$');
         };
 
+        $formatMultiRateTooltipPrice = function ($rate, $serviceId) use ($formatPrice, $currency_code) {
+            $formatted = $formatPrice($rate, $serviceId);
+            if (strtoupper((string) $currency_code) !== 'VND') {
+                return e($formatted);
+            }
+
+            $number = preg_replace('/[^\d,.-]/u', '', $formatted);
+            $number = str_replace('.', '', $number);
+            $number = str_replace(',', '.', $number);
+
+            return number_format(round((float) $number), 0, ',', '.') . ' <sup>VND</sup>';
+        };
+
         // Get categories - simplified
         $categories = Category::where('status', true)
             ->whereHas('services', fn($q) => $q->where('status', true))
@@ -526,8 +549,17 @@ class ViewController extends Controller
         $services = Service::where('status', true)
             ->orderBy('position', 'asc')
             ->get()
-            ->map(function ($svc) use ($userRole, $userLang, $formatPrice) {
+            ->map(function ($svc) use ($userRole, $userLang, $formatPrice, $formatMultiRateTooltipPrice, $showMultiRate) {
                 $rate = getUserServiceRate($userRole, $svc);
+                $multiRateTooltip = null;
+                if ($showMultiRate) {
+                    $retailRate = (float) ($svc->rate_retail ?? $rate);
+                    $agentRate = (float) ($svc->rate_agent ?? $retailRate);
+                    $distributorRate = (float) ($svc->rate_distributor ?? $agentRate);
+                    $multiRateTooltip = '<span class="fw-bold text-primary">' . $formatMultiRateTooltipPrice($retailRate, $svc->id) . '</span>'
+                        . ' - <span class="text-gray-500">' . $formatMultiRateTooltipPrice($agentRate, $svc->id) . '</span>'
+                        . ' - <span class="text-gray-500">' . $formatMultiRateTooltipPrice($distributorRate, $svc->id) . '</span>';
+                }
 
                 // Tên đa ngôn ngữ - name is cast to json, so it's already an array
                 $name = $svc->name;
@@ -561,7 +593,9 @@ class ViewController extends Controller
                     'max' => $svc->max ?? 100000,
                     'rate' => (float) $rate,
                     'rate_formatted' => $formatPrice($rate, $svc->id),
+                    'multi_rate_tooltip' => $multiRateTooltip,
                     'average_time' => $averageTime,
+                    'average_time_v2' => (string) ($svc->average_time_v2 ?? ''),
                     'attributes' => is_array($svc->attributes) ? $svc->attributes : (json_decode($svc->attributes ?? '[]', true) ?? []),
                 ];
             });
@@ -661,6 +695,7 @@ class ViewController extends Controller
                 'type' => 'Default',
                 'schedule' => true,
                 'avg' => $service['average_time'],
+                'avg_v2' => $service['average_time_v2'] ?? '',
                 'loop' => true,
                 'platformid' => (int) ($category['platform_id'] ?? -1),
                 'platform' => $platform['name'] ?? '',
@@ -671,6 +706,8 @@ class ViewController extends Controller
         })->values();
 
         $showAverageTime = serviceOn($config, 'service_average_time');
+        $childPanelDepositMinimum = fmtMoney($config->min_total_deposit_child_panel ?? 0, $currency, ['VND']);
+        $resellerDepositMinimum = fmtMoney($config->min_total_deposit_reseller ?? 0, $currency, ['VND']);
         $serviceColumnCount = $showAverageTime ? 8 : 7;
         $rateMin = (float) ($services->min('rate') ?? 0);
         $rateMax = (float) ($services->max('rate') ?? 100);
@@ -683,6 +720,9 @@ class ViewController extends Controller
             'servicesPayload',
             'platforms',
             'showAverageTime',
+            'showMultiRate',
+            'childPanelDepositMinimum',
+            'resellerDepositMinimum',
             'serviceColumnCount',
             'rateMin',
             'rateMax'
@@ -1030,7 +1070,9 @@ class ViewController extends Controller
                     : ''
             );
             $image = $toScalar($payment->image_url ?? $payment->image, '');
-            $options = json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $clientConfig = $config;
+            unset($clientConfig['options_hide']);
+            $options = json_encode($clientConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
             return [
                 'id' => $toNumber($payment->id),
@@ -1415,7 +1457,7 @@ class ViewController extends Controller
         $transactions = $query->paginate(50);
         $order = $orderId ? Order::where('user_id', $user->id)->find($orderId) : null;
 
-        return view("clients.theme-{$theme}.cashflow.index", compact('transactions', 'orderId', 'order', 'sym', 'symPos', 'exRate'));
+        return view("clients.theme-{$theme}.cashflow.index", compact('transactions', 'orderId', 'order', 'currency', 'sym', 'symPos', 'exRate'));
     }
 
     /**
@@ -1741,42 +1783,101 @@ class ViewController extends Controller
     /**
      * Create checkout session for Binance payment
      */
-    public function createCheckout(Request $request)
+    public function createCheckout(Request $request, HeleketCheckoutService $heleket)
     {
+        $validated = $request->validate([
+            'pm_id' => ['required', 'integer'],
+            'amount' => ['required', 'numeric', 'gt:0'],
+        ]);
+
+        $paymentMethod = PaymentMethod::where('domain', getDomain())
+            ->where('status', true)
+            ->find($validated['pm_id']);
+        if (!$paymentMethod) {
+            return response()->json(['success' => false, 'message' => 'Payment method not available.'], 404);
+        }
+
+        if ($paymentMethod->type === 'binance' || $paymentMethod->type === 'crypto') {
+            return response()->json(['success' => true, 'message' => 'Checkout is ready']);
+        }
+        if ($paymentMethod->type !== PaymentMethod::TYPE_HELEKET) {
+            return response()->json(['success' => false, 'message' => 'Unsupported checkout payment method.'], 422);
+        }
+
+        $amount = round((float) $validated['amount'], 8);
+        if (($paymentMethod->min > 0 && $amount < $paymentMethod->min) || ($paymentMethod->max > 0 && $amount > $paymentMethod->max)) {
+            return response()->json(['success' => false, 'message' => 'Amount is outside this payment method limits.'], 422);
+        }
+
+        $currency = strtoupper((string) ($paymentMethod->currency ?: 'USD'));
+        if ($currency !== 'USD') {
+            return response()->json(['success' => false, 'message' => 'Heleket deposits are currently configured in USD.'], 422);
+        }
+
+        $config = $paymentMethod->parsed_config;
+        $secrets = is_array($config['options_hide'] ?? null) ? $config['options_hide'] : [];
+        $paymentApiKey = (string) ($secrets['payment_api_key'] ?? '');
+        if ($paymentApiKey !== '') {
+            try {
+                $paymentApiKey = Crypt::decryptString($paymentApiKey);
+            } catch (\Throwable) {
+                // Keep credentials saved before encryption working until updated.
+            }
+        }
+        $orderId = 'HELEKET-' . Str::uuid();
+
         try {
-            $validated = $request->validate([
-                'pm_id' => 'required|integer',
-                'amount' => 'required|numeric|min:0.01',
+            $checkout = $heleket->createCheckout(
+                [
+                    'merchant' => $secrets['merchant'] ?? $secrets['merchant_id'] ?? '',
+                    'payment_api_key' => $paymentApiKey,
+                ],
+                [
+                    'amount' => number_format($amount, 8, '.', ''),
+                    'currency' => $currency,
+                    'order_id' => $orderId,
+                    'url_return' => route('clients.addfunds.index'),
+                    'url_success' => route('clients.addfunds.index'),
+                    'url_callback' => url('/webhook/heleket?type=' . $paymentMethod->id),
+                    'payer_email' => Auth::user()?->email,
+                ]
+            );
+
+            if (!$checkout['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $checkout['error'] ?? 'Unable to create Heleket invoice.',
+                ], $checkout['http_status'] ?? 502);
+            }
+
+            Payment::create([
+                'user_id' => Auth::id(),
+                'payment_method_id' => $paymentMethod->id,
+                'transaction_id' => $orderId,
+                'amount' => $amount,
+                'bonus_amount' => 0,
+                'total_amount' => $amount,
+                'currency' => $currency,
+                'exchange_rate' => 1,
+                'status' => 'pending',
+                'note' => 'Heleket deposit pending',
+                'payment_info' => [
+                    'provider' => 'heleket',
+                    'order_id' => $orderId,
+                    'invoice_uuid' => $checkout['invoice_uuid'] ?? null,
+                    'checkout_url' => $checkout['checkout_url'],
+                ],
+                'domain' => getDomain(),
             ]);
-
-            // Get payment method
-            $paymentMethod = PaymentMethod::where('domain', getDomain())
-                ->find($validated['pm_id']);
-            if (!$paymentMethod || !$paymentMethod->status) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment method not available'
-                ], 400);
-            }
-
-            // Check if it's Binance
-            if ($paymentMethod->type !== 'binance' && $paymentMethod->type !== 'crypto') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid payment method type'
-                ], 400);
-            }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Checkout is ready'
+                'checkout_url' => $checkout['checkout_url'],
+                'order_id' => $orderId,
             ]);
-        } catch (\Exception $e) {
-            Log::error('Create checkout error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error creating checkout: ' . $e->getMessage()
-            ], 500);
+        } catch (\Throwable $exception) {
+            report($exception);
+            return response()->json(['success' => false, 'message' => 'Unable to create Heleket checkout.'], 500);
         }
     }
 

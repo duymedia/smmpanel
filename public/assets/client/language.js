@@ -400,10 +400,11 @@ var LANGUAGE = {
             "Choose a social media": "Choose a social media:",
             "Social media": "Social media",
             "Category": "Category",
-            "Quick search service": "Quick search service2231132",
+            "Quick search service": "Quick search service",
             "Service": "Service",
             "Average time": "Average time",
             "Average time description": "The average time is based on 10 latest completed orders per 1000 quantity",
+            "Recent completion times": "Recent completion times",
             "Link": "Link",
             "Quantity": "Quantity",
             "Quantity 1": "Quantity (for one link)",
@@ -536,7 +537,9 @@ var LANGUAGE = {
             "cheaper4": "When you meet that condition, please contact the Admin to get new rate.",
             "Retail": "Retail",
             "Wholesale": "Wholesale",
-            "Reseller": "Reseller"
+            "Reseller": "Reseller",
+            "Check follower count before order": "Check follower count before order",
+            "Facebook followers": "Facebook followers"
         },
         "\/settings": {
             "currency.no_data_hint": "If there are no currencies, click Update to load data from the API.",
@@ -660,6 +663,13 @@ var LANGUAGE = {
             "Login attempts": "Too many login attempts from this account. Please try to sign in again 24 hours after",
             "Login more with wrong password": "Username & password do not match. If you try to login with the wrong password, your account will be blocked within 24 hours",
             "This account has been suspended": "This account has been suspended",
+            "Account does not exist": "Account does not exist",
+            "Your account has been locked": "Your account has been locked",
+            "Incorrect username or password": "Incorrect username or password",
+            "Please enter your username": "Please enter your username",
+            "Please enter your password": "Please enter your password",
+            "You must agree to the terms and conditions": "You must agree to the terms and conditions",
+            "Authentication request failed. Please try again later.": "Authentication request failed. Please try again later.",
             "Sign in successfully": "Sign in successfully"
         },
         "\/signup": {
@@ -686,8 +696,16 @@ var LANGUAGE = {
             "The Phone number already exists": "The Phone number already exists",
             "Length of password": "Length of password is 6-20",
             "Confirm password does not match": "Confirm password does not match",
+            "Username format is invalid": "Username format is invalid",
+            "Username already exists": "Username already exists",
+            "Email address is invalid": "Email address is invalid",
+            "Email already exists": "Email already exists",
+            "Password confirmation does not match": "Password confirmation does not match",
+            "Password must be at least 8 characters": "Password must be at least 8 characters",
+            "The submitted data is invalid": "The submitted data is invalid",
             "Error when signup": "Error when signup. Please try again",
             "Sign up successfully": "You can signin now. Thank You!",
+            "Account created successfully!": "Account created successfully!",
             "I Accept": "I Accept the",
             "Terms": "Terms",
             "You must agree to the terms": "You must agree to the terms"
@@ -702,7 +720,8 @@ var LANGUAGE = {
             "Submit": "Submit",
             "Back to Sign In": "Back to Sign In",
             "All fields cannot be blank": "All fields cannot be blank",
-            "Check your email inbox to get new password": "Check your email inbox to get new password"
+            "Check your email inbox to get new password": "Check your email inbox to get new password",
+            "Password reset is temporarily unavailable. Please try again later.": "Password reset is temporarily unavailable. Please try again later."
         },
         "\/2fa-auth": {
             "Already have an Account": "Already have an Account?",
@@ -713,6 +732,7 @@ var LANGUAGE = {
             "Submit": "Submit",
             "Back to Sign In": "Back to Sign In",
             "Please sign in again": "Please sign in again",
+            "The verification code is incorrect.": "The verification code is incorrect.",
             "Wrong authentication code": "Wrong authentication code"
         },
         "\/products": {
@@ -861,6 +881,7 @@ var LANGUAGE = {
             "menu::Campaigns": "Chi\u1ebfn d\u1ecbch",
             "menu::Create AI Video": "T\u1ea1o Video AI",
             "menu::Create AI Image": "T\u1ea1o \u1ea2nh AI",
+            "menu::Loop orders": "\u0110\u01a1n h\u00e0ng l\u1eb7p",
             "menu::Admin": "Qu\u1ea3n tr\u1ecb vi\u00ean",
             "menu::Agent": "\u0110\u1ea1i l\u00fd",
             "menu::Distributor": "Nh\u00e0 ph\u00e2n ph\u1ed1i",
@@ -1218,6 +1239,7 @@ var LANGUAGE = {
             "Service": "D\u1ecbch v\u1ee5",
             "Average time": "Th\u1eddi gian ho\u00e0n th\u00e0nh trung b\u00ecnh",
             "Average time description": "Th\u1eddi gian trung b\u00ecnh ho\u00e0n th\u00e0nh s\u1ed1 l\u01b0\u1ee3ng 1000 c\u1ee7a 10 \u0111\u01a1n h\u00e0ng g\u1ea7n nh\u1ea5t",
+            "Recent completion times": "Th\u1eddi gian ho\u00e0n th\u00e0nh g\u1ea7n \u0111\u00e2y",
             "Quick search service": "T\u00ecm nhanh d\u1ecbch v\u1ee5",
             "Link": "Li\u00ean k\u1ebft",
             "Quantity": "S\u1ed1 l\u01b0\u1ee3ng",
@@ -1351,7 +1373,9 @@ var LANGUAGE = {
             "cheaper4": "Khi b\u1ea1n \u0111\u01b0\u1ee3c \u0111\u01b0\u1ee3c \u0111i\u1ec1u ki\u1ec7n \u0111\u00f3 th\u00ec li\u00ean h\u1ec7 v\u1edbi Admin \u0111\u1ec3 \u0111\u01b0\u1ee3c gi\u00e1 m\u1edbi.",
             "Retail": "Gi\u00e1 b\u00e1n l\u1ebb",
             "Wholesale": "Gi\u00e1 \u0111\u1ea1i l\u00fd",
-            "Reseller": "Gi\u00e1 ph\u00e2n ph\u1ed1i"
+            "Reseller": "Gi\u00e1 ph\u00e2n ph\u1ed1i",
+            "Check follower count before order": "Ki\u1ec3m tra s\u1ed1 ng\u01b0\u1eddi theo d\u00f5i khi \u0111\u1eb7t h\u00e0ng",
+            "Facebook followers": "S\u1ed1 ng\u01b0\u1eddi theo d\u00f5i Facebook"
         },
         "\/settings": {
             "currency.no_data_hint": "Nếu không có tiền tệ nào, hãy nhấn Cập nhật để tải dữ liệu từ API.",
@@ -1475,6 +1499,13 @@ var LANGUAGE = {
             "Login attempts": "B\u1ea1n \u0111\u00e3 \u0111\u0103ng nh\u1eadp sai nhi\u1ec1u l\u1ea7n. Vui l\u00f2ng th\u1eed l\u1ea1i sau 24 gi\u1edd.",
             "Login more with wrong password": "T\u00e0i kho\u1ea3n & m\u1eadt kh\u1ea9u kh\u00f4ng \u0111\u00fang. N\u1ebfu b\u1ea1n \u0111\u0103ng nh\u1eadp th\u1ea5t b\u1ea1i nhi\u1ec1u l\u1ea7n t\u00e0i kho\u1ea3n c\u1ee7a b\u1ea1n c\u00f3 th\u1ec3 b\u1ecb t\u1ea1m kh\u00f3a 24h.",
             "This account has been suspended": "T\u00e0i kho\u1ea3n n\u00e0y \u0111\u00e3 b\u1ecb t\u1ea1m ng\u01b0ng",
+            "Account does not exist": "T\u00e0i kho\u1ea3n kh\u00f4ng t\u1ed3n t\u1ea1i",
+            "Your account has been locked": "T\u00e0i kho\u1ea3n c\u1ee7a b\u1ea1n \u0111\u00e3 b\u1ecb kh\u00f3a",
+            "Incorrect username or password": "T\u00e0i kho\u1ea3n ho\u1eb7c m\u1eadt kh\u1ea9u kh\u00f4ng \u0111\u00fang",
+            "Please enter your username": "Vui l\u00f2ng nh\u1eadp t\u00ean \u0111\u0103ng nh\u1eadp",
+            "Please enter your password": "Vui l\u00f2ng nh\u1eadp m\u1eadt kh\u1ea9u",
+            "You must agree to the terms and conditions": "B\u1ea1n ph\u1ea3i \u0111\u1ed3ng \u00fd v\u1edbi c\u00e1c \u0111i\u1ec1u kho\u1ea3n",
+            "Authentication request failed. Please try again later.": "Y\u00eau c\u1ea7u x\u00e1c th\u1ef1c th\u1ea5t b\u1ea1i. Vui l\u00f2ng th\u1eed l\u1ea1i sau.",
             "Sign in successfully": "\u0110\u0103ng nh\u1eadp th\u00e0nh c\u00f4ng"
         },
         "\/signup": {
@@ -1501,8 +1532,16 @@ var LANGUAGE = {
             "The Phone number already exists": "S\u1ed1 \u0111i\u1ec7n tho\u1ea1i n\u00e0y \u0111\u00e3 t\u1ed3n t\u1ea1i",
             "Length of password": "\u0110\u1ed9 d\u00e0i m\u1eadt kh\u1ea9u l\u00e0 6-20 k\u00fd t\u1ef1",
             "Confirm password does not match": "X\u00e1c nh\u1eadn m\u1eadt kh\u1ea9u kh\u00f4ng kh\u1edbp",
+            "Username format is invalid": "T\u00ean \u0111\u0103ng nh\u1eadp kh\u00f4ng h\u1ee3p l\u1ec7",
+            "Username already exists": "T\u00ean \u0111\u0103ng nh\u1eadp \u0111\u00e3 t\u1ed3n t\u1ea1i",
+            "Email address is invalid": "\u0110\u1ecba ch\u1ec9 email kh\u00f4ng h\u1ee3p l\u1ec7",
+            "Email already exists": "Email \u0111\u00e3 t\u1ed3n t\u1ea1i",
+            "Password confirmation does not match": "M\u1eadt kh\u1ea9u x\u00e1c nh\u1eadn kh\u00f4ng kh\u1edbp",
+            "Password must be at least 8 characters": "M\u1eadt kh\u1ea9u ph\u1ea3i c\u00f3 \u00edt nh\u1ea5t 8 k\u00fd t\u1ef1",
+            "The submitted data is invalid": "D\u1eef li\u1ec7u g\u1eedi l\u00ean kh\u00f4ng h\u1ee3p l\u1ec7",
             "Error when signup": "L\u1ed7i khi \u0111\u0103ng k\u00fd. Vui l\u00f2ng th\u1eed l\u1ea1i",
             "Sign up successfully": "B\u1ea1n c\u00f3 th\u1ec3 \u0111\u0103ng nh\u1eadp ngay b\u00e2y gi\u1edd. C\u1ea3m \u01a1n!",
+            "Account created successfully!": "T\u1ea1o t\u00e0i kho\u1ea3n th\u00e0nh c\u00f4ng!",
             "I Accept": "T\u00f4i \u0111\u1ed3ng v\u1edbi v\u1edbi c\u00e1c",
             "Terms": "\u0111i\u1ec1u kho\u1ea3n",
             "You must agree to the terms": "B\u1ea1n ph\u1ea3i \u0111\u1ed3ng \u00fd v\u1edbi c\u00e1c \u0111i\u1ec1u kho\u1ea3n"
@@ -1517,17 +1556,19 @@ var LANGUAGE = {
             "Submit": "G\u1eedi",
             "Back to Sign In": "Quay l\u1ea1i \u0111\u0103ng nh\u1eadp",
             "All fields cannot be blank": "Xin \u0111i\u1ec1n \u0111\u1ea7y \u0111\u1ee7 th\u00f4ng tin",
-            "Check your email inbox to get new password": "Ki\u1ec3m tra h\u1ed9p th\u01b0 \u0111\u1ebfn c\u1ee7a b\u1ea1n \u0111\u1ec3 l\u1ea5y m\u1eadt kh\u1ea9u m\u1edbi"
+            "Check your email inbox to get new password": "Ki\u1ec3m tra h\u1ed9p th\u01b0 \u0111\u1ebfn c\u1ee7a b\u1ea1n \u0111\u1ec3 l\u1ea5y m\u1eadt kh\u1ea9u m\u1edbi",
+            "Password reset is temporarily unavailable. Please try again later.": "Kh\u00f4ng th\u1ec3 kh\u00f4i ph\u1ee5c m\u1eadt kh\u1ea9u l\u00fac n\u00e0y. Vui l\u00f2ng th\u1eed l\u1ea1i sau."
         },
         "\/2fa-auth": {
             "Already have an Account": "B\u1ea1n c\u00f3 mu\u1ed1n t\u1ea1o t\u00e0i kho\u1ea3n ?",
             "Sign in": "\u0110\u0103ng nh\u1eadp",
             "Verification code": "M\u00e3 x\u00e1c minh",
-            "Two Step Verification": "X\u00e1c minh 2 b\u01b0\u1edbc",
+            "Two Step Verification": "X\u00e1c minh hai b\u01b0\u1edbc",
             "Type your 6 digit security code": "Nh\u1eadp m\u00e3 b\u1ea3o m\u1eadt 6 ch\u1eef s\u1ed1 c\u1ee7a b\u1ea1n",
             "Submit": "G\u1eedi",
             "Back to Sign In": "Quay l\u1ea1i \u0111\u0103ng nh\u1eadp",
             "Please sign in again": "Vui l\u00f2ng \u0111\u0103ng nh\u1eadp l\u1ea1i",
+            "The verification code is incorrect.": "M\u00e3 x\u00e1c minh kh\u00f4ng ch\u00ednh x\u00e1c.",
             "Wrong authentication code": "Sai m\u00e3 x\u00e1c th\u1ef1c"
         },
         "\/products": {
@@ -1715,6 +1756,8 @@ var LANGUAGE = {
         "full_name": "Full Name",
         "no_account": "No Account",
         "password": "Password",
+        "new_password": "New password",
+        "enter_new_password": "Enter your new password",
         "reset_password": "Reset Password",
         "send": "Send",
         "sign_in": "Sign In",
@@ -1888,4 +1931,6 @@ LANGUAGE.language.orders.service = 'D\u1ecbch v\u1ee5';
 LANGUAGE.language.orders.status = 'Tr\u1ea1ng th\u00e1i';
 LANGUAGE.language.orders.remains = 'C\u00f2n l\u1ea1i';
 LANGUAGE.language.newOrder.charge = 'Chi ph\u00ed';
+LANGUAGE.language.auth.new_password = 'M\u1eadt kh\u1ea9u m\u1edbi';
+LANGUAGE.language.auth.enter_new_password = 'Nh\u1eadp m\u1eadt kh\u1ea9u m\u1edbi cho t\u00e0i kho\u1ea3n c\u1ee7a b\u1ea1n.';
 

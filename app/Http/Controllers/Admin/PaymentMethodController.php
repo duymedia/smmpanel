@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 
 class PaymentMethodController extends Controller
@@ -166,6 +167,19 @@ class PaymentMethodController extends Controller
 
     private function historyRows($payment): array
     {
+        if (data_get($payment->payment_info, 'source') === 'admin_bonus') {
+            return [[
+                'account_id' => $payment->user_id,
+                'fund_id' => $payment->id,
+                'account_user' => optional($payment->user)->username ?? 'N/A',
+                'fund_amount' => (float) ($payment->bonus_amount ?? 0),
+                'pm_id' => 1,
+                'pm_name' => 'Bonus',
+                'fund_created_1' => optional($payment->created_at)->format('Y-m-d H:i:s') ?? 'N/A',
+                'fund_details' => $payment->note ?? ($payment->transaction_id ?? ''),
+            ]];
+        }
+
         $deposit = [
             'account_id' => $payment->user_id,
             'fund_id' => $payment->id,
@@ -196,17 +210,15 @@ class PaymentMethodController extends Controller
     {
         try {
             $this->normalizeMethodRequest($request);
-            // Debug: Log request data
             Log::info('Payment method store request', [
-                'all' => $request->all(),
+                'method_payment_id' => $request->input('pma_id'),
                 'has_name' => $request->has('name'),
-                'name_value' => $request->input('name')
             ]);
 
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
-                'type' => 'nullable|string|in:bank_vn,binance,payeer,other',
-                'method_payment_id' => 'nullable|integer|min:0|max:45',
+                'type' => 'nullable|string|in:bank_vn,binance,payeer,other,heleket',
+                'method_payment_id' => 'nullable|integer|min:0|max:46',
                 'image' => 'nullable|string',
                 'min' => 'nullable|integer|min:0',
                 'max' => 'nullable|integer|min:0',
@@ -329,6 +341,14 @@ class PaymentMethodController extends Controller
         $paymentMethod->load('payments');
 
         $config = $paymentMethod->parsed_config;
+        $optionsHide = is_array($config['options_hide'] ?? null) ? $config['options_hide'] : [];
+        if ((int) $paymentMethod->method_payment_id === 46 && filled($optionsHide['payment_api_key'] ?? null)) {
+            try {
+                $optionsHide['payment_api_key'] = Crypt::decryptString((string) $optionsHide['payment_api_key']);
+            } catch (\Throwable) {
+                // Support credentials saved before encryption was enabled.
+            }
+        }
         $bonus = $paymentMethod->bonus;
         if (is_string($bonus)) {
             $bonus = json_decode($bonus, true) ?: [];
@@ -346,7 +366,7 @@ class PaymentMethodController extends Controller
             'pm_icon' => $paymentMethod->image,
             'pm_type' => $paymentMethod->method_payment_id,
             'pm_options' => json_encode($config, JSON_UNESCAPED_UNICODE),
-            'pm_options_hide' => json_encode($config['options_hide'] ?? [], JSON_UNESCAPED_UNICODE),
+            'pm_options_hide' => json_encode($optionsHide, JSON_UNESCAPED_UNICODE),
             'pm_bonus' => $bonus ? 1 : 0,
             'pm_bonus_data' => json_encode($bonus, JSON_UNESCAPED_UNICODE),
             'pm_details' => $paymentMethod->details ?? '',
@@ -377,6 +397,17 @@ class PaymentMethodController extends Controller
 
         $options = json_decode((string) $request->input('options'), true) ?: [];
         $optionsHide = json_decode((string) $request->input('options_hide'), true) ?: [];
+        if ($request->integer('pma_id') === 46) {
+            validator([
+                'merchant' => trim((string) ($optionsHide['merchant'] ?? '')),
+                'payment_api_key' => trim((string) ($optionsHide['payment_api_key'] ?? '')),
+            ], [
+                'merchant' => ['required', 'uuid'],
+                'payment_api_key' => ['required', 'string', 'max:255'],
+            ])->validate();
+
+            $optionsHide['payment_api_key'] = Crypt::encryptString(trim((string) $optionsHide['payment_api_key']));
+        }
         $bonus = collect($request->input('bonus_data', []))->map(fn ($item) => [
             'min' => $item['min'] ?? $item['q'] ?? $item['quantity'] ?? 0,
             'percent' => $item['percent'] ?? $item['p'] ?? 0,
@@ -391,11 +422,13 @@ class PaymentMethodController extends Controller
         $template = PaymentMethod::template($request->integer('pma_id'));
         $options['currency'] = $template['currency'] ?? $request->input('currency', 'USD');
         $templateCode = strtolower((string) ($template['code'] ?? ''));
-        $type = str_contains($templateCode, 'binance')
+        $type = str_contains($templateCode, 'heleket')
+            ? PaymentMethod::TYPE_HELEKET
+            : (str_contains($templateCode, 'binance')
             ? PaymentMethod::TYPE_BINANCE
             : (str_contains($templateCode, 'bank') || str_contains($templateCode, 'sieuthicode')
                 ? PaymentMethod::TYPE_BANK_VN
-                : ($request->input('type') ?: PaymentMethod::TYPE_OTHER));
+                : ($request->input('type') ?: PaymentMethod::TYPE_OTHER)));
 
         $request->merge([
             'method_payment_id' => $request->integer('pma_id'),
@@ -479,14 +512,14 @@ class PaymentMethodController extends Controller
                 'method_id' => $paymentMethod->id,
                 'content_type' => $request->header('Content-Type'),
                 'is_json' => $request->isJson(),
-                'all' => $request->all()
+                'method_payment_id' => $request->input('pma_id'),
             ]);
 
             // Validate dữ liệu
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
-                'type' => 'nullable|string|in:bank_vn,binance,payeer,other',
-                'method_payment_id' => 'nullable|integer|min:0|max:45',
+                'type' => 'nullable|string|in:bank_vn,binance,payeer,other,heleket',
+                'method_payment_id' => 'nullable|integer|min:0|max:46',
                 'image' => 'nullable|string',
                 'min' => 'nullable|integer|min:0',
                 'max' => 'nullable|integer|min:0',

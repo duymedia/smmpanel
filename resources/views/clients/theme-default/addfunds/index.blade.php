@@ -231,6 +231,43 @@
                                             $('.div-fund-amount').toggle(paymentCurrency === 'USD');
                                         });
 
+                                        $('#btn-heleket-checkout').on('click', async function() {
+                                            const button = this;
+                                            const error = document.getElementById('heleket-checkout-error');
+                                            const amount = Number($('#ipt-fund-amount').val());
+                                            const pmId = $('#sl-pm-method').val();
+                                            error.classList.add('d-none');
+
+                                            if (!amount || amount <= 0 || !pmId || pmId === '0') {
+                                                error.textContent = addFundsText('Please enter a valid amount and payment method.');
+                                                error.classList.remove('d-none');
+                                                return;
+                                            }
+
+                                            button.disabled = true;
+                                            try {
+                                                const response = await fetch(@json(url('/request')), {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Accept': 'application/json',
+                                                        'Content-Type': 'application/json',
+                                                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                                                    },
+                                                    body: JSON.stringify({ action: 'Addfunds-createCheckout', pm_id: pmId, amount })
+                                                });
+                                                const result = await response.json();
+                                                if (!response.ok || !result.success || !result.checkout_url) {
+                                                    throw new Error(result.message || addFundsText('Unable to create checkout.'));
+                                                }
+                                                window.location.assign(result.checkout_url);
+                                            } catch (requestError) {
+                                                error.textContent = requestError.message || addFundsText('Unable to create checkout.');
+                                                error.classList.remove('d-none');
+                                            } finally {
+                                                button.disabled = false;
+                                            }
+                                        });
+
                                         const transferCodeForm = document.getElementById('vnd-transfer-code-form');
                                         if (transferCodeForm) {
                                             transferCodeForm.addEventListener('submit', async function(event) {
@@ -648,6 +685,13 @@
                                     <input type="hidden" id="ipt-binance-pm-id" value="">
                                     <button type="button" id="btn-binance-check" class="btn btn-primary w-100"
                                         data-lang="Pay Now"></button>
+                                </div>
+
+                                <div class="div-options div-46 mb-5" style="display: none;">
+                                    <div id="heleket-checkout-error" class="alert alert-danger d-none" role="alert"></div>
+                                    <button type="button" id="btn-heleket-checkout" class="btn btn-primary w-100">
+                                        <img src="https://heleket.com/img/logo/heleket-logo.svg" alt="Heleket" height="22" class="me-2 align-middle" style="width: auto; max-width: 120px;">Pay with Heleket
+                                    </button>
                                 </div>
 
                                 <div class="div-options div-36" style="display: none;">

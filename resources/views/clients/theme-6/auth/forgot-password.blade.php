@@ -8,13 +8,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="keywords" content="{{ $settings['keywords'] ?? '' }}">
     <meta name="description" content="{{ $settings['description'] ?? '' }}">
-    <script>
-        (function() {
-            var lang = localStorage.getItem('data-lang') || 'vi';
-            document.documentElement.lang = lang.replace('_', '-');
-            window.__siteLang = lang;
-        })();
-    </script>
+    @include('auth.theme-6.partials.language-bootstrap')
     @if(!empty($config->favicon))
         <link rel="shortcut icon" type="image/ico" href="{{ $config->favicon }}">
         <link rel="icon" type="image/png" href="{{ $config->favicon }}">
@@ -93,8 +87,7 @@
 <script>
 (function() {
     var lang = localStorage.getItem('data-lang') || 'vi';
-    fetch('/lang/' + lang + '.json')
-        .then(function(r) { return r.ok ? r.json() : null; })
+    Promise.resolve(window.AUTH_LANGUAGE_DATA?.[lang] || {})
         .then(function(t) {
             if (!t) return;
             document.querySelectorAll('[data-lang]').forEach(function(el) {

@@ -64,7 +64,7 @@ class AuthController extends Controller
             $data = $response->getData(true);
             if (!($data['success'] ?? false)) {
                 $message = (string) ($data['message'] ?? 'Yêu cầu không thành công');
-                $localized = $this->localizeAuthMessage($message, $language);
+                $localized = $this->localizeAuthMessage($message, $language, $action);
 
                 return response()->json([
                     'error' => $localized,
@@ -72,12 +72,14 @@ class AuthController extends Controller
                 ]);
             }
 
-            $localized = $this->localizeAuthMessage((string) ($data['message'] ?? ''), $language);
+            $localized = $this->localizeAuthMessage((string) ($data['message'] ?? ''), $language, $action);
+            $isTwoFactorStep = $action === 'Account-signin'
+                && ($data['redirect'] ?? null) === route('2fa.show');
 
             $response = match ($action) {
                 'Account-signin' => [
-                    'success' => $localized,
-                    'language' => $localized,
+                    'success' => $isTwoFactorStep ? '' : $localized,
+                    'language' => $isTwoFactorStep ? '' : $localized,
                     // landing.js builds the URL as `${location.origin}/${rd}`.
                     // Return a relative segment so `/admin` does not become
                     // `//admin` on localhost.
@@ -100,75 +102,134 @@ class AuthController extends Controller
             return response()->json($response);
         } catch (ValidationException $e) {
             if (in_array($action, ['Account-signin', 'Account-signup'], true)) {
-                return response()->json($this->legacyValidationError($e, $language));
+                return response()->json($this->legacyValidationError($e, $language, $action));
             }
 
-            $message = $this->localizeAuthMessage($e->validator->errors()->first(), $language);
+            $message = $this->localizeAuthMessage($e->validator->errors()->first(), $language, $action);
             return response()->json([
                 'error' => $message,
                 'language' => $message,
             ]);
         } catch (\Throwable $e) {
             report($e);
-            $message = in_array($action, ['Account-resetPassword', 'Account-resendVerifyEmail'], true)
+            $page = match ($action) {
+                'Account-signup' => '/signup',
+                'Account-checkGGAuth' => '/2fa-auth',
+                'Account-resetPassword', 'Account-resendVerifyEmail' => '/forget-password',
+                default => '/signin',
+            };
+            $key = $page === '/forget-password'
                 ? 'Password reset is temporarily unavailable. Please try again later.'
                 : 'Authentication request failed. Please try again later.';
+            $message = $this->clientAuthLanguage($page, $key, $language);
 
             return response()->json([
                 'error' => $message,
                 'language' => $message,
-            ], 500);
+            ]);
         }
     }
 
     private function requestLanguage(Request $request): string
     {
-        $language = strtolower((string) ($request->input('lang') ?: app()->getLocale() ?: 'en'));
-        return str_starts_with($language, 'vi') ? 'vi' : 'en';
+        $configuredLanguage = Config::where('domain', getDomain())->value('default_lang');
+        $language = strtolower(str_replace('_', '-', (string) (
+            $request->input('lang')
+                ?: $request->header('X-Language')
+                ?: $request->cookie('data-lang')
+                ?: $configuredLanguage
+                ?: app()->getLocale()
+                ?: 'en'
+        )));
+        $language = explode('-', $language)[0];
+
+        return preg_match('/^[a-z]{2}$/', $language)
+            && is_file(resource_path('lang/' . $language . '.json'))
+            ? $language
+            : 'en';
     }
 
-    private function localizeAuthMessage(string $message, string $language): string
+    private function clientAuthLanguage(string $page, string $key, string $language): string
     {
-        $messages = [
-            'Tài khoản không tồn tại' => ['en' => 'Account does not exist', 'vi' => 'Tài khoản không tồn tại'],
-            'Tài khoản của bạn đã bị khóa' => ['en' => 'Your account has been locked', 'vi' => 'Tài khoản của bạn đã bị khóa'],
-            'Tài khoản hoặc mật khẩu không đúng' => ['en' => 'Incorrect username or password', 'vi' => 'Tài khoản hoặc mật khẩu không đúng'],
-            'Đăng nhập thành công!' => ['en' => 'Sign in successfully', 'vi' => 'Đăng nhập thành công!'],
-            'Xác thực 2FA' => ['en' => 'Two-factor authentication required', 'vi' => 'Vui lòng xác thực 2FA'],
-            'Mã xác thực không đúng.' => ['en' => 'The verification code is incorrect.', 'vi' => 'Mã xác thực không đúng.'],
-            'Tạo tài khoản thành công!' => ['en' => 'Account created successfully!', 'vi' => 'Tạo tài khoản thành công!'],
-            'Vui lòng nhập tên đăng nhập' => ['en' => 'Please enter your username', 'vi' => 'Vui lòng nhập tên đăng nhập'],
-            'Vui lòng nhập mật khẩu' => ['en' => 'Please enter your password', 'vi' => 'Vui lòng nhập mật khẩu'],
-            'Vui lòng đồng ý với các điều khoản sử dụng' => ['en' => 'You must agree to the terms and conditions', 'vi' => 'Vui lòng đồng ý với các điều khoản sử dụng'],
+        $languagePath = resource_path('lang/' . $language . '.json');
+        if (is_file($languagePath)) {
+            $translations = json_decode(file_get_contents($languagePath), true);
+            $translated = is_array($translations) ? ($translations[$page . '.' . $key] ?? null) : null;
+            if (is_string($translated) && $translated !== '') {
+                return $translated;
+            }
+        }
+
+        $path = public_path('assets/client/language.js');
+        $source = is_file($path) ? file_get_contents($path) : false;
+        if (!is_string($source) || !preg_match('/^var LANGUAGE = (\{.*?^\});/ms', $source, $matches)) {
+            return $key;
+        }
+
+        $catalog = json_decode($matches[1], true);
+        if (!is_array($catalog)) {
+            return $key;
+        }
+
+        $dictionary = $language === 'vi' ? 'language' : 'core';
+        $translated = $catalog[$dictionary][$page][$key]
+            ?? $catalog['core'][$page][$key]
+            ?? $catalog[$dictionary]['/signin'][$key]
+            ?? $catalog['core']['/signin'][$key]
+            ?? null;
+
+        return is_string($translated) && $translated !== '' ? $translated : $key;
+    }
+
+    private function localizeAuthMessage(string $message, string $language, string $action): string
+    {
+        $keys = [
+            'Tài khoản không tồn tại' => 'Account does not exist',
+            'Tài khoản của bạn đã bị khóa' => 'Your account has been locked',
+            'Tài khoản hoặc mật khẩu không đúng' => 'Incorrect username or password',
+            'Đăng nhập thành công!' => 'Sign in successfully',
+            'Mã xác thực không đúng.' => 'The verification code is incorrect.',
+            'Tạo tài khoản thành công!' => 'Account created successfully!',
+            'Vui lòng nhập tên đăng nhập' => 'Please enter your username',
+            'Vui lòng nhập mật khẩu' => 'Please enter your password',
+            'Vui lòng đồng ý với các điều khoản sử dụng' => 'You must agree to the terms and conditions',
         ];
 
-        return $messages[$message][$language] ?? $message;
+        $key = $keys[$message] ?? $message;
+        $page = match ($action) {
+            'Account-signup' => '/signup',
+            'Account-checkGGAuth' => '/2fa-auth',
+            'Account-resetPassword', 'Account-resendVerifyEmail' => '/forget-password',
+            default => '/signin',
+        };
+
+        return $this->clientAuthLanguage($page, $key, $language);
     }
 
-    private function legacyValidationError(ValidationException $e, string $language): array
+    private function legacyValidationError(ValidationException $e, string $language, string $action): array
     {
         $failed = $e->validator->failed();
         $field = array_key_first($failed);
         $rule = $field ? array_key_first($failed[$field]) : null;
 
         if ($rule === 'Required') {
-            return [
-                'error' => $language === 'vi' ? 'Xin hãy nhập đầy đủ thông tin' : 'All fields cannot be blank',
-                'language' => $language === 'vi' ? 'Xin hãy nhập đầy đủ thông tin' : 'All fields cannot be blank',
-            ];
+            $page = $action === 'Account-signup' ? '/signup' : '/signin';
+            $message = $this->clientAuthLanguage($page, 'All fields cannot be blank', $language);
+            return ['error' => $message, 'language' => $message];
         }
 
-        $messages = match (strtolower("{$field}.{$rule}")) {
-            'username.regex' => ['Username format is invalid', 'Tên đăng nhập chỉ gồm chữ thường, số và dấu gạch dưới'],
-            'username.unique' => ['Username already exists', 'Tên đăng nhập này đã tồn tại'],
-            'email.email' => ['Email address is invalid', 'Địa chỉ email không hợp lệ'],
-            'email.unique' => ['Email already exists', 'Email này đã được đăng ký'],
-            'password.confirmed' => ['Password confirmation does not match', 'Mật khẩu xác nhận không khớp'],
-            'password.min' => ['Password must be at least 8 characters', 'Mật khẩu phải có ít nhất 8 ký tự'],
-            default => ['The submitted data is invalid', $e->validator->errors()->first()],
+        $key = match (strtolower("{$field}.{$rule}")) {
+            'username.regex' => 'Username format is invalid',
+            'username.unique' => 'Username already exists',
+            'email.email' => 'Email address is invalid',
+            'email.unique' => 'Email already exists',
+            'password.confirmed' => 'Password confirmation does not match',
+            'password.min' => 'Password must be at least 8 characters',
+            default => 'The submitted data is invalid',
         };
 
-        $message = $language === 'vi' ? $messages[1] : $messages[0];
+        $page = $action === 'Account-signup' ? '/signup' : '/signin';
+        $message = $this->clientAuthLanguage($page, $key, $language);
         return ['error' => $message, 'language' => $message];
     }
 
@@ -317,7 +378,7 @@ class AuthController extends Controller
         // 2FA
         if ($user->hasTwoFactorEnabled()) {
             session(['2fa_pending_user_id' => $user->id]);
-            return $this->ok($request, 'Xác thực 2FA', route('2fa.show'));
+            return $this->ok($request, '', route('2fa.show'));
         }
 
         Auth::login($user, false);
@@ -705,6 +766,7 @@ class AuthController extends Controller
         $html = view(view()->exists($view) ? $view : "clients.theme-{$authTheme}.auth.{$page}", array_merge([
             'config' => $config,
             'settings' => $config?->toArray() ?? [],
+            'authLanguageCatalogs' => $this->authLanguageCatalogs(),
         ], $data))->render();
         $html = $this->applyAuthCustomization($html, $theme, $page, $authTheme);
 
@@ -712,6 +774,44 @@ class AuthController extends Controller
             'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
             'Pragma' => 'no-cache',
         ]);
+    }
+
+    private function authLanguageCatalogs(): array
+    {
+        $prefixes = [
+            '/signin.',
+            '/signup.',
+            '/forget-password.',
+            '/2fa-auth.',
+            '/resetpassword.',
+            '/addfunds.Verifying...',
+            'auth.',
+            'message.Alert',
+        ];
+        $catalogs = [];
+
+        foreach (glob(resource_path('lang/*.json')) ?: [] as $path) {
+            $code = strtolower(pathinfo($path, PATHINFO_FILENAME));
+            if (!preg_match('/^[a-z]{2}$/', $code)) {
+                continue;
+            }
+
+            $messages = json_decode(file_get_contents($path), true);
+            if (!is_array($messages)) {
+                continue;
+            }
+
+            foreach ($messages as $key => $value) {
+                foreach ($prefixes as $prefix) {
+                    if (str_starts_with($key, $prefix)) {
+                        $catalogs[$code][$key] = $value;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $catalogs;
     }
 
     private function applyAuthCustomization(string $html, string $theme, string $page, string $authTheme): string

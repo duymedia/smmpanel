@@ -25,7 +25,7 @@
                             service</label>
                         <select id="sl-quick-search" class="form-select form-select-solid" multiple
                             onchange="_new.on.change.search(this.value)"
-                            data-placeholder="Please choose"
+                            data-lang="Please choose"
                             style="height:43px;overflow:hidden"></select>
                     </div>
                     <div class="row g-5">
@@ -340,10 +340,14 @@
                                 <div id="avg-time-container" class="" style="display:none">
                                     <label class="form-label" data-lang="Average time">Average time</label>
                                     <input type="text" id="ipt-average-time" class="form-control form-control-solid"
-                                        disabled="">
+                                        disabled="" aria-label="Average time">
                                     <small class="form-text text-muted fst-italic"><span
                                             data-lang="Average time description">The average time is
                                             based on 10 latest completed orders per 1000 quantity</span></small>
+                                    <div id="average-time-v2-container" class="mt-3" style="display: none;">
+                                        <label class="form-label" data-lang="Recent completion times">Recent completion times</label>
+                                        <div id="average-time-v2-list" class="d-flex flex-wrap gap-2"></div>
+                                    </div>
                                 </div>
                             @endif
                             <div class="p-5 mt-3 border border-dashed border-3 div-description" style="">
@@ -460,4 +464,3 @@
         })(jQuery);
     </script>
 @endpush
-

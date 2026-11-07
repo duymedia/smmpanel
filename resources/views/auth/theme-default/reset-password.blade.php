@@ -1,6 +1,7 @@
 ﻿<!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-theme="light">
 <head>
+    @include('auth.theme-default.partials.bootstrap')
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -25,25 +26,25 @@
                         @csrf
                         <input type="hidden" name="token" value="{{ $token }}">
                         <div class="text-center mb-11">
-                            <h1 class="text-dark fw-bolder mb-3" data-lang="Reset Password">Đặt lại mật khẩu</h1>
-                            <div class="text-gray-500 fw-semibold fs-6" data-lang="Enter your new password">Nhập mật khẩu mới cho tài khoản của bạn.</div>
+                            <h1 class="text-dark fw-bolder mb-3" data-lang="auth.reset_password">Đặt lại mật khẩu</h1>
+                            <div class="text-gray-500 fw-semibold fs-6" data-lang="auth.enter_new_password">Nhập mật khẩu mới cho tài khoản của bạn.</div>
                         </div>
                         <div class="fv-row mb-8">
                             <input type="email" name="email" value="{{ old('email', $email) }}" class="form-control"
-                                placeholder="Email" data-lang="Email" required autofocus>
+                                placeholder="Email" data-lang="auth.email" required autofocus>
                         </div>
                         <div class="fv-row mb-8">
                             <input type="password" name="password" class="form-control" placeholder="Mật khẩu mới"
-                                data-lang="New password" required>
+                                data-lang="auth.new_password" required>
                         </div>
                         <div class="fv-row mb-8">
                             <input type="password" name="password_confirmation" class="form-control"
-                                placeholder="Nhập lại mật khẩu" data-lang="Repeat password" required>
+                                placeholder="Nhập lại mật khẩu" data-lang="auth.confirm_password" required>
                         </div>
                         <div class="d-grid mb-10"><button type="submit" class="btn btn-primary"
-                                data-lang="Reset Password">Đặt lại mật khẩu</button></div>
+                                data-lang="auth.reset_password">Đặt lại mật khẩu</button></div>
                         <div class="text-center"><a href="{{ route('login') }}" class="link-primary"
-                                data-lang="Back to Sign In">Quay lại đăng nhập</a></div>
+                                data-lang="auth.back_to_login">Quay lại đăng nhập</a></div>
                     </form>
                 </div>
             </div>
@@ -62,35 +63,7 @@
 <script src="{{ asset('cdn.whoispanel.com/dashboard/5/js/scripts.bundle.js') }}"></script>
 <script src="{{ asset('cdn.whoispanel.com/libs/jquery.blockUI/2.70/jquery.blockUI.min.js') }}"></script>
 <script src="{{ asset('assets/client/language.js') }}?v={{ filemtime(public_path('assets/client/language.js')) }}"></script>
-<script>
-    (function () {
-        var language = window.LANGUAGE;
-        if (!language) return;
-
-        var segments = window.location.pathname.split('/');
-        var page = '/' + (segments[1] || '');
-
-        document.querySelectorAll('[data-lang]').forEach(function (element) {
-            var key = element.getAttribute('data-lang') || element.textContent.trim();
-            var elementPage = element.getAttribute('data-page') || page;
-            var group = key.indexOf('::') >= 0 ? key.split('::')[0] : elementPage;
-            var localized = language.language?.[group]?.[key]
-                || language.core?.[group]?.[key];
-
-            if (!localized) return;
-
-            if (element.matches('input, textarea')) {
-                if (element.hasAttribute('placeholder')) {
-                    element.setAttribute('placeholder', localized);
-                } else if (element.hasAttribute('value')) {
-                    element.value = localized;
-                }
-            } else {
-                element.innerHTML = localized;
-            }
-        });
-    })();
-</script>
+@include('auth.theme-default.partials.language')
 <script src="{{ asset('assets/app.js') }}?v=16.8"></script>
 <script src="{{ asset('assets/client/auth.js') }}?v=16.9"></script>
 </body>

@@ -87,11 +87,13 @@
                               <a class="menu-link py-3 menu-link" href="/admin/services"><span class="menu-title" data-lang="menu::Services">Dịch vụ</span></a>
                            </div>
                            <!--end:Menu item-->
-                           <!--begin:Menu item-->
-                           <div class="menu-item">
-                              <a class="menu-link py-3 menu-link" href="/admin/categories"><span class="menu-title" data-lang="menu::Categories">Danh mục dịch vụ</span></a>
-                           </div>
-                           <!--end:Menu item-->
+                           @unless (isChildPanel())
+                              <!--begin:Menu item-->
+                              <div class="menu-item">
+                                 <a class="menu-link py-3 menu-link" href="/admin/categories"><span class="menu-title" data-lang="menu::Categories">Danh mục dịch vụ</span></a>
+                              </div>
+                              <!--end:Menu item-->
+                           @endunless
                         </div>
                         <!--end:Menu sub-->
                      </div>

@@ -49,6 +49,102 @@ if (!function_exists('getDomain')) {
     }
 }
 
+if (!function_exists('langLocale')) {
+    function langLocale(?string $code, ?string $name = null): ?string
+    {
+        $code = strtolower(str_replace('_', '-', trim((string) $code)));
+        $name = strtolower(trim((string) $name));
+        $aliases = [
+            'en' => 'en-GB', 'vi' => 'vi-VN', 'vn' => 'vi-VN',
+            'ar' => 'ar', 'bs' => 'bs', 'be' => 'be',
+        ];
+        $countryMap = [];
+        foreach ([
+            'en' => 'ag ai aq as au bb bm bs bw bz ca cc ck cx dm fj fk fm gb gd gg gh gi gm gu gy ie im io je jm ke ki kn ky lc lr ls mh mp ms mu mw na ng nr nu nz pg pn pw sb sc sg sh sl ss sz tc tk tt tv ug us vc vg vi za zm zw',
+            'es' => 'ar bo cl co cr cu do ec es gq gt hn mx ni pa pe pr py sv uy ve',
+            'fr' => 'bf bi bj bl cd cf cg ci cm dj fr ga gn ht km mc mf mg ml nc ne pf pm re sn td tg vu wf yt',
+            'ar' => 'ae bh dz eg eh iq jo kw lb ly ma mr om ps qa sa sd sy tn ye',
+            'nl' => 'an aw be cw nl sr sx', 'de' => 'at ch de li', 'pt' => 'ao cv gw mz pt st tl',
+            'pt-BR' => 'br', 'zh-CN' => 'cn mo', 'zh-TW' => 'tw', 'zh-HK' => 'hk',
+            'ja' => 'jp', 'ko' => 'kp kr', 'vi-VN' => 'vn',
+            'ru' => 'ru', 'uk' => 'ua', 'be' => 'by', 'bg' => 'bg', 'cs' => 'cz',
+            'da' => 'dk', 'et' => 'ee', 'fi' => 'fi', 'el' => 'cy gr', 'he' => 'il',
+            'fa' => 'af ir', 'is' => 'is', 'ky' => 'kg', 'kk' => 'kz', 'lo' => 'la',
+            'lt' => 'lt', 'lv' => 'lv', 'my' => 'mm', 'no' => 'no sj', 'pl' => 'pl',
+            'ro' => 'md ro', 'sv' => 'se', 'sk' => 'sk', 'sl' => 'si', 'th' => 'th',
+            'tr' => 'tr', 'uz' => 'uz', 'bn' => 'bd', 'hi' => 'in', 'ur' => 'pk',
+            'si' => 'lk', 'km' => 'kh', 'hy' => 'am', 'az' => 'az', 'ka' => 'ge',
+            'ne' => 'np', 'dz' => 'bt', 'id' => 'id', 'ms' => 'my bn', 'tl' => 'ph',
+            'sw' => 'tz', 'rw' => 'rw', 'am' => 'et', 'so' => 'so', 'ti' => 'er',
+            'sq' => 'al xk', 'bs' => 'ba', 'hr' => 'hr', 'hu' => 'hu', 'mk' => 'mk',
+            'sr' => 'me rs', 'mt' => 'mt', 'lb' => 'lu', 'ca' => 'ad', 'dv' => 'mv',
+            'mn' => 'mn', 'fo' => 'fo', 'kl' => 'gl', 'tg' => 'tj', 'tk' => 'tm',
+            'to' => 'to', 'sm' => 'ws', 'it' => 'it sm va',
+        ] as $locale => $countries) {
+            foreach (explode(' ', $countries) as $country) {
+                if ($country !== '') {
+                    $countryMap[$country] = $locale;
+                }
+            }
+        }
+
+        $countryNames = [
+            'argentina' => 'es', 'belarus' => 'be', 'bahamas' => 'en', 'canada' => 'en',
+            'gabon' => 'fr', 'greenland' => 'kl', 'guam' => 'en', 'montserrat' => 'en',
+            'sierra leone' => 'en', 'slovenia' => 'sl', 'el salvador' => 'es',
+            'sweden' => 'sv', 'u.s. virgin islands' => 'en', 'virgin islands' => 'en',
+        ];
+        $languageNames = [
+            'arabic' => 'ar', 'bengali' => 'bn', 'belarusian' => 'be', 'bosnian' => 'bs',
+            'catalan' => 'ca', 'chinese' => 'zh-CN', 'english' => 'en-GB', 'estonian' => 'et',
+            'galician' => 'gl', 'gujarati' => 'gu', 'irish' => 'ga', 'latin' => 'la',
+            'malay' => 'ms', 'maori' => 'mi', 'sami' => 'se', 'sinhala' => 'si',
+            'slovenian' => 'sl', 'somali' => 'so', 'swedish' => 'sv', 'vietnamese' => 'vi-VN',
+        ];
+
+        if (isset($countryNames[$name])) {
+            return $countryNames[$name];
+        }
+
+        if (isset($languageNames[$name])) {
+            return $languageNames[$name];
+        }
+
+        if (isset($aliases[$code])) {
+            return $aliases[$code];
+        }
+
+        if (isset($countryMap[$code])) {
+            return $countryMap[$code];
+        }
+
+        if (class_exists(\Locale::class) && preg_match('/^[a-z]{2}$/', $code)) {
+            $locale = \Locale::addLikelySubtags('und-' . strtoupper($code));
+            $language = strtolower((string) \Locale::getPrimaryLanguage($locale));
+            if ($language !== '' && $language !== 'und') {
+                return $language;
+            }
+        }
+
+        // Use an explicitly stored language tag only when it is not a country code.
+        if (preg_match('/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/', $code) && !isset($countryMap[$code])) {
+            return $code;
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('langPair')) {
+    function langPair(?string $from, ?string $to, ?string $name = null): ?string
+    {
+        $from = langLocale($from);
+        $to = langLocale($to, $name);
+
+        return $from && $to ? $from . '|' . $to : null;
+    }
+}
+
 if (!function_exists('isChildPanel')) {
     function isChildPanel(?string $domain = null): bool
     {
@@ -104,6 +200,10 @@ if (!function_exists('panelCanAccess')) {
             return false;
         }
 
+        if (isChildPanel($domain) && ($page === 'categories' || str_starts_with($page, 'categories/'))) {
+            return false;
+        }
+
         $access = panelAccess($domain);
         if ($access === 'all' || $access === 'parent' || panelAccessPages($domain) === ['*']) {
             return true;
@@ -152,6 +252,10 @@ if (!function_exists('panelAccessPages')) {
 
             if ($value === 'all' || $value === ['all']) {
                 return $pages[$domain] = ['*'];
+            }
+
+            if ($value === 'child') {
+                return $pages[$domain] = \App\Models\ChildPanel::DEFAULT_ACCESS_PAGES;
             }
 
             $pages[$domain] = is_array($value)
@@ -445,13 +549,36 @@ if (!function_exists('userMoney')) {
     }
 }
 
+if (!function_exists('langFlagCode')) {
+    function langFlagCode(?object $language = null, ?string $fallback = 'en'): string
+    {
+        $storedFlag = strtolower(trim((string) ($language?->flag ?? $language?->flag_class ?? '')));
+
+        if (preg_match('/(?:^|\s)fi-([a-z]{2,3})(?:$|\s)/', $storedFlag, $matches)) {
+            return $matches[1];
+        }
+
+        if (preg_match('/^[a-z]{2,3}$/', $storedFlag)) {
+            return $storedFlag;
+        }
+
+        $code = strtolower(trim((string) ($language?->code ?: $fallback ?: 'en')));
+
+        return match ($code) {
+            'vi', 'vn' => 'vn',
+            'en', 'us' => 'us',
+            default => preg_match('/^[a-z]{2,3}$/', $code) ? $code : 'us',
+        };
+    }
+}
+
 if (!function_exists('langData')) {
     
     function langData(?object $language = null, ?string $fallback = 'en'): array
     {
-        $code = strtolower((string) ($language?->code ?: $fallback ?: 'en'));
-        $flagClass = trim((string) ($language?->flag ?: ($code === 'vi' ? 'fi fi-vn' : 'fi fi-us')));
-        $flagCode = preg_replace('/^(?:fi\s+)?fi-/', '', $flagClass) ?: ($code === 'vi' ? 'vn' : 'us');
+        $code = strtolower(trim((string) ($language?->code ?: $fallback ?: 'en')));
+        $flagCode = langFlagCode($language, $fallback);
+        $flagClass = 'fi fi-' . $flagCode;
 
         return [
             'id' => $language?->id,
@@ -522,14 +649,14 @@ if (!function_exists('formatCurrencyAmount')) {
 }
 
 if (!function_exists('formatCharge')) {
-    function formatCharge($charge)
+    function formatCharge($charge, bool $groupThousands = false)
     {
         if ($charge == 0) {
             return '0';
         }
 
         $charge = (float) $charge;
-        $formatted = number_format($charge, 8, '.', '');
+        $formatted = number_format($charge, 8, '.', $groupThousands ? ',' : '');
         $formatted = rtrim($formatted, '0');
         $formatted = rtrim($formatted, '.');
 
@@ -606,6 +733,100 @@ if (!function_exists('formatAverageTime')) {
         }
 
         return implode(' ', $parts);
+    }
+}
+
+if (!function_exists('averageTimeV2Items')) {
+    function averageTimeV2Items($value): array
+    {
+        $data = is_string($value) ? json_decode($value, true) : $value;
+        if (!is_array($data)) {
+            return [];
+        }
+        $items = ($data['v'] ?? null) === 2 ? ($data['items'] ?? []) : $data;
+        if (!is_array($items)) return [];
+
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) continue;
+            $quantity = $item['quantity'] ?? $item[0] ?? null;
+            $seconds = $item['seconds'] ?? $item[1] ?? null;
+            if (is_numeric($quantity) && is_numeric($seconds) && (int) $quantity > 0 && (int) $seconds >= 0) {
+                $normalized[] = ['quantity' => (int) $quantity, 'seconds' => (int) $seconds];
+            }
+        }
+
+        return $normalized;
+    }
+}
+
+if (!function_exists('averageTimeV2LegacySeconds')) {
+    function averageTimeV2LegacySeconds($value): int
+    {
+        $data = is_string($value) ? json_decode($value, true) : $value;
+        return is_array($data) && ($data['v'] ?? null) === 2 && is_numeric($data['legacy_seconds'] ?? null)
+            ? max(0, (int) $data['legacy_seconds'])
+            : 0;
+    }
+}
+
+if (!function_exists('formatAverageTimeV2Duration')) {
+    function formatAverageTimeV2Duration($seconds): string
+    {
+        $seconds = max(0, (int) $seconds);
+        $hours = intdiv($seconds, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+        $remainingSeconds = $seconds % 60;
+        $parts = [];
+
+        if ($hours > 0) $parts[] = $hours . ' h';
+        if ($minutes > 0) $parts[] = $minutes . ' min';
+        if ($remainingSeconds > 0 || $parts === []) $parts[] = $remainingSeconds . ' sec';
+
+        return implode(' ', $parts);
+    }
+}
+
+if (!function_exists('adminServiceFeatureOptions')) {
+    function adminServiceFeatureOptions(): array
+    {
+        return [
+            'Owner', 'Exclusive', 'Provider Direct', 'New', 'Best seller', 'Promotion', 'Recommend', 'Instant',
+            'Super Fast', 'Real', 'Lifetime', '7 days Refill', '15 days Refill', '30 days Refill', '60 days Refill',
+            '90 days Refill', '365 days Refill', 'No refill', 'Auto Refill', 'No refund', 'Refill Button', 'Cancel Button',
+        ];
+    }
+}
+
+if (!function_exists('adminServiceFormData')) {
+    function adminServiceFormData(?object $service = null, mixed $fallbackServiceId = null): array
+    {
+        $averageTimeValue = (string) ($service->average_time ?? '');
+        $averageTimeV2Value = (string) ($service->average_time_v2 ?? '');
+        $legacyAverageTimeData = json_decode($averageTimeValue, true);
+
+        if ($averageTimeV2Value === '' && is_array($legacyAverageTimeData) && ($legacyAverageTimeData['v'] ?? null) === 2) {
+            $averageTimeV2Value = json_encode($legacyAverageTimeData) ?: '';
+        }
+
+        $averageTimeV2Items = averageTimeV2Items($averageTimeV2Value);
+        $averageTimeV2Value = $service === null ? '' : (json_encode(array_map(
+            static fn ($item) => [$item['quantity'], $item['seconds']],
+            $averageTimeV2Items
+        )) ?: '[]');
+        $hasAverageTimeV2 = $averageTimeV2Items !== [];
+        $legacyAverageTime = is_numeric($averageTimeValue)
+            ? (int) $averageTimeValue
+            : averageTimeV2LegacySeconds($averageTimeValue);
+
+        return [
+            'serviceId' => $service?->id ?? $fallbackServiceId,
+            'averageTimeV2Value' => $averageTimeV2Value,
+            'hasAverageTimeV2' => $hasAverageTimeV2,
+            'hasAverageTime' => $hasAverageTimeV2 || $legacyAverageTime > 0,
+            'legacyAverageTime' => $legacyAverageTime,
+            'featureOptions' => adminServiceFeatureOptions(),
+        ];
     }
 }
 

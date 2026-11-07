@@ -82,16 +82,12 @@ class ChildPanelController extends Controller
             'child-panels' => 'Quản lý website con',
         ];
 
+        unset($accessPages['categories']);
+
         // Pages introduced by the reworked navbar (see t.html).
         $accessPages['ticket_statistics_by_service'] = 'Ticket statistics by service';
         $accessPages['api_v2'] = 'API v2';
-        $childNavbarPages = [
-            'orders', 'refill_services', 'cancel_services', 'accounts',
-            'services', 'categories', 'payments', 'coupons', 'messages',
-            'tickets', 'news', 'ticket_statistics_by_service', 'settings',
-            'analytics', 'reports', 'affiliates', 'api', 'api_v2', 'backup',
-        ];
-        $childPanelAccessPages = array_intersect_key($accessPages, array_flip($childNavbarPages));
+        $childPanelAccessPages = array_intersect_key($accessPages, array_flip(ChildPanel::DEFAULT_ACCESS_PAGES));
         // Render every available page in the modal so ALL and Child panel are
         // visibly different selections. The restricted set is applied by the
         // Child panel quick option in admin.js and by the middleware.
@@ -105,7 +101,7 @@ class ChildPanelController extends Controller
             // The model default is "child". Treat it as the standard child
             // admin area instead of trying to decode it as JSON.
             if ($access === 'child') {
-                $accessList = array_keys($childPanelAccessPages);
+                $accessList = ChildPanel::DEFAULT_ACCESS_PAGES;
             }
             $panel->access_list = is_array($accessList) ? $accessList : [];
             $panel->is_access_all = $access === 'all' || $accessList === ['all'];

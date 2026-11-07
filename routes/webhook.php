@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Http\Request;
 use App\Http\Controllers\Webhook\PaymentWebhookController;
+use App\Http\Controllers\Crons\CronHeleketController;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,10 +19,12 @@ use App\Http\Controllers\Webhook\PaymentWebhookController;
 Route::get('/webhook/sieuthicode', [PaymentWebhookController::class, 'handlePayment'])
     ->name('webhook.sieuthicode.get');
 Route::post('/webhook/sieuthicode', [PaymentWebhookController::class, 'handlePayment'])
-    ->name('webhook.sieuthicode');;
+    ->name('webhook.sieuthicode');
+Route::post('/webhook/heleket', [CronHeleketController::class, 'handle'])
+    ->name('webhook.heleket');
 
 // Notification webhook - POST để đẩy thông báo modal
-Route::post('/webhook/notification', function (\Illuminate\Http\Request $request) {
+Route::post('/webhook/notification', function (Request $request) {
     $content = $request->input('content') ?? $request->input('message') ?? '';
     $title = $request->input('title') ?? 'Thông báo';
 
@@ -40,9 +44,3 @@ Route::post('/webhook/notification', function (\Illuminate\Http\Request $request
 
     return response()->json(['status' => true, 'msg' => 'Notification sent', 'version' => $data['version']]);
 })->name('webhook.notification');
-
-//demo webhook notice
-// {
-//     "title": "Thông báo",
-//     "content": "<p>Hello mọi người</p>"
-// }

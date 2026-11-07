@@ -448,4 +448,3 @@ Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
         Route::delete('{childPanel}', [\App\Http\Controllers\Admin\ChildPanelController::class, 'destroy'])->name('destroy');
     });
 });
-

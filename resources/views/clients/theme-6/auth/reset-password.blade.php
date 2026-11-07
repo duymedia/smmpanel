@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    @include('auth.theme-6.partials.language-bootstrap')
     <title>Reset Password - {{ $settings['title'] ?? config('app.name') }}</title>
     <link rel="manifest" href="{{ route('manifest') }}">
     <link rel="canonical" href="{{ url()->current() }}">
@@ -22,25 +23,25 @@
                         @csrf
                         <input type="hidden" name="token" value="{{ $token }}">
                         <div class="text-center mb-11">
-                            <h1 class="text-dark fw-bolder mb-3" data-lang="Reset Password">Đặt lại mật khẩu</h1>
-                            <div class="text-gray-500 fw-semibold fs-6" data-lang="Enter your new password">Nhập mật khẩu mới cho tài khoản của bạn.</div>
+                            <h1 class="text-dark fw-bolder mb-3" data-lang="auth.reset_password">Đặt lại mật khẩu</h1>
+                            <div class="text-gray-500 fw-semibold fs-6" data-lang="auth.enter_new_password">Nhập mật khẩu mới cho tài khoản của bạn.</div>
                         </div>
                         <div class="fv-row mb-8">
                             <input type="email" name="email" value="{{ old('email', $email) }}" class="form-control"
-                                placeholder="Email" data-lang="Email" required autofocus>
+                                placeholder="Email" data-lang="auth.email" required autofocus>
                         </div>
                         <div class="fv-row mb-8">
                             <input type="password" name="password" class="form-control" placeholder="Mật khẩu mới"
-                                data-lang="New password" required>
+                                data-lang="auth.new_password" required>
                         </div>
                         <div class="fv-row mb-8">
                             <input type="password" name="password_confirmation" class="form-control"
-                                placeholder="Nhập lại mật khẩu" data-lang="Repeat password" required>
+                                placeholder="Nhập lại mật khẩu" data-lang="auth.confirm_password" required>
                         </div>
                         <div class="d-grid mb-10"><button type="submit" class="btn btn-primary"
-                                data-lang="Reset Password">Đặt lại mật khẩu</button></div>
+                                data-lang="auth.reset_password">Đặt lại mật khẩu</button></div>
                         <div class="text-center"><a href="{{ route('login') }}" class="link-primary"
-                                data-lang="Back to Sign In">Quay lại đăng nhập</a></div>
+                                data-lang="auth.back_to_login">Quay lại đăng nhập</a></div>
                     </form>
                 </div>
             </div>
@@ -57,5 +58,6 @@
 </div>
 <script src="{{ asset('cdn.whoispanel.com/dashboard/5/plugins/global/plugins.bundle.js') }}"></script>
 <script src="{{ asset('cdn.whoispanel.com/dashboard/5/js/scripts.bundle.js') }}"></script>
+@include('auth.theme-default.partials.language')
 </body>
 </html>

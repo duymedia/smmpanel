@@ -230,8 +230,21 @@
                                                                 {{ number_format($service['min'] ?? '') }}</td>
                                                             <td data-label="{{ __('services.max_order') }}">
                                                                 {{ number_format($service['max'] ?? '') }}</td>
-                                                            <td data-label="{{ __('services.avg_time') }}" class="nowrap">
-                                                                {{ $service['average_time'] ?? '-' }}
+                                                            @php($avgTimeV2Items = averageTimeV2Items($service['average_time_v2'] ?? ''))
+                                                            <td data-label="{{ __('services.avg_time') }}" class="{{ $avgTimeV2Items !== [] ? 'text-wrap' : 'nowrap' }}">
+                                                                @if ($avgTimeV2Items !== [])
+                                                                    <div class="d-flex flex-wrap gap-1">
+                                                                        @php($avgTimeLegacySeconds = is_numeric($service['average_time'] ?? null) ? (int) $service['average_time'] : 0)
+                                                                        @if ($avgTimeLegacySeconds > 0)
+                                                                            <span class="badge rounded-pill text-white px-3 py-2" style="background:#37a6a0">{{ formatAverageTime($avgTimeLegacySeconds) }}</span>
+                                                                        @endif
+                                                                        @foreach ($avgTimeV2Items as $item)
+                                                                            <span class="badge rounded-pill text-white px-3 py-2" style="background:#5b5ce2">{{ number_format($item['quantity']) }} = {{ formatAverageTimeV2Duration($item['seconds']) }}</span>
+                                                                        @endforeach
+                                                                    </div>
+                                                                @else
+                                                                    {{ is_numeric($service['average_time'] ?? null) ? formatAverageTime($service['average_time']) : ($service['average_time'] ?? '-') }}
+                                                                @endif
                                                             </td>
                                                             <td data-label="{{ __('services.description') }}" class="services-list__description">
                                                                 <div class="component_button_view">

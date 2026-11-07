@@ -321,7 +321,7 @@
                     </div>
                     <div class="row g-2 child-panel-access-list">
                     @foreach($accessPages as $key => $label)
-                        <div class="col-md-6"><label class="child-panel-access-page w-100 d-flex align-items-center gap-2"><input class="form-check-input access-page" type="checkbox" value="{{ $key }}" data-key="{{ $key }}"><span><span class="fw-bold d-block">{{ $label }}</span><span class="text-muted fs-8">/admin/{{ $key }}</span></span></label></div>
+                        <div class="col-md-6"><label class="child-panel-access-page w-100 d-flex align-items-center gap-2"><input class="form-check-input access-page" type="checkbox" value="{{ $key }}" data-key="{{ $key }}"><span><span class="fw-bold d-block">{{ $label }}</span><span class="text-muted fs-8">/{{ $key }}</span></span></label></div>
                     @endforeach
                     </div>
                 </div>

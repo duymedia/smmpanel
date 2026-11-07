@@ -4,6 +4,7 @@ import json
 import queue
 import re
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,6 +16,8 @@ from tkinter import filedialog, messagebox, ttk
 
 
 API_URL = "https://smmtop.com/api/system/history/list"
+ORDER_LIST_URL = "https://smmtop.com/api/order/list"
+NAPLIKE_ORDER_URL = "https://naplike.com/request"
 DEFAULT_API_KEY = "d447e5c307213a69eccc9946e0706f1d"
 TIMEZONE = timezone(timedelta(hours=7), "UTC+07")
 PAGE_SIZE = 1000
@@ -36,6 +39,169 @@ FIELDS = [
     ("time", "time"),
     ("owner", "owner"),
 ]
+
+ORDER_COLUMNS = [
+    ("", ""),
+    ("id", ""),
+    ("id", "action"),
+    ("status", "status"),
+    ("service_category", ""),
+    ("service_id", "service_id"),
+    ("object_link", "object_link"),
+    ("object_id", "object_id"),
+    ("start_count", "start_count"),
+    ("quantity", "quantity"),
+    ("remains", "remains"),
+    ("charge", "charge"),
+    ("created_time", ""),
+    ("owner", ""),
+]
+
+NAPLIKE_COLUMNS = [
+    ("order_id", ""),
+    ("order_status", "order_status"),
+    ("order_id", "order_id"),
+    ("order_start", ""),
+    ("order_link", "order_link"),
+    ("account_id", "account_id"),
+    ("service_id", "service_id"),
+    ("provider_oid", "provider_oid"),
+    ("provider_id", "provider_id"),
+    ("order_tag", "order_tag"),
+    ("order_type", "order_type"),
+    ("order_created", "order_created"),
+]
+
+
+def make_datatable_payload(columns, start, length, draw, order_column, search_column=None, search_value=""):
+    payload = {"draw": draw}
+    for index, (data, name) in enumerate(columns):
+        payload.update({
+            f"columns[{index}][data]": data,
+            f"columns[{index}][name]": name,
+            f"columns[{index}][searchable]": "true" if index else "false",
+            f"columns[{index}][orderable]": "true" if index else "false",
+            f"columns[{index}][search][value]": search_value if index == search_column else "",
+            f"columns[{index}][search][regex]": "false",
+        })
+    payload.update({
+        "order[0][column]": str(order_column),
+        "order[0][dir]": "desc",
+        "start": start,
+        "length": length,
+        "search[value]": "",
+        "search[regex]": "false",
+    })
+    return payload
+
+
+def post_form(url, payload, cookie=None, referer=None):
+    headers = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/156.0.0.0 Safari/537.36",
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+    if referer:
+        headers["Referer"] = referer
+        headers["Origin"] = urllib.parse.urlsplit(referer).scheme + "://" + urllib.parse.urlsplit(referer).netloc
+    request = urllib.request.Request(
+        url,
+        data=urllib.parse.urlencode(payload).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=45) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"API trả về HTTP {exc.code}.") from None
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        reason = getattr(exc, "reason", None)
+        raise RuntimeError(f"Không thể đọc dữ liệu từ API: {reason or exc}") from None
+    if not isinstance(body, dict) or not isinstance(body.get("data"), list):
+        raise RuntimeError("Phản hồi API không hợp lệ hoặc phiên đăng nhập đã hết hạn.")
+    return body
+
+
+def fetch_orders(key, start_date, end_date, notify_page):
+    rows = []
+    pages = 0
+    offset = 0
+    for page in range(MAX_PAGES):
+        payload = make_datatable_payload(ORDER_COLUMNS, offset, PAGE_SIZE, page + 1, 1)
+        payload["key"] = key
+        body = post_form(
+            ORDER_LIST_URL,
+            payload,
+            referer="https://smmtop.com/orders.html",
+        )
+        page_rows = body["data"]
+        pages += 1
+        if not page_rows:
+            break
+        offset += len(page_rows)
+        oldest = None
+        for order in page_rows:
+            if not isinstance(order, dict):
+                continue
+            created = parse_api_time(order.get("created_time"))
+            if created and (oldest is None or created < oldest):
+                oldest = created
+            if created and start_date <= created <= end_date:
+                row = dict(order)
+                row["_created"] = created
+                row["_naplike"] = "Chưa kiểm tra"
+                row["_naplike_row"] = None
+                rows.append(row)
+        notify_page(pages, len(rows))
+        total = body.get("recordsFiltered", body.get("recordsTotal"))
+        reached_total = isinstance(total, int) and offset >= total
+        if reached_total or (oldest and oldest < start_date):
+            break
+    rows.sort(key=lambda row: row["_created"], reverse=True)
+    return rows, pages, pages >= MAX_PAGES
+
+
+def check_naplike(provider_oid, cookie):
+    payload = make_datatable_payload(
+        NAPLIKE_COLUMNS, 0, 50, 3, 2, search_column=7, search_value=str(provider_oid)
+    )
+    payload["action"] = "Admin-Order-list"
+    payload["searchTypes[order_link]"] = "exact"
+    body = post_form(
+        NAPLIKE_ORDER_URL,
+        payload,
+        cookie=cookie,
+        referer="https://naplike.com/admin/orders",
+    )
+    matches = [
+        order for order in body["data"]
+        if isinstance(order, dict) and str(order.get("provider_oid", "")) == str(provider_oid)
+    ]
+    return matches
+
+
+def normalize_cookie(value):
+    attributes = {"expires", "max-age", "path", "domain", "secure", "httponly", "samesite"}
+    cookies = []
+    for line in value.replace("\r", "\n").split("\n"):
+        line = line.strip()
+        if line.lower().startswith("set-cookie:"):
+            line = line.split(":", 1)[1].strip()
+        for part in line.split(";"):
+            part = part.strip()
+            if "=" not in part:
+                continue
+            name, cookie_value = part.split("=", 1)
+            if name.strip().lower() not in attributes and name.strip():
+                cookies.append((name.strip(), cookie_value.strip()))
+    merged = {}
+    for name, cookie_value in cookies:
+        merged[name] = cookie_value
+    return "; ".join(f"{name}={cookie_value}" for name, cookie_value in merged.items())
 
 
 class TextOnlyParser(HTMLParser):
@@ -160,24 +326,29 @@ def fetch_history(key, start_date, end_date, notify_page):
             API_URL,
             data=payload,
             headers={
-                "Accept": "application/json",
+                "Accept": "application/json, text/javascript, */*; q=0.01",
                 "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                 "X-Requested-With": "XMLHttpRequest",
-                "User-Agent": "Mozilla/5.0 (compatible; HistoryAudit/1.0)",
+                "Referer": "https://smmtop.com/history.html",
+                "Origin": "https://smmtop.com",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/156.0.0.0 Safari/537.36",
             },
             method="POST",
         )
         try:
             with urllib.request.urlopen(request, timeout=45) as response:
-                body = json.loads(response.read().decode("utf-8"))
+                body = json.loads(response.read().decode("utf-8-sig"))
         except urllib.error.HTTPError as exc:
             raise RuntimeError(f"API trả về HTTP {exc.code}.") from None
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except (urllib.error.URLError, TimeoutError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             reason = getattr(exc, "reason", None)
             raise RuntimeError(f"Không thể đọc dữ liệu từ API: {reason or exc}") from None
 
-        if not isinstance(body, dict) or not body.get("success") or not isinstance(body.get("data"), list):
+        if not isinstance(body, dict) or not isinstance(body.get("data"), list):
             raise RuntimeError("Phản hồi không hợp lệ hoặc API key không đúng.")
+        if body.get("success") is False:
+            detail = body.get("message") or body.get("error") or "API rejected the request"
+            raise RuntimeError(str(detail))
 
         page_rows = body["data"]
         pages += 1
@@ -216,6 +387,7 @@ class HistoryAuditApp:
         self.root.minsize(980, 620)
         self.root.configure(bg="#f3f5f7")
         self.results = []
+        self.order_results = []
         self.messages = queue.Queue()
         self._build_ui()
         self._poll_messages()
@@ -228,7 +400,13 @@ class HistoryAuditApp:
         style.configure("TButton", padding=(12, 8))
         style.configure("Stat.TLabel", font=("Segoe UI", 16, "bold"))
 
-        shell = ttk.Frame(self.root, padding=20)
+        notebook = ttk.Notebook(self.root)
+        notebook.pack(fill="both", expand=True)
+        history_tab = ttk.Frame(notebook, padding=20)
+        notebook.add(history_tab, text="Đối soát lịch sử")
+        self._build_orders_tab(notebook)
+
+        shell = ttk.Frame(history_tab)
         shell.pack(fill="both", expand=True)
         ttk.Label(shell, text="Đối soát biến động số dư", font=("Segoe UI", 20, "bold")).pack(anchor="w")
         ttk.Label(
@@ -332,6 +510,64 @@ class HistoryAuditApp:
         xscroll.pack(fill="x")
         yscroll.place(in_=self.tree, relx=1, rely=0, relheight=1, anchor="ne")
 
+    def _build_orders_tab(self, notebook):
+        tab = ttk.Frame(notebook, padding=20)
+        notebook.add(tab, text="Kiểm tra order")
+        ttk.Label(tab, text="Order SMMTop ↔ Naplike", font=("Segoe UI", 18, "bold")).pack(anchor="w")
+        ttk.Label(
+            tab,
+            text="Lọc order theo thời gian tạo và đối chiếu provider_oid trên Naplike.",
+            foreground="#667085",
+        ).pack(anchor="w", pady=(2, 14))
+
+        controls = ttk.LabelFrame(tab, text="Tham số", padding=12)
+        controls.pack(fill="x", pady=(0, 12))
+        controls.columnconfigure(1, weight=1)
+        controls.columnconfigure(3, weight=1)
+        ttk.Label(controls, text="Từ (giờ Việt Nam)").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=5)
+        self.order_from_var = tk.StringVar(value="2026-10-30 23:59:16")
+        ttk.Entry(controls, textvariable=self.order_from_var, width=22).grid(row=0, column=1, sticky="ew", padx=(0, 16), pady=5)
+        ttk.Label(controls, text="Đến (giờ Việt Nam)").grid(row=0, column=2, sticky="w", padx=(0, 8), pady=5)
+        self.order_to_var = tk.StringVar(value=datetime.now(TIMEZONE).strftime(DATE_FORMAT))
+        ttk.Entry(controls, textvariable=self.order_to_var, width=22).grid(row=0, column=3, sticky="ew", pady=5)
+        ttk.Label(controls, text="Cookie Naplike (Cookie hoặc Set-Cookie)").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=5)
+        self.naplike_cookie_var = tk.StringVar()
+        ttk.Entry(controls, textvariable=self.naplike_cookie_var, show="•").grid(row=1, column=1, columnspan=3, sticky="ew", pady=5)
+
+        actions = ttk.Frame(controls)
+        actions.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+        self.order_fetch_button = ttk.Button(actions, text="Lấy và đối chiếu order", command=self.start_order_fetch)
+        self.order_fetch_button.pack(side="left")
+        ttk.Label(actions, text="Dùng API key SMMTop ở tab đối soát lịch sử; cookie Naplike chỉ dùng trong phiên này.", foreground="#667085").pack(side="left", padx=12)
+        self.order_status_var = tk.StringVar(value="Sẵn sàng")
+        ttk.Label(actions, textvariable=self.order_status_var, foreground="#475467").pack(side="right")
+
+        self.order_tree = ttk.Treeview(
+            tab,
+            columns=("id", "created", "status", "provider", "naplike", "nap_status", "link"),
+            show="headings",
+        )
+        for column, label, width in (
+            ("id", "Order ID", 100),
+            ("created", "Thời gian tạo", 155),
+            ("status", "Trạng thái SMMTop", 125),
+            ("provider", "ID đối chiếu", 120),
+            ("naplike", "Đối chiếu Naplike", 180),
+            ("nap_status", "Trạng thái Naplike", 135),
+            ("link", "Link", 360),
+        ):
+            self.order_tree.heading(column, text=label)
+            self.order_tree.column(column, width=width, minwidth=80, anchor="w", stretch=column == "link")
+        self.order_tree.tag_configure("found", background="#e9f7ef", foreground="#176b3a")
+        self.order_tree.tag_configure("missing", background="#fff0ee", foreground="#982b20")
+        self.order_tree.tag_configure("check_error", background="#fff6e5", foreground="#8a4b08")
+        yscroll = ttk.Scrollbar(tab, orient="vertical", command=self.order_tree.yview)
+        xscroll = ttk.Scrollbar(tab, orient="horizontal", command=self.order_tree.xview)
+        self.order_tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+        self.order_tree.pack(fill="both", expand=True, side="top")
+        xscroll.pack(fill="x")
+        yscroll.place(in_=self.order_tree, relx=1, rely=0, relheight=1, anchor="ne")
+
     def copy_object_link(self, event):
         if self.tree.identify_column(event.x) != "#4":
             return
@@ -372,6 +608,92 @@ class HistoryAuditApp:
             daemon=True,
         ).start()
 
+    def start_order_fetch(self):
+        key = self.key_var.get().strip()
+        cookie = normalize_cookie(self.naplike_cookie_var.get())
+        try:
+            start_date = datetime.strptime(self.order_from_var.get().strip(), DATE_FORMAT).replace(tzinfo=TIMEZONE)
+            end_date = datetime.strptime(self.order_to_var.get().strip(), DATE_FORMAT).replace(tzinfo=TIMEZONE)
+        except ValueError:
+            messagebox.showerror("Thời gian không hợp lệ", f"Nhập thời gian theo mẫu {DATE_FORMAT}.")
+            return
+        if len(key) < 8 or len(key) > 256:
+            messagebox.showerror("API key không hợp lệ", "Nhập API key SMMTop ở tab đối soát lịch sử.")
+            return
+        if not cookie:
+            messagebox.showerror("Thiếu cookie Naplike", "Nhập Cookie hoặc Set-Cookie mới từ phiên đăng nhập Naplike.")
+            return
+        if start_date > end_date or end_date > datetime.now(TIMEZONE):
+            messagebox.showerror("Khoảng thời gian không hợp lệ", "Thời điểm bắt đầu/kết thúc chưa hợp lệ.")
+            return
+
+        self.order_fetch_button.configure(state="disabled")
+        self.order_status_var.set("Đang tải order SMMTop...")
+        self.order_results = []
+        self.order_tree.delete(*self.order_tree.get_children())
+        threading.Thread(
+            target=self._order_fetch_worker,
+            args=(key, cookie, start_date, end_date),
+            daemon=True,
+        ).start()
+
+    def _order_fetch_worker(self, key, cookie, start_date, end_date):
+        try:
+            rows, pages, truncated = fetch_orders(
+                key,
+                start_date,
+                end_date,
+                lambda page, count: self.messages.put(("order_page", page, count)),
+            )
+            self.messages.put(("orders_loaded", [dict(row) for row in rows], pages, truncated))
+            for index, row in enumerate(rows):
+                provider_oid = str(row.get("id", ""))
+                if not provider_oid:
+                    row["_naplike"] = "Thiếu ID đối chiếu"
+                    self.messages.put(("order_checked", row))
+                    continue
+                try:
+                    matches = check_naplike(provider_oid, cookie)
+                    row["_naplike_row"] = matches[0] if matches else None
+                    row["_naplike"] = "Có dữ liệu" if matches else "Không có dữ liệu"
+                except Exception as exc:
+                    row["_naplike"] = f"Lỗi API: {exc}"
+                    row["_naplike_row"] = None
+                self.messages.put(("order_checked", row))
+                if index + 1 < len(rows):
+                    time.sleep(0.15)
+            self.messages.put(("orders_done", len(rows), truncated))
+        except Exception as exc:
+            self.messages.put(("orders_error", str(exc)))
+
+    def _insert_order_row(self, row):
+        naplike_row = row.get("_naplike_row") or {}
+        result = row.get("_naplike", "Chưa kiểm tra")
+        if result == "Có dữ liệu":
+            tag = "found"
+        elif result == "Không có dữ liệu":
+            tag = "missing"
+        elif result.startswith("Lỗi API:"):
+            tag = "check_error"
+        elif result == "Thiếu ID đối chiếu":
+            tag = "check_error"
+        else:
+            tag = ""
+        iid = f"order_{row.get('id', '')}"
+        values = (
+            row.get("id", ""),
+            row.get("_created").strftime(DATE_FORMAT) if row.get("_created") else row.get("created_time", ""),
+            row.get("status", ""),
+            row.get("id", ""),
+            result,
+            naplike_row.get("order_status", ""),
+            row.get("object_link", ""),
+        )
+        if self.order_tree.exists(iid):
+            self.order_tree.item(iid, values=values, tags=(tag,) if tag else ())
+        else:
+            self.order_tree.insert("", "end", iid=iid, values=values, tags=(tag,) if tag else ())
+
     def _fetch_worker(self, key, start_date, end_date):
         try:
             rows, pages, truncated = fetch_history(
@@ -390,7 +712,39 @@ class HistoryAuditApp:
         try:
             while True:
                 message = self.messages.get_nowait()
-                if message[0] == "page":
+                if message[0] == "order_page":
+                    _, pages, count = message
+                    self.order_status_var.set(f"Đã tải {pages} trang SMMTop · {count:,} order trong khoảng")
+                elif message[0] == "orders_loaded":
+                    _, rows, pages, truncated = message
+                    self.order_results = [dict(row) for row in rows]
+                    for row in self.order_results:
+                        self._insert_order_row(row)
+                    self.order_status_var.set(
+                        f"Tìm thấy {len(self.order_results):,} order · {pages:,} trang"
+                        + (" · chạm giới hạn trang" if truncated else " · đang đối chiếu Naplike")
+                    )
+                elif message[0] == "order_checked":
+                    _, row = message
+                    for index, existing in enumerate(self.order_results):
+                        if str(existing.get("id", "")) == str(row.get("id", "")):
+                            self.order_results[index] = dict(row)
+                            break
+                    self._insert_order_row(row)
+                    completed = sum(item.get("_naplike") != "Chưa kiểm tra" for item in self.order_results)
+                    self.order_status_var.set(f"Đang đối chiếu Naplike {completed:,}/{len(self.order_results):,}")
+                elif message[0] == "orders_done":
+                    _, count, truncated = message
+                    self.order_status_var.set(
+                        f"Hoàn tất · {count:,} order"
+                        + (" · chạm giới hạn trang" if truncated else "")
+                    )
+                    self.order_fetch_button.configure(state="normal")
+                elif message[0] == "orders_error":
+                    self.order_status_var.set("Lấy order thất bại")
+                    self.order_fetch_button.configure(state="normal")
+                    messagebox.showerror("Không thể lấy danh sách order", message[1])
+                elif message[0] == "page":
                     _, pages, page_rows, count = message
                     out_of_order = bool(
                         self.results

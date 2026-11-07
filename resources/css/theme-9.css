@@ -1,0 +1,14 @@
+@import "tailwindcss" source(none);
+
+@source "../views/clients/theme-9";
+
+@custom-variant dark (&:where([data-bs-theme=dark], [data-bs-theme=dark] *));
+
+@theme {
+    --color-t9-canvas: #f2f5f4;
+    --color-t9-surface: #ffffff;
+    --color-t9-ink: #1a292d;
+    --color-t9-cobalt: #3159d8;
+    --color-t9-teal: #148a76;
+    --color-t9-amber: #e1a43b;
+}

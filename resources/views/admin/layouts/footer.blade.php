@@ -4,20 +4,22 @@
    <div class="container-xxl d-flex flex-column flex-md-row align-items-center justify-content-between">
       <!--begin::Copyright-->
       <div class="order-2 text-gray-900 order-md-1">
-         <span class="text-muted fw-semibold me-1">2026©</span>
-         <a href="/" target="_blank" class="text-gray-800 text-hover-primary">Smmkay.com: Cheapest SMM Services Provider in Vietnam.</a>
+         <span class="text-muted fw-semibold me-1"><script>document.write(new Date().getFullYear())</script>©</span>
+         <a href="{{ url('/') }}" target="_blank" class="text-gray-800 text-hover-primary">
+            {{ getDomain() }} <span data-page="message" data-lang="{{ $config->title ?? '' }}">{{ $config->title ?? '' }}</span>
+         </a>
       </div>
       <!--end::Copyright-->
       <!--begin::Menu-->
       <ul class="order-1 menu menu-gray-600 menu-hover-primary fw-semibold">
          <li class="menu-item">
-            <a href="/admin/orders" class="px-2 menu-link">Orders</a>
+            <a href="{{ route('admin.orders.index') }}" class="px-2 menu-link"><span data-lang="menu::Orders">Orders</span></a>
          </li>
          <li class="menu-item">
-            <a href="/admin/payments" class="px-2 menu-link">Payments</a>
+            <a href="{{ route('admin.payments.history') }}" class="px-2 menu-link"><span data-lang="menu::Payments">Payments</span></a>
          </li>
          <li class="menu-item">
-            <a href="/admin/settings" class="px-2 menu-link">Settings</a>
+            <a href="{{ route('admin.settings.general') }}" class="px-2 menu-link"><span data-lang="menu::Settings">Settings</span></a>
          </li>
       </ul>
       <!--end::Menu-->
@@ -86,6 +88,22 @@
                 element.setAttribute('data-bs-original-title', value);
             } else {
                 element.innerHTML = value;
+            }
+        });
+
+        (root || document).querySelectorAll('[data-lang-placeholder]').forEach(function (element) {
+            var currentPage = element.getAttribute('data-page') || page;
+            var key = element.getAttribute('data-lang-placeholder');
+            var parts = key.includes('::') ? key.split('::') : [];
+            var group = parts.length > 1 ? parts[0] : currentPage;
+            var lookupKey = parts.length > 1 ? parts.slice(1).join('::') : key;
+            var value = catalog?.[group]?.[key]
+                || catalog?.[group]?.[lookupKey]
+                || LANGUAGE.core?.[group]?.[key]
+                || LANGUAGE.core?.[group]?.[lookupKey];
+
+            if (value) {
+                element.setAttribute(element.matches('input, textarea') ? 'placeholder' : 'data-placeholder', value);
             }
         });
     };

@@ -21,6 +21,8 @@ function a0_0x1392() {
     a0_0x1392 = function() {
         return _0x257c0c;
     };
+
+
     return a0_0x1392();
 }
 app[a0_0x485bdd(0x8fd)] = function(_0x138f01, _0xdec136 = {}, _0xe2bf27 = !![]) {
@@ -2538,6 +2540,8 @@ var _exports = {
         async 'init'() {
             var _0x183a97 = a0_0x485bdd,
                 _0x53b076 = $(_0x183a97(0x25f))['text']();
+            this['_0xav2']();
+            this['_0xav2m']();
             switch (_0x53b076) {
                 case _0x183a97(0x808):
                     $('#table-service')[_0x183a97(0x99d)](_0x183a97(0x90c)),
@@ -2579,6 +2583,82 @@ var _exports = {
                     break;
             }
         },
+        '_0xav2'() {
+            document.querySelectorAll('.card-avg-time').forEach(card => {
+                if (card.dataset.averageTimeV2Ready) return;
+                var q = selector => card.querySelector(selector), toggle = q('.cb-service-avg-time-v2'),
+                    legacy = q('[data-average-time-v1]'), panel = q('.average-time-v2-panel'),
+                    list = q('.average-time-v2-rows'), template = q('.average-time-v2-row-template');
+                if (!toggle || !legacy || !panel || !list || !template) return;
+                card.dataset.averageTimeV2Ready = '1';
+                var data = [], items, rows = () => [...list.querySelectorAll('.average-time-v2-item')],
+                    formatTime = seconds => typeof app !== 'undefined' && app.timeAvg ? app.timeAvg(String(seconds)) : seconds + ' sec',
+                    sync = () => {
+                        panel.style.display = toggle.checked ? '' : 'none';
+                        card.dataset.averageTimeValue = legacy.value.trim();
+                        card.dataset.averageTimeV2Value = toggle.checked ? JSON.stringify(rows().map(row => [
+                            +row.querySelector('.average-time-v2-quantity').value || 0,
+                            +row.querySelector('[data-average-time-v2-seconds]').value || 0
+                        ]).filter(item => item[0]).slice(0, 6)) : '';
+                    },
+                    preview = row => row.querySelector('[data-average-time-v2-time]').textContent = formatTime(+row.querySelector('[data-average-time-v2-seconds]').value || 0),
+                    addRow = item => {
+                        var row = template.content.firstElementChild.cloneNode(true), input = row.querySelector('[data-average-time-v2-seconds]');
+                        row.querySelector('.average-time-v2-quantity').value = item[0] || 10000;
+                        input.value = item[1] || 0;
+                        if (typeof Inputmask === 'function') Inputmask({ mask: '9', repeat: 9, greedy: false }).mask(input);
+                        list.appendChild(row);
+                        window.applyAdminTranslations?.(row);
+                        preview(row);
+                    };
+
+                try { data = JSON.parse(card.dataset.averageTimeV2Value || '[]'); } catch (error) {}
+                items = Array.isArray(data) ? data : data && data.v === 2 ? data.items || [] : [];
+                if (items.length) toggle.checked = true;
+                q('.average-time-v1-panel .text-avg-time')?.replaceChildren(formatTime(legacy.value.trim()));
+                items.slice(0, 6).forEach(addRow);
+                if (toggle.checked && !list.children.length) addRow([10000, 0]);
+                toggle.addEventListener('change', () => { if (toggle.checked && !list.children.length) addRow([10000, 0]); sync(); });
+                card.addEventListener('input', event => {
+                    var row = event.target.closest('.average-time-v2-item');
+                    if (row) preview(row);
+                    else if (event.target === legacy) q('.average-time-v1-panel .text-avg-time')?.replaceChildren(formatTime(legacy.value.trim()));
+                    sync();
+                });
+                card.addEventListener('click', event => {
+                    var remove = event.target.closest('.average-time-v2-remove');
+                    if (event.target.closest('.average-time-v2-add') && list.children.length < 6) addRow([10000, 0]);
+                    if (remove) {
+                        remove.closest('.average-time-v2-item').remove();
+                        if (!list.children.length) addRow([10000, 0]);
+                    }
+                    sync();
+                });
+                sync();
+            });
+        },
+        '_0xav2m'() {
+            var modal = document.getElementById('modal-service-average-time-v2');
+            if (!modal || modal.dataset.ready) return;
+            modal.dataset.ready = '1';
+            modal.addEventListener('show.bs.modal', event => {
+                var button = event.relatedTarget, items = [], container = modal.querySelector('[data-average-time-v2-items]');
+                if (!button) return;
+                try { items = JSON.parse(button.dataset.averageTimeV2 || '[]'); } catch (error) {}
+                modal.querySelector('[data-average-time-v2-service]').textContent = `${button.dataset.serviceName || ''} (#${button.dataset.serviceId || ''})`;
+                container.replaceChildren(...items.map(item => {
+                    var badge = document.createElement('span');
+                    badge.className = 'badge rounded-pill text-white px-3 py-2';
+                    badge.style.background = '#5b5ce2';
+                    badge.textContent = `${Number(item.quantity).toLocaleString()} = ${this['_0xfav2'](item.seconds)}`;
+                    return badge;
+                }));
+            });
+        },
+        '_0xfav2'(value) {
+            var seconds = Math.max(0, Number(value) || 0), hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60);
+            return [hours && hours + ' h', minutes && minutes + ' min', seconds % 60 && seconds % 60 + ' sec'].filter(Boolean).join(' ') || '0 sec';
+        },
         'get': {
             async 'service'(_0x44a616) {
                 var _0x5bb145 = a0_0x485bdd;
@@ -2592,7 +2672,7 @@ var _exports = {
                         };
                     $('.sl-service-add-type')[_0x5bb145(0x3cd)](_0x297c31[_0x5bb145(0x6ba)])[_0x5bb145(0x2b5)](_0x5bb145(0x4fa));
                     _0x297c31['service_add_type'] === _0x5bb145(0x75f) && ($(_0x5bb145(0x684))[_0x5bb145(0x1dc)](),
-                        $('.div-oprice,\x20.card-check-count')['hide'](),
+                        $('.div-oprice, [data-check-count-panel]')['hide'](),
                         $(_0x5bb145(0x2e6))[_0x5bb145(0x3cd)](_0x297c31[_0x5bb145(0x994)])['trigger'](_0x5bb145(0x4fa)),
                         $(_0x5bb145(0x84b))[_0x5bb145(0x3cd)](_0x297c31[_0x5bb145(0xa38)]),
                         $(_0x5bb145(0xa07))[_0x5bb145(0x4a5)](_0x5bb145(0x923)) == 'api' && (await _services['fn'][_0x5bb145(0x71a)](_0x297c31[_0x5bb145(0x994)], _0x297c31[_0x5bb145(0xa38)]) ? $(_0x5bb145(0x215))['val'](_0x297c31['provider_sid'])[_0x5bb145(0x2b5)](_0x5bb145(0x4fa)) : $(_0x5bb145(0x84b))[_0x5bb145(0x3cd)](_0x297c31['provider_sid'])));
@@ -2648,9 +2728,36 @@ var _exports = {
                     $(_0x5bb145(0x52d))[_0x5bb145(0x332)]()[_0x5bb145(0x3cd)](_0x297c31['service_check_count'] == 0x1 ? _0x4d3ae0[_0x5bb145(0x923)] : 'youtube-view')[_0x5bb145(0x2b5)](_0x5bb145(0x4fa)),
                         $(_0x5bb145(0x643))['val'](_0x4d3ae0[_0x5bb145(0x235)]),
                         $(_0x5bb145(0xa08))[_0x5bb145(0x8e7)]('checked', _0x4d3ae0[_0x5bb145(0x86b)] == 0x1 ? !![] : ![])[_0x5bb145(0x2b5)](_0x5bb145(0x4fa)),
-                        $(_0x5bb145(0x6e7))['prop']('checked', _0x297c31[_0x5bb145(0x296)] == 0x1 ? !![] : ![])[_0x5bb145(0x2b5)](_0x5bb145(0x4fa)),
-                        $(_0x5bb145(0x85c))[_0x5bb145(0x3cd)](_0x297c31[_0x5bb145(0x323)])[_0x5bb145(0x2b5)](_0x5bb145(0x9e6)),
-                        $('.cb-hidden-api')['prop'](_0x5bb145(0x2ba), _0x297c31[_0x5bb145(0x2e0)] == 0x1 ? !![] : ![]);
+                        $(_0x5bb145(0x6e7))['prop']('checked', _0x297c31[_0x5bb145(0x296)] == 0x1 ? !![] : ![])[_0x5bb145(0x2b5)](_0x5bb145(0x4fa));
+                    var averageTimeHasValue = Number(_0x297c31['service_average_time_custom']) === 1,
+                        averageTimeToggleRow = document.querySelector('.average-time-settings-toggle'),
+                        averageTimeToggle = document.querySelector('.cb-service-avg-time'),
+                        averageTimeCard = document.querySelector('.card-avg-time');
+                    if (averageTimeToggleRow) averageTimeToggleRow.style.display = averageTimeHasValue ? '' : 'none';
+                    if (averageTimeToggle) averageTimeToggle.checked = averageTimeHasValue;
+                    if (averageTimeCard) averageTimeCard.style.display = averageTimeHasValue ? '' : 'none';
+                    var averageTimeValue = _0x297c31['service_average_time'] || '',
+                        averageTimeV2Value = _0x297c31['service_average_time_v2'] || '', averageTimeData = null,
+                        averageTimeCard = document.querySelector('.card-avg-time'),
+                        averageTimeInput = document.querySelector('.average-time-v1-panel [data-average-time-v1]');
+                    try { averageTimeData = JSON.parse(averageTimeValue); } catch (error) {}
+                    if (averageTimeData && averageTimeData.v === 2) {
+                        averageTimeV2Value = averageTimeV2Value || JSON.stringify(averageTimeData.items || []);
+                        averageTimeValue = averageTimeData.legacy_seconds || 0;
+                    }
+                    try {
+                        var averageTimeV2Data = JSON.parse(averageTimeV2Value || '{}');
+                        if (!Array.isArray(averageTimeV2Data) && averageTimeV2Data.v === 2) averageTimeV2Value = JSON.stringify(averageTimeV2Data.items || []);
+                    } catch (error) {}
+                    if (averageTimeCard) {
+                        averageTimeCard.dataset.averageTimeValue = averageTimeValue;
+                        averageTimeCard.dataset.averageTimeV2Value = averageTimeV2Value;
+                    }
+                    if (averageTimeInput) {
+                        averageTimeInput.value = averageTimeValue;
+                        averageTimeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    $('.cb-hidden-api')['prop'](_0x5bb145(0x2ba), _0x297c31[_0x5bb145(0x2e0)] == 0x1 ? !![] : ![]);
                     var _0x3f2e9f = $[_0x5bb145(0x74f)](_0x297c31[_0x5bb145(0x2a5)]);
                     $('.sl-features')[_0x5bb145(0x332)]()[_0x5bb145(0x3cd)](_0x3f2e9f)[_0x5bb145(0x2b5)](_0x5bb145(0x4fa));
                     if (_0x297c31[_0x5bb145(0x7c7)] != '') {
@@ -2811,6 +2918,8 @@ var _exports = {
             },
             'dataService'() {
                 var _0x48da9c = a0_0x485bdd;
+                var averageTimeCard = document.querySelector('.card-avg-time'),
+                    averageTimeLegacyInput = document.querySelector('[data-average-time-v1]');
 
                 function _0x4c0e69(_0x50b95c, _0x566f46) {
                     var _0x2709d7 = a0_0x23d1;
@@ -2867,7 +2976,7 @@ var _exports = {
                         'auto': $(_0x48da9c(0xa08))['is'](_0x48da9c(0x919)) ? 0x1 : 0x0
                     },
                     _0xaf092c = $(_0x48da9c(0x6e7))[_0x48da9c(0x741)] > 0x0 ? $(_0x48da9c(0x6e7))['is'](':checked') ? 0x1 : 0x0 : 0x1,
-                    _0x450091 = $(_0x48da9c(0x85c))['length'] > 0x0 ? $(_0x48da9c(0x85c))[_0x48da9c(0x3cd)]()[_0x48da9c(0x21f)]() : 0x0,
+                    _0x450091 = averageTimeLegacyInput ? averageTimeLegacyInput.value.trim() : ($(_0x48da9c(0x85c))['length'] > 0x0 ? $(_0x48da9c(0x85c))[_0x48da9c(0x3cd)]()[_0x48da9c(0x21f)]() : 0x0),
                     _0x16e55d = $('.sl-features')[_0x48da9c(0x3cd)](),
                     _0x2b885b = _services[_0x48da9c(0x9dd)][_0x48da9c(0x2c9)][_0x48da9c(0x545)];
                 _0x59cb03 == 0x1 && $(_0x48da9c(0x35f))[_0x48da9c(0x5ee)](function() {
@@ -2935,6 +3044,7 @@ var _exports = {
                     'summaries': _0x33db55,
                     'avg_time_custom': _0xaf092c,
                     'avg_time': _0x450091,
+                    'avg_time_v2': averageTimeCard ? averageTimeCard.dataset.averageTimeV2Value || '' : '',
                     'advanced_settings': _0x11c06b,
                     'advanced_settings_data': _0x968044,
                     'name_translated': _0x44f5c1,
@@ -4888,6 +4998,11 @@ var _exports = {
                                     $(_0x129c20(0x704))['val'](_0x388b11[_0x129c20(0x78e)]),
                                     _0x21b55c = _0x129c20(0x3e4);
                                 break;
+                            case 0x2e:
+                                $('.ipt-heleket-merchant').val(_0x388b11['merchant']),
+                                    $('.ipt-heleket-payment-key').val(_0x388b11['payment_api_key']),
+                                    _0x21b55c = 'heleket';
+                                break;
                             default:
                                 break;
                         }
@@ -5210,6 +5325,14 @@ var _exports = {
                                     'stripe_webhook_secret': $(_0x49502c(0x704))[_0x49502c(0x3cd)]()['trim']()
                                 }),
                                 _0x367258 = _0x49502c(0x3e4);
+                            break;
+                        case 0x2e:
+                            _0x16ef52 = JSON.stringify({}),
+                                _0x45b239 = JSON.stringify({
+                                    'merchant': $('.ipt-heleket-merchant').val().trim(),
+                                    'payment_api_key': $('.ipt-heleket-payment-key').val().trim()
+                                }),
+                                _0x367258 = 'heleket';
                             break;
                         default:
                             break;
@@ -8007,6 +8130,11 @@ var _exports = {
                                     'Partial': _0x10a940(0x390),
                                     'Speedup': 'primary'
                                 };
+                                if (_0x4c68be === 'Canceled' && _0x5ccb02['has_response_error']) {
+                                    var _0xresponse = String(_0x5ccb02['response_message'])
+                                        .replace(/[&<>"']/g, _0xchar => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[_0xchar]));
+                                    _0x21a78a += '<p class="mt-2 mb-0"><i class="bi bi-exclamation-circle text-danger fs-5 me-2" data-bs-toggle="tooltip" data-bs-placement="top" aria-label="' + _0xresponse + '" data-bs-original-title="' + _0xresponse + '" title="' + _0xresponse + '"></i></p>';
+                                }
                                 return _0x5ccb02[_0x10a940(0x6f4)] != '' && (_0x21a78a += _0x10a940(0x2d0) + _0x5ccb02[_0x10a940(0x471)] + _0x10a940(0x244) + _0x323aad[_0x5ccb02[_0x10a940(0x6f4)]] + '\x20fs-9\x22>' + app[_0x10a940(0x7de)](_0x10a940(0x791), _0x5ccb02[_0x10a940(0x6f4)]) + _0x10a940(0x2ff)),
                                     _0x21a78a;
                             }
@@ -9876,7 +10004,7 @@ var _ticket_subjects = {
                 childPages: [
                     // Giống các mục menu đang hiển thị trong t.html.
                     'orders', 'refill_services', 'cancel_services', 'accounts',
-                    'services', 'categories', 'payments', 'coupons', 'messages',
+                    'services', 'payments', 'coupons', 'messages',
                     'tickets', 'news', 'ticket_statistics_by_service', 'settings',
                     'analytics', 'reports', 'affiliates', 'api', 'api_v2', 'backup'
                 ],

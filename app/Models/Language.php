@@ -15,6 +15,12 @@ class Language extends Model
      */
     public function getFlagCodeAttribute(): string
     {
-        return preg_replace('/^fi\s+fi-/', '', (string) $this->flag);
+        $flagCode = preg_replace('/^(?:fi\s+)?fi-/', '', trim((string) $this->flag));
+        if ($flagCode !== '') {
+            return $flagCode;
+        }
+
+        $languageCode = strtolower((string) $this->code);
+        return $languageCode === 'vi' ? 'vn' : $languageCode;
     }
 }

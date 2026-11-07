@@ -7,7 +7,6 @@ use App\Models\Service;
 use App\Models\ApiProvider;
 use App\Models\ServiceSyncLog;
 use App\Smm\Smm;
-use App\Jobs\SyncServiceJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -58,20 +57,63 @@ class CronSyncController extends Controller
                 if (isset($item->service)) $apiMap[(string) $item->service] = $item;
             }
 
+            $processed = 0;
+            $disabled = 0;
+
             foreach ($services as $service) {
                 $apiData = $apiMap[(string) $service->service_api] ?? null;
-                SyncServiceJob::dispatch(
-                    $service->id,
-                    $provider->id,
-                    $apiData ? (array) $apiData : null,
-                    $this->syncBatch
-                );
+                $api = $apiData === null ? null : (object) (array) $apiData;
+
+                if (!$api) {
+                    if ($service->sync_status && (int) $service->status !== 0) {
+                        $oldStatus = (int) $service->status;
+                        $service->status = 0;
+                        $service->save();
+                        $this->log($service, $provider, 'disable', 'status', $oldStatus, 0, (string) $provider->domain, 'api');
+                        $disabled++;
+                    }
+
+                    $processed++;
+                    continue;
+                }
+
+                $changes = [];
+                $needSave = false;
+                $decimals = max(0, min(12, (int) ($provider->fixed_decimal ?? 10)));
+                $rateApi = (float) ($provider->rate_api ?? 1);
+                if ($rateApi <= 0) {
+                    $rateApi = 1;
+                }
+
+                $this->syncRate($service, $api, $changes, $needSave, $decimals, $rateApi);
+                $this->syncMinMax($service, $api, $changes);
+                $this->syncRefill($service, $api, $changes);
+                $this->syncCancel($service, $api, $changes);
+
+                if ($needSave || $changes) {
+                    $service->save();
+                    foreach ($changes as $change) {
+                        $this->log(
+                            $service,
+                            $provider,
+                            $change['change_type'],
+                            $change['field'],
+                            $change['old_value'],
+                            $change['new_value'],
+                            (string) $provider->domain,
+                            $change['log_type'] ?? 'api'
+                        );
+                    }
+                }
+
+                $processed++;
             }
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Sync jobs queued',
-                'queued' => $services->count(),
+                'message' => 'Services synced',
+                'processed' => $processed,
+                'disabled' => $disabled,
                 'sync_batch' => $this->syncBatch,
             ]);
         } catch (\Exception $e) {
@@ -81,14 +123,20 @@ class CronSyncController extends Controller
     }
 
     /** Process one service inside a queue worker. */
-    public function syncServiceItem(int $serviceId, int $providerId, ?array $apiData, string $syncBatch): void
+    public function syncServiceItem(
+        int $serviceId,
+        int $providerId,
+        ?array $apiData,
+        string $syncBatch,
+        string $domain
+    ): void
     {
         $this->syncBatch = $syncBatch;
-        $service = Service::where('id', $serviceId)->where('domain', getDomain())->first();
+        $service = Service::where('id', $serviceId)->where('domain', $domain)->first();
         $provider = $service
             ? ApiProvider::whereKey($service->provider_id)
                 ->where('id', $providerId)
-                ->where('domain', getDomain())
+                ->where('domain', $domain)
                 ->first()
             : null;
         if (!$service || !$provider) return;
@@ -97,7 +145,7 @@ class CronSyncController extends Controller
         if (!$api) {
             if ($service->sync_status) {
                 $service->update(['status' => 0]);
-                $this->log($service, $provider, 'disable', 'status', 1, 0, 'api');
+                $this->log($service, $provider, 'disable', 'status', 1, 0, $domain, 'api');
             }
             return;
         }
@@ -118,7 +166,16 @@ class CronSyncController extends Controller
 
         $service->save();
         foreach ($changes as $change) {
-            $this->log($service, $provider, $change['change_type'], $change['field'], $change['old_value'], $change['new_value'], $change['log_type'] ?? 'api');
+            $this->log(
+                $service,
+                $provider,
+                $change['change_type'],
+                $change['field'],
+                $change['old_value'],
+                $change['new_value'],
+                $domain,
+                $change['log_type'] ?? 'api'
+            );
         }
     }
     private function syncRate(
@@ -219,11 +276,20 @@ class CronSyncController extends Controller
 
     // ── Log helper ────────────────────────────────────────────────────────────
 
-    private function log(Service $service, ApiProvider $provider, string $changeType, ?string $field, $oldValue, $newValue, string $logType = 'api'): void
+    private function log(
+        Service $service,
+        ApiProvider $provider,
+        string $changeType,
+        ?string $field,
+        $oldValue,
+        $newValue,
+        string $domain,
+        string $logType = 'api'
+    ): void
     {
         // Bỏ qua nếu đã có bản ghi giống hệt trong ngày hôm nay
         $exists = ServiceSyncLog::where('service_id', $service->id)
-            ->where('domain', getDomain())
+            ->where('domain', $domain)
             ->where('change_type', $changeType)
             ->where('field_changed', $field)
             ->where('new_value', $newValue)
@@ -242,7 +308,7 @@ class CronSyncController extends Controller
             'new_value'     => $newValue,
             'field_changed' => $field,
             'is_read'       => false,
-            'domain'        => getDomain(),
+            'domain'        => $domain,
         ];
 
         if (Schema::hasColumn('service_sync_logs', 'log_type'))   $data['log_type']   = $logType;

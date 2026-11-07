@@ -38,12 +38,7 @@
                         </thead>
                         <tbody>
                             @php
-                                $fmtMoney = function($v) use ($sym, $symPos, $exRate) {
-                                    $amount = $exRate > 0 ? (float)$v * $exRate : (float)$v;
-                                    $str = rtrim(rtrim(number_format($amount, 8, '.', ''), '0'), '.');
-                                    if ($str === '' || $str === '.') $str = '0';
-                                    return $symPos === 'before' ? $sym . $str : $str . ' ' . $sym;
-                                };
+                                $fmtMoney = fn ($amount) => fmtMoney($amount, $currency);
                                 $totalChange = 0;
                             @endphp
                             @forelse ($transactions as $tx)

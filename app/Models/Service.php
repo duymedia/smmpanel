@@ -13,7 +13,7 @@ class Service extends Model
         'min', 'max', 'overflow', 'service_api', 'provider_id', 'provider_name',
         'type', 'type_service', 'type_radio', 'refill', 'cancel', 'dripfeed', 
         'sync_rate', 'sync_min_max', 'sync_refill', 'sync_cancel', 'sync_status',
-        'average_time', 'note', 'reaction', 'attributes',
+        'average_time', 'average_time_v2', 'note', 'reaction', 'attributes',
         'status', 'domain', 'quantity_discount', 'quantity_discount_data',
         'advanced_settings', 'advanced_settings_data', 'check_count',
         'check_count_data', 'hidden_api', 'change_provider', 'summaries'

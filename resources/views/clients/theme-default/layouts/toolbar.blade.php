@@ -1,3 +1,11 @@
+@php
+    $toolbarLanguage = $uiData['lang'] ?? [];
+    $isVietnamese = in_array(strtolower((string) ($toolbarLanguage['code'] ?? '')), ['vi', 'vn'], true);
+    $toolbarFlagClass = $isVietnamese ? 'fi fi-vn' : ($toolbarLanguage['flag_class'] ?? 'fi fi-us');
+    $toolbarFlagUrl = $isVietnamese
+        ? asset('cdn.whoispanel.com/flags/4x3/vn.svg')
+        : ($toolbarLanguage['flag_url'] ?? asset('cdn.whoispanel.com/flags/4x3/us.svg'));
+@endphp
 <div class="toolbar d-flex flex-stack flex-wrap mb-5 mb-lg-7" id="kt_toolbar">
     <div class="page-title d-flex flex-column py-1">
         <h1 class="d-flex align-items-center my-1">
@@ -13,8 +21,8 @@
             </div>
             <div class="d-flex align-items-center" data-kt-menu-trigger="click" data-kt-menu-placement="bottom-end">
                 <a href="{{ route('clients.settings.index') }}" aria-label="Change language">
-                    <span class="rounded-1 {{ $uiData['lang']['flag_class'] ?? 'fi fi-us' }}"
-                        style="font-size: 2em !important; background-image: url('{{ $uiData['lang']['flag_url'] ?? asset('cdn.whoispanel.com/flags/4x3/us.svg') }}') !important;"></span>
+                    <span class="rounded-1 {{ $toolbarFlagClass }}"
+                        style="font-size: 2em !important; background-image: url('{{ $toolbarFlagUrl }}') !important;"></span>
                 </a>
             </div>
         @endauth

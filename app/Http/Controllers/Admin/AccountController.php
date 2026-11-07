@@ -79,7 +79,13 @@ class AccountController extends Controller
             ->where('domain', $domain)
             ->where('status', 'completed');
         $totalDeposit = (float) (clone $completedPayments)->sum('amount');
-        $totalBonus = (float) (clone $completedPayments)->sum('bonus_amount');
+        $totalBonus = (float) (clone $completedPayments)->sum('bonus_amount')
+            + (float) Transaction::where('user_id', $accounts->id)
+                ->where('domain', $domain)
+                ->where('status', 'completed')
+                ->where('type', 'bonus')
+                ->whereNotIn('transaction_id', Payment::where('user_id', $accounts->id)->where('domain', $domain)->select('transaction_id'))
+                ->sum('amount');
         $totalSpent = (float) $accounts->spent;
         $currencyRates = Currency::where(function (Builder $query) use ($domain) {
                 $query->where('domain', $domain)->orWhereNull('domain');
@@ -467,7 +473,13 @@ class AccountController extends Controller
             ->where('status', 'completed');
 
         $deposit = (float) (clone $completedPayments)->sum('amount');
-        $bonus = (float) (clone $completedPayments)->sum('bonus_amount');
+        $bonus = (float) (clone $completedPayments)->sum('bonus_amount')
+            + (float) Transaction::where('user_id', $account->id)
+                ->where('domain', getDomain())
+                ->where('status', 'completed')
+                ->where('type', 'bonus')
+                ->whereNotIn('transaction_id', Payment::where('user_id', $account->id)->where('domain', getDomain())->select('transaction_id'))
+                ->sum('amount');
         $spent = (float) $account->spent;
 
         return response()->json([
@@ -558,10 +570,59 @@ class AccountController extends Controller
 
         $domain = getDomain();
         $account = User::whereKey($validated['id'])->where('domain', $domain)->firstOrFail();
+
+        if ((int) $validated['pm_id'] === -1) {
+            $amount = round((float) $validated['amount'], 8);
+            DB::transaction(function () use ($account, $amount, $validated, $domain): void {
+                $user = User::whereKey($account->id)->where('domain', $domain)->lockForUpdate()->firstOrFail();
+                $transactionId = 'ADMIN-BONUS-' . $user->id . '-' . now()->format('YmdHis') . '-' . strtoupper(str()->random(6));
+
+                Payment::create([
+                    'user_id' => $user->id,
+                    'payment_method_id' => null,
+                    'transaction_id' => $transactionId,
+                    'amount' => 0,
+                    'bonus_amount' => $amount,
+                    'total_amount' => $amount,
+                    'currency' => $user->currency ?: 'USD',
+                    'exchange_rate' => 1,
+                    'status' => 'completed',
+                    'note' => $validated['details'] ?: 'Admin bonus',
+                    'payment_info' => ['source' => 'admin_bonus'],
+                    'domain' => $domain,
+                ]);
+
+                $user->increment('balance', $amount);
+                $user->refresh();
+
+                Transaction::create([
+                    'user_id' => $user->id,
+                    'amount' => $amount,
+                    'type' => 'bonus',
+                    'status' => 'completed',
+                    'payment_method' => 'bonus',
+                    'transaction_id' => $transactionId,
+                    'description' => $validated['details'] ?: 'Admin bonus',
+                    'balance_after' => $user->balance,
+                    'domain' => $domain,
+                ]);
+            });
+
+            return response()->json([
+                'success' => adminMessage('add'),
+                'amount' => 0,
+                'bonus_amount' => $amount,
+                'total_amount' => $amount,
+            ]);
+        }
+
         $paymentMethod = PaymentMethod::whereKey($validated['pm_id'])
             ->where('domain', $domain)
             ->where('status', true)
-            ->firstOrFail();
+            ->first();
+        if (!$paymentMethod) {
+            return response()->json(['error' => 'Payment method is not configured for this panel.'], 422);
+        }
         $amount = round((float) $validated['amount'], 8);
         $bonus = $this->calculatePaymentMethodBonus($amount, $paymentMethod->bonus);
         $totalAmount = round($amount + $bonus['amount'], 8);

@@ -6,7 +6,7 @@
     <span class="title d-none">List</span>
 
     <div class="row g-3 g-xl-3">
-        <div class="col-md-4 col-12">
+        <div class="{{ isChildPanel() ? 'col-md-8 col-12' : 'col-md-4 col-12' }}">
             <div class="d-flex align-items-center">
                 <div class="input-group input-group-sm">
                     <input type="text" class="form-control ipt-keyword" placeholder="ID hoặc tên" data-page="/services" data-lang="ID or Name">
@@ -17,6 +17,7 @@
                 </div>
             </div>
         </div>
+        @unless (isChildPanel())
         <div class="col-md-6">
             <div class="d-flex justify-content-start">
                 <a class="btn btn-primary btn-sm me-3" href="/admin/services/add">
@@ -27,6 +28,20 @@
                 </a>
             </div>
         </div>
+        @endunless
+        @if (isChildPanel())
+            <div class="col-md-4 col-12">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-child-panel-service-sync">
+                        <i class="bi bi-arrow-repeat me-1"></i><span data-lang="Sync services">Đồng bộ dịch vụ</span>
+                    </button>
+                    <button type="button" class="btn btn-light-danger btn-sm btn-icon" data-child-services-delete
+                        data-bs-toggle="tooltip" data-bs-placement="top" title="Delete all services" data-page="/services" data-lang-title="Delete all services" aria-label="Delete all services">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        @endif
     </div>
 
     <div class="p-5 text-muted text-end"
@@ -43,7 +58,9 @@
                         <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0 text-nowrap">
                             <th class="w-10px"></th>
                             <th class="min-w-60px">ID</th>
-                            <th class="min-w-120px" data-page="/services" data-lang="Provider">Nhà cung cấp</th>
+                            @unless (isChildPanel())
+                                <th class="min-w-120px" data-page="/services" data-lang="Provider">Nhà cung cấp</th>
+                            @endunless
                             <th class="min-w-300px" data-page="/services" data-lang="Service">Dịch vụ</th>
                             <th class="min-w-120px" data-page="/services" data-lang="Rate">Giá bán</th>
                             <th class="min-w-90px" data-page="/services" data-lang="Min/Max">Min/Max</th>
@@ -76,7 +93,7 @@
 
                         <thead class="platform platform-{{ $platform['id'] }}">
                             <tr class="static bg-secondary">
-                                <td colspan="10">
+                                <td colspan="{{ isChildPanel() ? 8 : 9 }}">
                                     <div class="d-flex align-items-center flex-nowrap gap-2">
                                         <div class="flex-grow-1 fs-5 fw-bold text-nowrap overflow-hidden">
                                             @if (!empty($platform['image']) && filter_var($platform['image'], FILTER_VALIDATE_URL))
@@ -118,7 +135,7 @@
                                 data-cat="{{ $category['id'] }}"
                                 data-platform="{{ $platform['id'] }}">
                                 <tr class="static bg-secondary">
-                                    <td colspan="10" class="py-2">
+                                    <td colspan="{{ isChildPanel() ? 8 : 9 }}" class="py-2">
                                         <div class="d-flex align-items-center flex-nowrap gap-2">
                                             <div class="flex-grow-1 fs-5 fw-bold text-nowrap overflow-hidden">
                                                 @if (!empty($category['image']) && filter_var($category['image'], FILTER_VALIDATE_URL))
@@ -154,7 +171,10 @@
                                         $isActive = (bool) $service->status;
                                         $hasSyncRate = (bool) ($service->sync_rate ?? false);
                                         $hasSyncMinMax = (bool) ($service->sync_min_max ?? false);
-                                        $avgTime = formatAverageTime($service->average_time ?? 0);
+                                        $avgTimeV2Items = averageTimeV2Items($service->average_time_v2 ?? '');
+                                        $avgTime = is_numeric($service->average_time)
+                                            ? formatAverageTime((int) $service->average_time)
+                                            : '';
                                         $attributes = $service->attributes;
                                         $badges = [];
                                         if (is_string($attributes) && $attributes !== '') {
@@ -207,18 +227,14 @@
                                                         data-lang="Cancel enabled"
                                                         title="Hủy"></i>
                                                 @endif
-                                                @if (!$isActive)
-                                                    <i class="las la-ban fs-7 text-danger"
-                                                        data-bs-toggle="tooltip"
-                                                        data-bs-placement="top"
-                                                        title="Vô hiệu hóa"></i>
-                                                @endif
                                             </p>
                                         </td>
-                                        <td width="1">
-                                            {{ $service->provider_name ?? '' }}
-                                            <p class="mb-0 text-muted fs-7">{{ $service->service_api ?? '' }}</p>
-                                        </td>
+                                        @unless (isChildPanel())
+                                            <td width="1">
+                                                {{ $service->provider_name ?? '' }}
+                                                <p class="mb-0 text-muted fs-7">{{ $service->service_api ?? '' }}</p>
+                                            </td>
+                                        @endunless
                                         <td class="service-name">
                                             {{ trim($service->getName()) }}
                                             @if (!empty($badges))
@@ -237,7 +253,7 @@
                                             </p>
                                             @endif
                                         </td>
-                                        <td width="1" class="text-nowrap">
+                                        <td width="1" class="{{ $avgTimeV2Items !== [] ? 'text-wrap' : 'text-nowrap' }}">
                                             <span class="d-block">
                                                 <i class="invisible fa fa-circle text-secondary fs-10 me-1" aria-hidden="true"></i>{{ formatCharge($service->rate_retail) }} -
                                                 {{ formatCharge($service->rate_agent) }} -
@@ -258,11 +274,22 @@
                                             </span>
                                         </td>
                                         <td width="1" class="text-nowrap">
-                                            @if ($avgTime)
-                                                {{ $avgTime }}
-                                            @else
-                                                <span class="text-muted"></span>
-                                            @endif
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span>{{ $avgTime ?: '—' }}</span>
+                                                @if ($avgTimeV2Items !== [])
+                                                    <button type="button" class="btn btn-icon btn-sm btn-light-primary p-0"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#modal-service-average-time-v2"
+                                                        data-service-name="{{ trim($service->getName()) }}"
+                                                        data-service-id="{{ $service->id }}"
+                                                        data-average-time-v2='@json($avgTimeV2Items)'
+                                                        title="View average_time_v2"
+                                                        aria-label="View average_time_v2"
+                                                        style="width:24px;height:24px;min-width:24px">
+                                                        <i class="bi bi-clock-history fs-9"></i>
+                                                    </button>
+                                                @endif
+                                            </div>
                                         </td>
                                         <td width="1">
                                             <div class="form-check form-switch form-check-custom form-check-solid">
@@ -275,9 +302,11 @@
                                             </div>
                                         </td>
                                         <td width="1">
-                                            <a href="/admin/services/edit?id={{ $service->id }}">
-                                                <i class="bi bi-pencil fs-8"></i>
-                                            </a>
+                                            @unless (isChildPanel())
+                                                <a href="/admin/services/edit?id={{ $service->id }}" aria-label="Edit service">
+                                                    <i class="bi bi-pencil fs-8"></i>
+                                                </a>
+                                            @endunless
                                         </td>
                                     </tr>
                                 @endforeach
@@ -286,7 +315,7 @@
                     @empty
                         <tbody>
                             <tr>
-                                <td colspan="10" class="py-10 text-center text-muted">Chưa có dịch vụ</td>
+                                <td colspan="{{ isChildPanel() ? 8 : 9 }}" class="py-10 text-center text-muted">Chưa có dịch vụ</td>
                             </tr>
                         </tbody>
                     @endforelse
@@ -295,7 +324,125 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="modal-service-average-time-v2" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title fw-bold">Average time V2</h5>
+                    <div class="text-muted fs-8" data-average-time-v2-service></div>
+                </div>
+                <button type="button" class="btn btn-icon btn-sm btn-active-light-primary" data-bs-dismiss="modal" aria-label="Close">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex flex-wrap gap-2" data-average-time-v2-items></div>
+            </div>
+        </div>
+    </div>
+</div>
+@if (isChildPanel())
+<div class="modal fade" id="modal-child-panel-service-sync" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" data-lang="Main panel service sync">Đồng bộ dịch vụ từ panel mẹ</h5>
+                <button type="button" class="btn btn-icon btn-sm btn-active-light-primary" data-bs-dismiss="modal" aria-label="Close">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-5">
+                    <label class="form-label" data-lang="Price increase percent">Tăng giá so với panel mẹ (%)</label>
+                    <div class="input-group input-group-solid">
+                        <input type="number" class="form-control" min="0" max="1000" step="0.01" value="{{ data_get($childPanelSyncSettings, 'markup_percent', 0) }}" data-child-sync-markup>
+                        <span class="input-group-text">%</span>
+                    </div>
+                </div>
+                <label class="form-check form-switch form-check-custom">
+                    <input class="form-check-input" type="checkbox" @checked(data_get($childPanelSyncSettings, 'auto_sync', false)) data-child-sync-auto>
+                    <span class="form-check-label" data-lang="Automatic sync">Tự động đồng bộ theo cron</span>
+                </label>
+                <div class="mt-4 text-muted fs-8">
+                    <span data-lang="Last synchronized">Lần đồng bộ gần nhất</span>:
+                    {{ $childPanel?->last_sync_at?->format('Y-m-d H:i:s') ?? '-' }}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal" data-lang="Close">Đóng</button>
+                <button type="button" class="btn btn-light-primary btn-sm" data-child-sync-save data-lang="Save configuration">Lưu cấu hình</button>
+                <button type="button" class="btn btn-primary btn-sm" data-child-sync-run>
+                    <i class="bi bi-arrow-repeat me-1"></i><span data-lang="Sync now">Đồng bộ ngay</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
 @endsection
 @push('scripts')
-<script>typeof _services !== 'undefined' && typeof _services.init !== 'undefined' && _services.init();</script>
+<script>
+    typeof _services !== 'undefined' && typeof _services.init !== 'undefined' && _services.init();
+    (() => {
+        const modal = document.getElementById('modal-child-panel-service-sync');
+        if (!modal) return;
+        const markup = modal.querySelector('[data-child-sync-markup]');
+        const autoSync = modal.querySelector('[data-child-sync-auto]');
+        const saveButton = modal.querySelector('[data-child-sync-save]');
+        const syncButton = modal.querySelector('[data-child-sync-run]');
+        const deleteButton = document.querySelector('[data-child-services-delete]');
+        const save = async () => {
+            const result = await app.ajax('Service-saveChildSyncSettings', {
+                markup_percent: markup.value,
+                auto_sync: autoSync.checked ? 1 : 0
+            });
+            if (result.error) throw result;
+            return result;
+        };
+        saveButton.addEventListener('click', async () => {
+            saveButton.disabled = true;
+            try {
+                const result = await save();
+                app.toastr(result.message || 'Configuration saved.');
+            } catch (error) {
+                app.toastr(error.error || error.message || 'Unable to save configuration.', 'error');
+            } finally {
+                saveButton.disabled = false;
+            }
+        });
+        syncButton.addEventListener('click', async () => {
+            syncButton.disabled = true;
+            try {
+                await save();
+                const result = await app.ajax('Service-syncChildPanelServices', {});
+                if (result.error) throw result;
+                app.toastr(result.message || 'Services synchronized.');
+                location.reload();
+            } catch (error) {
+                app.toastr(error.error || error.message || 'Unable to synchronize services.', 'error');
+            } finally {
+                syncButton.disabled = false;
+            }
+        });
+        deleteButton?.addEventListener('click', async () => {
+            try {
+                await app.confirm(app.language('/services', 'Confirm remove all child panel services'));
+            } catch (_) {
+                return;
+            }
+            deleteButton.disabled = true;
+            try {
+                const result = await app.ajax('Service-deleteChildPanelServices', {});
+                if (result.error) throw result;
+                app.toastr(result.message || 'Child panel services removed.');
+                location.reload();
+            } catch (error) {
+                app.toastr(error.error || error.message || 'Unable to remove child panel services.', 'error');
+            } finally {
+                deleteButton.disabled = false;
+            }
+        });
+    })();
+</script>
 @endpush

@@ -14,7 +14,7 @@ return new class extends Migration
         // Drop existing services table if exists
         Schema::dropIfExists('services');
         
-        Schema::create('services', function (Blueprint $table) { 
+        Schema::create('services', function (Blueprint $table) {
             $table->id();
             $table->foreignId('category_id')->constrained('categories')->onDelete('cascade');
             $table->json('name');
@@ -64,6 +64,7 @@ return new class extends Migration
             $table->boolean('cancel')->default(false);
             $table->boolean('dripfeed')->default(false);
             $table->string('average_time')->nullable();
+            $table->text('average_time_v2')->nullable();
             $table->text('note')->nullable();
             $table->string('reaction')->nullable();
             $table->boolean('status')->default(true);

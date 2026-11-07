@@ -96,6 +96,10 @@
     <link href="{{ asset('assets/client/style.css') }}" rel="stylesheet">
     <link href="{{ asset('assets/client/metronic.css') }}" rel="stylesheet">
     <link href="{{ asset('assets/custom.css') }}" rel="stylesheet">
+    @if ((string) ($config?->default_interface ?? '') === '9')
+        <link href="{{ asset('assets/client/theme-9.css') }}?v={{ filemtime(public_path('assets/client/theme-9.css')) }}" rel="stylesheet">
+        <link href="{{ asset('assets/client/theme-9.utilities.css') }}?v={{ filemtime(public_path('assets/client/theme-9.utilities.css')) }}" rel="stylesheet">
+    @endif
     <style>
         /* The local plugins bundle contains KeenIcons CSS but not its font files. */
         @font-face {
@@ -172,7 +176,7 @@
     </script>
 </head>
 
-<body id="kt_body" class="header-fixed header-tablet-and-mobile-fixed aside-enabled">
+<body id="kt_body" class="header-fixed header-tablet-and-mobile-fixed aside-enabled {{ (string) ($config?->default_interface ?? '') === '9' ? 'client-theme-9' : '' }}">
     {{-- <div id="pm-modal" class="pm-modal">
         <div class="pm-box">
 
@@ -358,4 +362,3 @@
             @include('clients.theme-default.layouts.header')
 
             @include('clients.theme-default.layouts.footer')
-

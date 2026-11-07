@@ -10,6 +10,7 @@ use App\Jobs\ProcessStagedOrdersJob;
 use App\Jobs\UpdateOrdersStatusJob;
 use App\Http\Controllers\Crons\CronStatusController;
 use App\Http\Controllers\Crons\CronSyncController;
+use App\Http\Controllers\Crons\CronChildPanelController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 
@@ -121,11 +122,17 @@ Artisan::command('services:sync', function () {
     $this->info("Service sync started for {$providers->count()} providers.");
 })->purpose('Sync services from all active providers');
 
+Artisan::command('child-panels:sync-services', function () {
+    $summary = app(CronChildPanelController::class)->syncConfigured();
+    $this->info("Child panels: {$summary['synced']} synced, {$summary['failed']} failed.");
+})->purpose('Sync enabled child panel services from their main panels');
+
 // One scheduler entry for hosting cron: schedule:run.
 Artisan::command('app:cron', function () {
     $this->call('orders:update-status');
     $this->call('orders:process-staged');
     $this->call('services:sync');
+    $this->call('child-panels:sync-services');
 
     if (config('queue.default') !== 'sync') {
         try {

@@ -343,6 +343,10 @@ class RequestController extends Controller
         'Service' => [
             'get' => 'ajaxGet',
             'add' => 'ajaxAdd',
+            'saveChildSyncSettings' => 'saveChildSyncSettings',
+            'syncChildPanelServices' => 'syncChildPanelServices',
+            'deleteChildPanelServices' => 'deleteChildPanelServices',
+            'translateName' => 'translateName',
             'import' => 'storeImport',
             'update' => 'ajaxUpdate',
             'delete' => 'ajaxDelete',
@@ -476,7 +480,10 @@ class RequestController extends Controller
 
             $request->headers->set('Accept', 'application/json');
 
-            return app(\App\Http\Controllers\Client\ViewController::class)->createCheckout($request);
+            return app(\App\Http\Controllers\Client\ViewController::class)->createCheckout(
+                $request,
+                app(\App\Services\HeleketCheckoutService::class)
+            );
         }
 
         if (in_array($action, self::CLIENT_ACTIONS, true)) {
@@ -485,6 +492,10 @@ class RequestController extends Controller
 
         if (!Auth::check() || !Auth::user()->isAdmin()) {
             return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        if (isChildPanel() && in_array($entity, ['Category', 'Platform'], true)) {
+            return response()->json(['error' => 'Categories are unavailable on child panels.'], 403);
         }
 
         if (!isset(self::CONTROLLERS[$entity])) {

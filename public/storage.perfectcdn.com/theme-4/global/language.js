@@ -363,7 +363,7 @@ var LANGUAGE = {
             "Choose a social media": "Choose a social media:",
             "Social media": "Social media",
             "Category": "Category",
-            "Quick search service": "Quick search service2231132",
+            "Quick search service": "Quick search service",
             "Service": "Service",
             "Average time": "Average time",
             "Average time description": "The average time is based on 10 latest completed orders per 1000 quantity",

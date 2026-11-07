@@ -18,6 +18,7 @@ class PaymentMethod extends Model
             ['legacy_id' => 24, 'code' => 'sieuthicode_vietcombank', 'name' => 'SIEUTHICODE - Vietcombank', 'icon' => 'https://i.imgur.com/Fz183j7.png', 'currency' => 'VND'],
             ['legacy_id' => 25, 'code' => 'sieuthicode_mbbank', 'name' => 'SIEUTHICODE - MBBank', 'icon' => 'https://i.imgur.com/zVEduxd.png', 'currency' => 'VND'],
             ['legacy_id' => 38, 'code' => 'sieuthicode_bidv', 'name' => 'SIEUTHICODE - BIDV', 'icon' => 'https://i.imgur.com/znVQVCm.png', 'currency' => 'VND'],
+            ['legacy_id' => 46, 'code' => 'heleket', 'name' => 'Heleket', 'icon' => 'https://heleket.com/img/logo/heleket-logo.svg', 'currency' => 'USD'],
         ];
     }
 
@@ -31,6 +32,7 @@ class PaymentMethod extends Model
     const TYPE_BINANCE = 'binance';
     const TYPE_PAYEER = 'payeer';
     const TYPE_OTHER = 'other';
+    const TYPE_HELEKET = 'heleket';
 
     protected $fillable = [
         'name',
@@ -164,6 +166,7 @@ class PaymentMethod extends Model
             self::TYPE_BINANCE => 'Binance',
             self::TYPE_PAYEER => 'Payeer',
             self::TYPE_OTHER => 'Khác',
+            self::TYPE_HELEKET => 'Heleket',
         ];
     }
 

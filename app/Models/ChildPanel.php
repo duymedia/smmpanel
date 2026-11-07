@@ -9,6 +9,15 @@ class ChildPanel extends Model
 {
     use HasFactory;
 
+    public const DEFAULT_ACCESS_PAGES = [
+        'orders', 'refill_services', 'cancel_services', 'accounts', 'services',
+        'payments', 'messages', 'tickets', 'news', 'coupons',
+        'reports', 'analytics', 'affiliates', 'api', 'settings', 'backup',
+        'ticket_statistics_by_service', 'api_v2',
+    ];
+
+    public const DEFAULT_ACCESS_JSON = '["orders","refill_services","cancel_services","accounts","services","payments","messages","tickets","news","coupons","reports","analytics","affiliates","api","settings","backup","ticket_statistics_by_service","api_v2"]';
+
     protected $fillable = [
         'user_id',
         'domain',
@@ -39,7 +48,7 @@ class ChildPanel extends Model
         'total_orders' => 0,
         'total_services' => 0,
         'total_users' => 0,
-        'access' => 'child',
+        'access' => self::DEFAULT_ACCESS_JSON,
         'status' => 'pending',
     ];
 

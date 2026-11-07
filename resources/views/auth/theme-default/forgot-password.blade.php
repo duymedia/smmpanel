@@ -2,6 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-theme="light">
 
 <head>
+    @include('auth.theme-default.partials.bootstrap')
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -96,35 +97,7 @@
     <script src="{{ asset('cdn.whoispanel.com/dashboard/5/js/scripts.bundle.js') }}"></script>
     <script src="{{ asset('cdn.whoispanel.com/libs/jquery.blockUI/2.70/jquery.blockUI.min.js') }}"></script>
     <script src="{{ asset('assets/client/language.js') }}?v={{ filemtime(public_path('assets/client/language.js')) }}"></script>
-    <script>
-        (function () {
-            var language = window.LANGUAGE;
-            if (!language) return;
-
-            var segments = window.location.pathname.split('/');
-            var page = '/' + (segments[1] || '');
-
-            document.querySelectorAll('[data-lang]').forEach(function (element) {
-                var key = element.getAttribute('data-lang') || element.textContent.trim();
-                var elementPage = element.getAttribute('data-page') || page;
-                var group = key.indexOf('::') >= 0 ? key.split('::')[0] : elementPage;
-                var localized = language.language?.[group]?.[key]
-                    || language.core?.[group]?.[key];
-
-                if (!localized) return;
-
-                if (element.matches('input, textarea')) {
-                    if (element.hasAttribute('placeholder')) {
-                        element.setAttribute('placeholder', localized);
-                    } else if (element.hasAttribute('value')) {
-                        element.value = localized;
-                    }
-                } else {
-                    element.innerHTML = localized;
-                }
-            });
-        })();
-    </script>
+    @include('auth.theme-default.partials.language')
     <script src="{{ asset('assets/app.js') }}?v=16.8"></script>
     <script src="{{ asset('assets/client/auth.js') }}?v=16.20"></script>
 </body>

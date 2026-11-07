@@ -684,7 +684,6 @@ class CronStatusController extends Controller
 
     public function updateAverageTime(Request $request)
     {
-        // Lấy tất cả service_id có đơn completed với success_time
         $serviceIds = Order::where('status', 'completed')
             ->whereNotNull('success_time')
             ->distinct()
@@ -700,57 +699,37 @@ class CronStatusController extends Controller
 
         foreach ($serviceIds as $serviceId) {
             try {
-                // Lấy 1000 đơn completed gần nhất của service này
                 $orders = Order::where('service_id', $serviceId)
                     ->where('status', 'completed')
                     ->whereNotNull('success_time')
                     ->orderByDesc('id')
-                    ->limit(1000)
-                    ->get(['created_at', 'success_time']);
+                    ->limit(100)
+                    ->get(['quantity', 'created_at', 'success_time'])
+                    ->filter(fn ($order) => $order->created_at && $order->success_time && $order->success_time->gt($order->created_at))
+                    ->values();
 
-                if ($orders->isEmpty()) continue;
+                $recentOrders = $orders->take(10);
+                if ($recentOrders->isEmpty()) continue;
 
-                // Tính trung bình thời gian hoàn thành: created_at -> success_time (tính bằng phút)
-                $totalMinutes = 0;
-                $validCount = 0;
+                $secondsFor = static fn ($order): int => max(0, $order->success_time->getTimestamp() - $order->created_at->getTimestamp());
+                $averageSeconds = (int) round($recentOrders->avg($secondsFor));
+                $averageTimeV2 = $orders->filter(fn ($order) => (int) $order->quantity > 0)->take(6)
+                    ->map(fn ($order) => [(int) $order->quantity, $secondsFor($order)])
+                    ->values()
+                    ->all();
 
-                foreach ($orders as $order) {
-                    $created = $order->created_at;
-                    $completed = $order->success_time;
-
-                    if ($completed->gt($created)) {
-                        $totalMinutes += $created->diffInMinutes($completed);
-                        $validCount++;
-                    }
-                }
-
-                if ($validCount === 0) continue;
-
-                $averageMinutes = (int) round($totalMinutes / $validCount);
-
-                // Format thời gian trung bình thành chuỗi dễ đọc
-                if ($averageMinutes < 60) {
-                    $averageTime = $averageMinutes . ' minutes';
-                } elseif ($averageMinutes < 1440) {
-                    $hours = floor($averageMinutes / 60);
-                    $mins = $averageMinutes % 60;
-                    $averageTime = $hours . ' hours' . ($mins > 0 ? ' ' . $mins . ' minutes' : '');
-                } else {
-                    $days = floor($averageMinutes / 1440);
-                    $remainingMins = $averageMinutes % 1440;
-                    $hours = floor($remainingMins / 60);
-                    $averageTime = $days . ' days' . ($hours > 0 ? ' ' . $hours . ' hours' : '');
-                }
-
-                // Update average_time cho service
-                Service::where('id', $serviceId)->update(['average_time' => $averageTime]);
+                Service::where('id', $serviceId)->update([
+                    'average_time' => (string) $averageSeconds,
+                    'average_time_v2' => $averageTimeV2 ? json_encode($averageTimeV2) : null,
+                ]);
 
                 $updated++;
                 $results[] = [
                     'service_id' => $serviceId,
-                    'orders_count' => $validCount,
-                    'average_minutes' => $averageMinutes,
-                    'average_time' => $averageTime,
+                    'orders_count' => $recentOrders->count(),
+                    'average_minutes' => (int) round($averageSeconds / 60),
+                    'average_time' => $averageSeconds,
+                    'average_time_v2' => $averageTimeV2,
                 ];
             } catch (\Exception $e) {
                 $errors++;
@@ -786,7 +765,9 @@ class CronStatusController extends Controller
     {
         $quantity = max(1, (int) round((float) $quantity));
         $overflow = (int) ($service?->overflow ?? 0);
+        $adjusted = max(1, (int) round($quantity * (1 + $overflow / 100)));
+        $minimum = max(1, (int) ($service?->min ?? 1));
 
-        return max(1, (int) round($quantity * (1 + $overflow / 100)));
+        return $adjusted < $minimum ? $quantity : $adjusted;
     }
 }

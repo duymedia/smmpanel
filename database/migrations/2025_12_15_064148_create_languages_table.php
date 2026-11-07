@@ -1,5 +1,6 @@
 <?php
 
+use Database\Seeders\LanguageSeeder;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -25,6 +26,8 @@ return new class extends Migration
             $table->index('code');
             $table->index('created_at');
         });
+
+        app(LanguageSeeder::class)->run();
     }
 
     /**

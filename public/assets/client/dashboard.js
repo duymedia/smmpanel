@@ -714,6 +714,12 @@ var _addfunds = {
                 }
             }
         }
+    },
+    'init'() {
+        $('#child-panel-form').off('submit.childPanel').on('submit.childPanel', event => {
+            event.preventDefault();
+            this.on.click.create();
+        });
     }
 }
   , _new = {
@@ -1126,8 +1132,28 @@ var _addfunds = {
                   , _0x2ebd9b = _0x2ebd9b[0x0];
                 if (!_0x2ebd9b) return;
                 var _0x554eee = _0x2ebd9b['platformicon'] != '' ? _0x2ebd9b['platformicon'][_0x51372a(0x1c6)](_0x51372a(0x331)) ? '<img\x20src=\x22' + _0x2ebd9b[_0x51372a(0x2d5)] + _0x51372a(0x3c8) : _0x51372a(0x4d0) + _0x2ebd9b[_0x51372a(0x2d5)] + _0x51372a(0x4e5) : '';
-                $(_0x51372a(0x32e))[_0x51372a(0x46b)]('<p\x20class=\x22fs-2\x20fw-bolder\x20text-primary\x20mb-0\x20ls-1\x22>' + _0x2ebd9b['id'] + _0x51372a(0x1a7) + _0x554eee + '\x20' + _0x2ebd9b['name'] + _0x51372a(0x343)),
-                $('#ipt-average-time')[_0x51372a(0x392)](_0x2ebd9b['avg'] == 0x0 ? 'No\x20data' : app['timeAvg'](_0x2ebd9b['avg']));
+                $(_0x51372a(0x32e))[_0x51372a(0x46b)]('<p\x20class=\x22fs-2\x20fw-bolder\x20text-primary\x20mb-0\x20ls-1\x22>' + _0x2ebd9b['id'] + _0x51372a(0x1a7) + _0x554eee + '\x20' + _0x2ebd9b['name'] + _0x51372a(0x343));
+                var averageTimeSeconds = Number(_0x2ebd9b['avg']) || 0, averageTimeItems = [],
+                    averageTimeList = document.getElementById('average-time-v2-list'),
+                    averageTimeV2Container = document.getElementById('average-time-v2-container');
+                $('#ipt-average-time').val(averageTimeSeconds > 0 ? app['timeAvg'](averageTimeSeconds) : 'No data');
+                try { averageTimeItems = JSON.parse(_0x2ebd9b['avg_v2'] || '[]'); } catch (error) {}
+                if (!Array.isArray(averageTimeItems)) averageTimeItems = averageTimeItems['v'] === 2 ? averageTimeItems['items'] || [] : [];
+                if (averageTimeList && averageTimeV2Container) {
+                    averageTimeList.replaceChildren();
+                    averageTimeItems.forEach(item => {
+                        var quantity = Number(Array.isArray(item) ? item[0] : item['quantity']) || 0,
+                            seconds = Number(Array.isArray(item) ? item[1] : item['seconds']) || 0;
+                        if (quantity <= 0 || seconds < 0) return;
+                        var badge = document.createElement('span');
+                        badge.className = 'badge rounded-pill text-white px-3 py-2';
+                        badge.style.backgroundColor = '#5b5ce2';
+                        badge.textContent = quantity.toLocaleString() + ' = ' + app['timeAvg'](seconds);
+                        averageTimeList.appendChild(badge);
+                    });
+                    averageTimeV2Container.style.display = averageTimeList.children.length ? '' : 'none';
+                }
+                $('#avg-time-container').show();
                 $(_0x2ebd9b[_0x51372a(0x4ee)])[_0x51372a(0x24e)]() == '' ? $(_0x51372a(0x549))[_0x51372a(0x328)]() : $(_0x51372a(0x549))[_0x51372a(0x46b)](_0x2ebd9b[_0x51372a(0x4ee)])['show']();
                 $(_0x51372a(0x522))['val'](''),
                 $('.min')[_0x51372a(0x24e)](_0x2ebd9b[_0x51372a(0x370)]),
@@ -1402,6 +1428,21 @@ var _addfunds = {
                     'action': _0x168ab1,
                     'service_id': _0x2b76d0
                 }, ![]);
+            },
+            'averageTimeV2'(_0x2f6d3a) {
+                var _0x1cb43a = document['getElementById']('\x6d\x6f\x64\x61\x6c-\x61\x76\x65\x72\x61\x67\x65-\x74\x69\x6d\x65-\x76\x32'), _0x39d4b1;
+                try { _0x39d4b1 = JSON['parse'](_0x2f6d3a['dataset']['averageTimeV2'] || '\x5b\x5d'); } catch (_0x58a21e) { return; }
+                if (!_0x1cb43a || !Array['isArray'](_0x39d4b1) || !_0x39d4b1['length'] || typeof bootstrap === 'undefined') return;
+
+                _0x1cb43a['querySelector']('\x5b\x64\x61\x74\x61-\x61\x76\x65\x72\x61\x67\x65-\x74\x69\x6d\x65-\x76\x32-\x73\x65\x72\x76\x69\x63\x65\x5d')['textContent'] = (_0x2f6d3a['dataset']['\x73erviceName'] || '') + ' (#' + (_0x2f6d3a['dataset']['\x73erviceId'] || '') + ')';
+                var _0x3e942f = _0x1cb43a['querySelector']('\x5b\x64\x61\x74\x61-\x61\x76\x65\x72\x61\x67\x65-\x74\x69\x6d\x65-\x76\x32-\x69\x74\x65\x6d\x73\x5d');
+                _0x3e942f['replaceChildren'](..._0x39d4b1['filter'](_0x1a8c4f => _0x1a8c4f && _0x1a8c4f['\x71uantity'] && _0x1a8c4f['\x64uration'])['map'](_0x1a8c4f => {
+                    var _0x2d43b6 = document['createElement']('span');
+                    _0x2d43b6['className'] = '\x62adge badge-primary rounded-pill fs-7 fw-semibold px-3 py-2';
+                    _0x2d43b6['textContent'] = _0x1a8c4f['\x71uantity'] + '\x20=\x20' + _0x1a8c4f['\x64uration'];
+                    return _0x2d43b6;
+                }));
+                if (_0x3e942f['childElementCount']) bootstrap['Modal']['getOrCreateInstance'](_0x1cb43a)['show']();
             },
             'viewDescription'(_0xa6d7fd) {
                 var _0x46d045 = a0_0x250120

@@ -51,14 +51,14 @@ class OrderController extends Controller
     public function list(Request $request): JsonResponse
     {
         return $this->dataTablesResponse($request,
-            Order::with(['user:id,username', 'service:id,name,type,refill,cancel'])->domain(getDomain())
+            Order::with(['user:id,username', 'service:id,name,type,type_service,refill,cancel'])->domain(getDomain())
         );
     }
 
     public function listOld(Request $request): JsonResponse
     {
         return $this->dataTablesResponse($request,
-            Order::with(['user:id,username', 'service:id,name,type,refill,cancel'])
+            Order::with(['user:id,username', 'service:id,name,type,type_service,refill,cancel'])
                 ->domain(getDomain())->where('status','completed')->where('created_at','<',now()->subMonths(3))
         );
     }
@@ -67,7 +67,7 @@ class OrderController extends Controller
 
     public function get(Request $request): JsonResponse
     {
-        $order = Order::with(['user:id,username','service:id,name,type,refill,cancel'])
+        $order = Order::with(['user:id,username','service:id,name,type,type_service,refill,cancel'])
             ->domain(getDomain())->find($request->input('data.id'));
 
         return $order
@@ -82,14 +82,18 @@ class OrderController extends Controller
         if (!$order) return $this->notFound();
 
         $dbStatus = orderStatusToDatabase($d['new_status'] ?? '');
-        $update   = ['status' => $dbStatus];
+        if (!$dbStatus) return response()->json(['error' => 'Unknown status'], 422);
+        if ($dbStatus === 'partial' && !is_numeric($d['remains'] ?? null)) {
+            return response()->json(['error' => 'Remaining quantity is required for partial refunds.'], 422);
+        }
 
-        $this->completeCancelRequest($order, $dbStatus, $update);
-
-        $this->applyStatusFinancials($order, $dbStatus, $d['remains'] ?? null, $update);
-
-        $order->update($update);
-        return $this->ok();
+        try {
+            $this->transitionOrderStatus($order->id, $dbStatus, isset($d['remains']) ? (int) $d['remains'] : null);
+            return $this->ok();
+        } catch (\Throwable $exception) {
+            Log::error('Admin order status update failed', ['order_id' => $order->id, 'status' => $dbStatus, 'error' => $exception->getMessage()]);
+            return response()->json(['error' => $exception->getMessage()], 422);
+        }
     }
 
     public function bulkChangeStatus(Request $request): JsonResponse
@@ -97,11 +101,18 @@ class OrderController extends Controller
         $d    = $request->input('data', []);
         $ids  = (array)($d['ids'] ?? []);
         $dbStatus = orderStatusToDatabase($d['data'] ?? '');
-        Order::domain(getDomain())->whereIn('id', $ids)->update(['status' => $dbStatus]);
-        if (in_array($dbStatus, ['partial', 'canceled'], true)) {
-            Order::domain(getDomain())->whereIn('id', $ids)
-                ->whereNotNull('cancel_status')->where('cancel_status', '!=', '')
-                ->update(['cancel_status' => 'completed']);
+        if (!$dbStatus) return response()->json(['error' => 'Unknown status'], 422);
+        if ($dbStatus === 'partial') return response()->json(['error' => 'Use single-order partial refund to enter remaining quantity.'], 422);
+
+        try {
+            foreach (array_unique(array_map('intval', $ids)) as $id) {
+                if ($id > 0 && $this->findOrder($id)) {
+                    $this->transitionOrderStatus($id, $dbStatus);
+                }
+            }
+        } catch (\Throwable $exception) {
+            Log::error('Bulk order status update failed', ['status' => $dbStatus, 'error' => $exception->getMessage()]);
+            return response()->json(['error' => $exception->getMessage()], 422);
         }
 
         return response()->json(['success' => adminMessage('update'), 'count' => count($ids)]);
@@ -188,31 +199,21 @@ class OrderController extends Controller
             $newStatus = orderStatusToDatabase($res->status);
             if (!$newStatus) return response()->json(['error' => 'Unknown status: ' . $res->status], 400);
 
-            $update = ['status' => $newStatus];
-            $this->completeCancelRequest($order, $newStatus, $update);
-
             // API status responses include start_count. Keep it even when it
             // is 0 so the value shown in the orders table matches the provider.
-            if (property_exists($res, 'start_count') && is_numeric($res->start_count)) {
-                $update['start_count'] = (int) $res->start_count;
-            }
-
+            $extra = [];
+            if (property_exists($res, 'start_count') && is_numeric($res->start_count)) $extra['start_count'] = (int) $res->start_count;
+            $remains = null;
             if ($newStatus === 'completed') {
-                $update['remains'] = 0;
+                $extra['success_time'] = $order->success_time ?? now();
             } elseif ($newStatus === 'partial') {
                 if (!property_exists($res, 'remains') || !is_numeric($res->remains)) {
                     return response()->json(['error' => 'Provider did not return a valid remaining quantity'], 422);
                 }
-
-                $remains = max(0, min((int) $res->remains, (int) $order->quantity));
-                if (!in_array($order->status, ['partial', 'canceled'], true)) {
-                    $this->applyPartialRefund($order, $remains, $update);
-                } else {
-                    $update['remains'] = $remains;
-                }
+                $remains = (int) $res->remains;
             }
 
-            $order->update($update);
+            $this->transitionOrderStatus($order->id, $newStatus, $remains, $extra);
 
             return response()->json(['success' => adminMessage('status'), 'status' => $newStatus]);
         } catch (\Exception $e) {
@@ -262,20 +263,18 @@ class OrderController extends Controller
 
         if ($request->has('toggle_status')) {
             $dbStatus = orderStatusToDatabase($request->input('status'));
+            if (!$dbStatus) return response()->json(['error' => 'Unknown status'], 422);
             $changed  = $order->status !== $dbStatus;
             if ($changed) {
-                $upd = ['status' => $dbStatus];
-                if ($dbStatus === 'canceled') $this->refundAndZero($order, $upd);
-                $order->update($upd);
+                $this->transitionOrderStatus($order->id, $dbStatus);
             }
             return response()->json(['success' => true, 'message' => $changed ? 'Updated' : 'No change', 'order' => $order->fresh()]);
         }
 
         if ($request->has('quick_status')) {
             $dbStatus = orderStatusToDatabase($request->input('quick_status'));
-            $upd = ['status' => $dbStatus];
-            if ($dbStatus === 'canceled') $this->refundAndZero($order, $upd);
-            $order->update($upd);
+            if (!$dbStatus) return response()->json(['error' => 'Unknown status'], 422);
+            $this->transitionOrderStatus($order->id, $dbStatus);
             return response()->json(['success' => true, 'order_id' => $order->id]);
         }
 
@@ -307,6 +306,15 @@ class OrderController extends Controller
             'start_count' => 'sometimes|nullable|integer|min:0',
             'remains'     => 'sometimes|nullable|integer|min:0',
         ]);
+        if (array_key_exists('status', $v)) {
+            $status = orderStatusToDatabase($v['status']);
+            if (!$status) return response()->json(['error' => 'Unknown status'], 422);
+            if ($status === 'partial' && (!isset($v['remains']) || (int) $v['remains'] < 0)) {
+                return response()->json(['error' => 'Remaining quantity is required for partial refunds.'], 422);
+            }
+            $this->transitionOrderStatus($order->id, $status, isset($v['remains']) ? (int) $v['remains'] : null, array_intersect_key($v, ['start_count' => true]));
+            unset($v['status'], $v['remains'], $v['start_count']);
+        }
         $diff = array_filter($v, fn($val, $k) => $order->getAttribute($k) != $val, ARRAY_FILTER_USE_BOTH);
         if ($diff) $order->update($diff);
 
@@ -332,18 +340,16 @@ class OrderController extends Controller
             $dbStatus = orderStatusToDatabase($request->input('status'));
             if (!$dbStatus) return response()->json(['error' => 'Unknown status'], 400);
 
-            $update = ['status' => $dbStatus];
+            $extra = [];
             if ($dbStatus === 'completed') {
-                $update += ['remains' => 0, 'success_time' => $order->success_time ?? now()];
-            } elseif (in_array($dbStatus, ['in progress', 'processing'], true)) {
-                $update['remains'] = $order->quantity;
-            } elseif ($dbStatus === 'partial') {
-                $this->applyPartialRefund($order, (int) $request->input('remains', 0), $update);
-            } elseif ($dbStatus === 'canceled') {
-                $this->applyStatusFinancials($order, $newStatus, $remains ?? null, $update);
+                $extra['success_time'] = $order->success_time ?? now();
+            }
+            if ($request->filled('start_count')) $extra['start_count'] = (int) $request->input('start_count');
+            if ($dbStatus === 'partial' && (!$request->has('remains') || !is_numeric($request->input('remains')) || (int) $request->input('remains') < 0)) {
+                return response()->json(['error' => 'Remaining quantity is required for partial refunds.'], 422);
             }
 
-            $order->update($update);
+            $this->transitionOrderStatus($order->id, $dbStatus, $request->has('remains') ? (int) $request->input('remains') : null, $extra);
             return response()->json(['success' => adminMessage('update')]);
         } catch (\Exception $e) {
             Log::error('updateOrderStatus', ['id' => $id, 'err' => $e->getMessage()]);
@@ -449,6 +455,12 @@ class OrderController extends Controller
     {
         $provider = (string)($o->provider_name ?? '');
         $isManual = $provider === '' || strtolower($provider) === 'manual';
+        $responseData = $o->response_data;
+        if (is_string($responseData)) {
+            $responseData = json_decode($responseData, true) ?? $responseData;
+        }
+        $responseError = is_array($responseData) ? data_get($responseData, 'error') : null;
+        $hasResponseError = is_scalar($responseError) && trim((string) $responseError) !== '';
         $features = [];
         if ($o->service) {
             if ($o->service->refill) $features[] = 'Refill';
@@ -461,7 +473,7 @@ class OrderController extends Controller
             'account_user'       => $o->user->username ?? '',
             'service_id'         => (int)($o->service_id ?? 0),
             'service_name'       => $o->service ? $this->resolveName($o->service->name) : '',
-            'service_type'       => $o->service->type ?? 'Default',
+            'service_type'       => $o->service->type_service ?? 'Default',
             'service_feature'    => json_encode($features),
             'order_status'       => orderStatusToDisplay($o->status),
             'order_type'         => (!empty($o->orders_api) || !$isManual) ? 'Api' : 'Manual',
@@ -485,6 +497,8 @@ class OrderController extends Controller
             'order_link'         => (string)($o->link ?? ''),
             'order_comment'      => filled($o->comment) ? (string) $o->comment : null,
             'order_more'         => $o->order_data ? self::safeOrderMore($o->order_data) : '',
+            'has_response_error' => $hasResponseError,
+            'response_message'   => $hasResponseError ? mb_substr(trim((string) $responseError), 0, 500) : '',
             'order_note'         => (string)($o->note ?? ''),
             'order_loop'         => (int)($o->loop_quantity ?? 0),
             'order_loop_spacing' => (int)($o->loop_spacing ?? 0),
@@ -539,83 +553,74 @@ class OrderController extends Controller
         return response()->json(['success' => $msg]);
     }
 
-    private function refundAndZero(Order $order, array &$update): void
+    private function transitionOrderStatus(int $orderId, string $status, ?int $remains = null, array $extra = []): Order
     {
-        $update['remains'] = (int) $order->quantity;
+        return DB::transaction(function () use ($orderId, $status, $remains, $extra): Order {
+            $order = Order::domain(getDomain())->lockForUpdate()->findOrFail($orderId);
+            $update = array_merge($extra, ['status' => $status]);
+            $this->completeCancelRequest($order, $status, $update);
+            $this->applyStatusFinancials($order, $status, $remains, $update);
+            $order->update($update);
 
-        if ($order->charge > 0) {
-            User::find($order->user_id)?->increment('balance', $order->charge);
-            $update['charge'] = 0;
-        }
+            return $order;
+        });
     }
 
     private function applyStatusFinancials(Order $order, string $status, ?int $remains, array &$update): void
     {
-        $previous = $order->status;
-        $total = (float) ($order->total ?? $order->charge ?? 0);
+        $quantity = max(0, (int) $order->quantity);
+        $total = max(0, (float) ($order->total ?? $order->charge ?? 0));
+        $currentCharge = max(0, (float) ($order->charge ?? $total));
+        $targetCharge = $total;
 
-        if ($status === 'completed') {
-            $update['remains'] = 0;
-        } elseif (in_array($status, ['processing', 'in progress', 'pending'], true)) {
-            $update['remains'] = (int) $order->quantity;
-        } elseif ($status === 'partial' && $remains !== null) {
-            $update['remains'] = max(0, min($remains, (int) $order->quantity));
+        if ($status === 'partial') {
+            $remains = max(0, min($remains ?? (int) $order->remains, $quantity));
+            $update['remains'] = $remains;
+            $targetCharge = $quantity > 0 ? round($total * ($quantity - $remains) / $quantity, 8) : $total;
         } elseif ($status === 'canceled') {
-            $this->refundAndZero($order, $update);
+            $update['remains'] = $quantity;
+            $targetCharge = 0;
+        } elseif ($status === 'completed') {
+            $update['remains'] = 0;
+        } else {
+            $update['remains'] = $quantity;
         }
 
-        if ($previous === 'partial' && $status !== 'partial' && $total > (float) $order->charge) {
-            $amount = $total - (float) $order->charge;
-            DB::transaction(function () use ($order, $amount): void {
-                $user = User::whereKey($order->user_id)->lockForUpdate()->first();
-                if (!$user) return;
-                $user->decrement('balance', $amount);
-                $user->refresh();
-                Transaction::create([
-                    'user_id' => $user->id,
-                    'order_id' => $order->id,
-                    'amount' => -$amount,
-                    'type' => 'refund_reversal',
-                    'status' => 'completed',
-                    'payment_method' => null,
-                    'transaction_id' => 'REVERSE-REFUND-ORDER-' . $order->id . '-' . uniqid(),
-                    'description' => 'Reversal of partial refund for order #' . $order->id,
-                    'balance_after' => $user->balance,
-                    'domain' => $order->domain,
-                ]);
-            });
-            $update['charge'] = $total;
-            $update['remains'] = (int) $order->quantity;
+        $delta = round($currentCharge - $targetCharge, 8);
+        if ($delta > 0) {
+            $this->adjustOrderBalance($order, $delta, false, $status);
+        } elseif ($delta < 0) {
+            $this->adjustOrderBalance($order, abs($delta), true, $status);
         }
+        $update['charge'] = $targetCharge;
     }
 
-    private function applyPartialRefund(Order $order, int $remains, array &$update): void
+    private function adjustOrderBalance(Order $order, float $amount, bool $debit, string $status): void
     {
-        $update['remains'] = $remains;
-        if ($order->quantity <= 0 || ($order->total ?? 0) <= 0) return;
-
-        $refund = round($remains * $order->total / $order->quantity, 8);
-        $update['charge'] = max(0, $order->charge - $refund);
-        if ($refund > 0) {
-            DB::transaction(function () use ($order, $refund): void {
-                $user = User::whereKey($order->user_id)->lockForUpdate()->first();
-                if (!$user) return;
-                $user->increment('balance', $refund);
-                $user->refresh();
-                Transaction::create([
-                    'user_id' => $user->id,
-                    'order_id' => $order->id,
-                    'amount' => $refund,
-                    'type' => 'refund',
-                    'status' => 'completed',
-                    'payment_method' => null,
-                    'transaction_id' => 'PARTIAL-REFUND-ORDER-' . $order->id . '-' . uniqid(),
-                    'description' => 'Partial refund for order #' . $order->id,
-                    'balance_after' => $user->balance,
-                    'domain' => $order->domain,
-                ]);
-            });
+        $user = User::whereKey($order->user_id)->lockForUpdate()->firstOrFail();
+        $amount = round($amount, 8);
+        if ($debit && (float) $user->balance < $amount) {
+            throw new \RuntimeException('Insufficient balance to reverse the previous order refund.');
         }
+
+        $debit ? $user->decrement('balance', $amount) : $user->increment('balance', $amount);
+        $user->refresh();
+        $type = $debit ? 'refund_reversal' : 'refund';
+        $description = $debit
+            ? 'Refund reversal for order #' . $order->id
+            : (($status === 'canceled' ? 'Canceled order refund #' : 'Partial order refund #') . $order->id);
+        Transaction::create([
+            'user_id' => $user->id,
+            'order_id' => $order->id,
+            'amount' => $debit ? -$amount : $amount,
+            'type' => $type,
+            'status' => 'completed',
+            'payment_method' => null,
+            'transaction_id' => strtoupper($type) . '-ORDER-' . $order->id . '-' . uniqid(),
+            'description' => $description,
+            'balance_after' => $user->balance,
+            'domain' => $order->domain ?? getDomain(),
+        ]);
     }
 
     private function resolveName(mixed $name): string

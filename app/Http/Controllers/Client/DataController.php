@@ -24,6 +24,7 @@ use App\Models\EventSpin;
 use App\Models\User;
 use App\Library\TelegramCustom;
 use App\Smm\Smm;
+use App\Services\FacebookMetricsService;
 use App\Jobs\ProcessStagedOrdersJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -214,12 +215,12 @@ class DataController extends Controller
 
     public function getFacebookId(Request $request): JsonResponse
     {
-        $link = trim((string) $request->input('link'));
-        preg_match('/(?:id=|facebook\.com\/)(\d+)/i', $link, $match);
+        $link = trim((string) $request->input('link', $request->input('url', '')));
+        $result = app(FacebookMetricsService::class)->getUID($link);
 
-        return isset($match[1])
-            ? response()->json(['success' => $match[1]])
-            : response()->json(['error' => 'Unable to extract Facebook ID']);
+        return $result['success']
+            ? response()->json(['success' => $result['user_id']])
+            : response()->json(['error' => $result['error']], $result['http_status'] ?? 422);
     }
 
     /**
@@ -495,6 +496,44 @@ class DataController extends Controller
                 ], 422);
             }
 
+            $startCount = 0;
+            $checkCountSettings = $service->check_count_data ?? [];
+            $checkCountType = is_array($checkCountSettings) ? (string) ($checkCountSettings['type'] ?? '') : '';
+            $facebookMetricTypes = ['facebook-followers', 'facebook-followers-no-api', 'facebook-reactions-no-api'];
+            if ($service->check_count && in_array($checkCountType, $facebookMetricTypes, true)) {
+                $profile = trim((string) ($request->input('user_id') ?: $request->input('link') ?: $request->input('username', '')));
+                $metricCheck = ['success' => false, 'error' => 'Facebook profile or post link is missing.'];
+
+                if ($profile !== '' && !($checkCountType === 'facebook-followers' && !ctype_digit($profile))) {
+                    try {
+                        $metricCheck = app(FacebookMetricsService::class)->getMetricCount($profile, $checkCountType);
+                    } catch (\Throwable $exception) {
+                        $metricCheck = [
+                            'success' => false,
+                            'error' => $exception->getMessage(),
+                            'exception' => get_class($exception),
+                        ];
+                    }
+                } elseif ($profile !== '') {
+                    $metricCheck['error'] = 'API follower checks require a numeric Facebook user ID.';
+                }
+
+                $countKey = $checkCountType === 'facebook-reactions-no-api' ? 'reaction_count' : 'followers_count';
+                $currentCount = $metricCheck[$countKey] ?? null;
+                if (($metricCheck['success'] ?? false) && is_numeric($currentCount)) {
+                    $startCount = (int) $currentCount;
+                } else {
+                    Log::warning('Facebook metric check failed; order continues without start_count', [
+                        'service_id' => $service->id,
+                        'user_id' => $user->id,
+                        'metric_type' => $checkCountType,
+                        'http_status' => $metricCheck['http_status'] ?? null,
+                        'exception' => $metricCheck['exception'] ?? null,
+                        'error' => $metricCheck['error'] ?? 'Metric response did not contain a valid count.',
+                    ]);
+                }
+            }
+
             $orderData = [
                 'user_id' => $user->id,
                 'service_id' => $service->id,
@@ -504,7 +543,7 @@ class DataController extends Controller
                 'rate' => $rate,
                 'charge' => $total,
                 'total' => $total,
-                'start_count' => 0,
+                'start_count' => $startCount,
                 'remains' => $quantity,
                 'status' => 'pending',
                 'currency' => 'USD',
@@ -547,6 +586,7 @@ class DataController extends Controller
                 'rate' => $rate,
                 'charge' => $total,
                 'total' => $total,
+                'start_count' => $startCount,
                 'dripfeed' => $orderData['dripfeed'],
                 'refill' => $orderData['refill'],
                 'cancel' => $orderData['cancel'],
@@ -584,16 +624,21 @@ class DataController extends Controller
             $orderData['status'] = 'awaiting';
 
             DB::transaction(function () use ($orderData, $user, $total, &$order) {
-                $order = Order::create($orderData);
-                $user->decrement('balance', $total);
+                $balanceUser = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+                $debitAmount = number_format((float) $total, 9, '.', '');
+                $transactionAmount = bcsub('0', $debitAmount, 9);
+                $balanceBefore = number_format((float) $balanceUser->balance, 9, '.', '');
+                if (bccomp($balanceBefore, $debitAmount, 9) < 0) {
+                    throw new \RuntimeException('Not enough funds');
+                }
 
-                $totalStr     = number_format((float)$total, 9, '.', '');
-                $balanceStr   = number_format((float)$user->balance, 9, '.', '');
-                $balanceAfter = bcsub($balanceStr, $totalStr, 9);
+                $order = Order::create($orderData);
+                $balanceUser->decrement('balance', $total);
+                $balanceAfter = bcadd($balanceBefore, $transactionAmount, 9);
                 Transaction::create([
-                    'user_id'        => $user->id,
+                    'user_id'        => $balanceUser->id,
                     'order_id'       => $order->id,
-                    'amount'         => -$total,
+                    'amount'         => $transactionAmount,
                     'type'           => 'order',
                     'status'         => 'completed',
                     'payment_method' => 'balance',
@@ -736,6 +781,7 @@ class DataController extends Controller
                 'description' => $service->description,
                 'note' => $service->note,
                 'average_time' => $service->average_time,
+                'average_time_v2' => $service->average_time_v2,
                 'type_service' => $service->type_service,
                 'attributes' => $service->attributes ? json_decode($service->attributes, true) : [],
             ];
@@ -1499,8 +1545,16 @@ class DataController extends Controller
 
             $productOrder = null;
             DB::transaction(function () use ($user, $product, $quantity, $charge, &$productOrder) {
+                $balanceUser = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+                $debitAmount = number_format((float) $charge, 9, '.', '');
+                $transactionAmount = bcsub('0', $debitAmount, 9);
+                $balanceBefore = number_format((float) $balanceUser->balance, 9, '.', '');
+                if (bccomp($balanceBefore, $debitAmount, 9) < 0) {
+                    throw new \RuntimeException('Insufficient balance');
+                }
+
                 $productOrder = ProductOrder::create([
-                    'user_id'    => $user->id,
+                    'user_id'    => $balanceUser->id,
                     'domain'     => getDomain(),
                     'product_id' => $product->id,
                     'status'     => $product->type === 'manual' ? 'Manual' : 'Pending',
@@ -1509,14 +1563,14 @@ class DataController extends Controller
                     'quantity'   => $quantity,
                 ]);
 
-                $user->decrement('balance', $charge);
+                $balanceUser->decrement('balance', $charge);
 
                 // Record transaction
-                $balanceAfter = number_format((float)$user->balance - $charge, 9, '.', '');
+                $balanceAfter = bcadd($balanceBefore, $transactionAmount, 9);
                 Transaction::create([
-                    'user_id'        => $user->id,
+                    'user_id'        => $balanceUser->id,
                     'order_id'       => null,
-                    'amount'         => -$charge,
+                    'amount'         => $transactionAmount,
                     'type'           => 'order',
                     'status'         => 'completed',
                     'payment_method' => 'balance',

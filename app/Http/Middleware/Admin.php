@@ -17,8 +17,11 @@ class Admin
 
         abort_unless((int) $user->role === User::ROLE_ADMIN, 403);
 
-        if (isChildPanel() && ! panelCanAccess($request->path())) {
-            abort(403, 'This page is not available for the child panel.');
+        // Let the admin root reach its redirect to /admin/orders; the target
+        // page still passes the normal child-panel access check.
+        $isAdminRoot = trim($request->path(), '/') === 'admin';
+        if (!$isAdminRoot && isChildPanel() && ! panelCanAccess($request->path())) {
+            abort(403);
         }
 
         return $next($request);

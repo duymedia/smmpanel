@@ -3,9 +3,10 @@
     <div class="app-container container-xxl d-flex flex-column flex-md-row flex-center flex-md-stack py-3">
         <!--begin::Copyright-->
         <div class="text-gray-900 order-2 order-md-1">
-            <span class="text-muted fw-semibold me-1">2026 ©</span>
-            <a href="https://{{ getDomain() }}" target="_blank"
-                class="text-gray-800 text-hover-primary">{{ $config->title ?? '' }}</a>
+            <span class="text-muted fw-semibold me-1"><script>document.write(new Date().getFullYear())</script>©</span>
+            <a href="{{ url('/') }}" target="_blank" class="text-gray-800 text-hover-primary">
+            {{ getDomain() }} <span data-page="message" data-lang="{{ $config->title ?? '' }}">{{ $config->title ?? '' }}</span>
+         </a>
         </div>
         <!--end::Copyright-->
         <!--begin::Menu-->
@@ -123,7 +124,6 @@
 
 <script src="{{ asset('assets/client/dashboard.js') }}?v={{ filemtime(public_path('assets/client/dashboard.js')) }}"></script>
 <script src="{{ asset('assets/client/settings.js') }}?v={{ filemtime(public_path('assets/client/settings.js')) }}"></script>
-<script src="{{ asset('assets/client/childpanel.js') }}?v={{ filemtime(public_path('assets/client/childpanel.js')) }}"></script>
 @stack('scripts')
 
 <div class="daterangepicker ltr single opensright">

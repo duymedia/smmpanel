@@ -63,8 +63,8 @@
                                 <tr class="fw-bold fs-6">
                                     <td>{{ $referrals->count() }}</td>
                                     <td>{{ $totalOrders }}</td>
-                                    <td class="text-success">${{ number_format($totalEarned, 4) }}</td>
-                                    <td class="text-success">${{ number_format($totalEarned, 4) }}</td>
+                                    <td class="text-success">${{ formatCharge($totalEarned, true) }}</td>
+                                    <td class="text-success">${{ formatCharge($totalEarned, true) }}</td>
                                 </tr>
                             </tbody>
                         </table>

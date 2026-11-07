@@ -1,15 +1,6 @@
 ﻿@extends('admin.layouts.app')
 @section('title', 'Edit service')
 
-@php
-    $serviceId = $service->id ?? request('id');
-    $featureOptions = [
-        'Owner', 'Exclusive', 'Provider Direct', 'New', 'Best seller', 'Promotion', 'Recommend', 'Instant',
-        'Super Fast', 'Real', 'Lifetime', '7 days Refill', '15 days Refill', '30 days Refill', '60 days Refill',
-        '90 days Refill', '365 days Refill', 'No refill', 'Auto Refill', 'No refund', 'Refill Button', 'Cancel Button',
-    ];
-@endphp
-
 @section('content')
     <div class="content flex-row-fluid" id="kt_content">
         <span class="title d-none">Edit</span>
@@ -82,30 +73,21 @@
                     <label class="required form-label" data-lang="/services::Category">Danh mục</label>
                     <select class="form-select form-select-solid sl-category">
                         @foreach ($categories as $category)
-                            @php
-    $serviceId = $service->id ?? request('id');
-                                $categoryRawName = $category->name;
-                                $categoryName = method_exists($category, 'getName')
-                                    ? $category->getName()
-                                    : (is_array($categoryRawName)
-                                        ? ($categoryRawName['en'] ?? (array_values($categoryRawName)[0] ?? ''))
-                                        : $categoryRawName);
-                            @endphp
                             <option value="{{ $category->id }}" data-icon="{{ $category->image ?? '' }}">
-                                {{ $category->platform->name ?? '' }} | {{ $categoryName }}
+                                {{ $category->platform->name ?? '' }} | {{ $category->getName() }}
                             </option>
                         @endforeach
                     </select>
-                </div>
+                </div> 
 
                 <div>
-                    <label class="form-label">
+                    <div class="form-label d-flex align-items-center gap-2">
                         <span data-lang="/services::Label Features">Nhãn thông tin</span>
-                        <button class="px-2 py-0 btn btn-sm btn-outline btn-outline-primary ms-2 btn-copy btn-copy-feature"
-                            onclick="_services.on.click.copyFromProvider('feature')" style="display: none;" data-lang="/services::Copy from provider">
+                        <button type="button" class="btn btn-sm btn-outline btn-outline-primary px-2 py-0 btn-copy btn-copy-feature"
+                            onclick="_services.on.click.copyFromProvider('feature')" data-lang="/services::Copy from provider">
                             Sao chép từ nhà cung cấp
                         </button>
-                    </label>
+                    </div>
                     <select class="form-select form-select-solid sl-features" data-control="select2"
                         data-close-on-select="false" data-placeholder="Choose"
                         data-lang-placeholder="/services::Choose" data-allow-clear="true" multiple>
@@ -115,7 +97,7 @@
                         @endforeach
                     </select>
                 </div>
-            </div>
+            </div> 
         </div>
 
         <div class="mb-5 shadow-sm card card-title">
@@ -130,10 +112,10 @@
                         data-bs-toggle="dropdown" data-lang="/services::Add translated name">Thêm tên ngôn ngữ khác</a>
                     <div class="dropdown-menu dropdown-menu-end">
                         @foreach ($languages as $language)
-                            @php $flagCode = $language->code === 'vi' ? 'vn' : $language->code; @endphp
+                            @php($languageData = langData($language))
                             <a href="javascript:;" class="dropdown-item ai-icon"
-                                onclick="_services.on.click.addTranslatedName('{{ $flagCode }}')">
-                                <span class="rounded-1 fi fi-{{ $flagCode }} fs-4"></span>
+                                onclick="_services.on.click.addTranslatedName('{{ $languageData['flag_code'] }}')">
+                                <span class="rounded-1 {{ $languageData['flag_class'] }} fs-4"></span>
                                 <span class="ms-2">{{ $language->name }}</span>
                             </a>
                         @endforeach
@@ -172,7 +154,6 @@
                                 <div class="input-group input-group-solid">
                                     <span class="input-group-text bg-secondary">$</span>
                                     <input type="text" class="form-control ipt-service-price"
-                                        value="{{ number_format((float) ($service->rate_original ?? 0) * (float) ($service->rate_retail_up ?? 100) / 100, 8, '.', '') }}"
                                         onkeyup="_services.on.keyup.retail_rate(this.value)">
                                     <input type="text" class="border-2 form-control border-start float-end text-end ipt-service-price-percent"
                                         value="{{ $service->rate_retail_up ?? ($markupConfig['markup_retail'] ?? 110) }}"
@@ -185,8 +166,7 @@
                                 <label class="required form-label" data-lang="/services::Wholesale Rate - Child">Giá đại lý</label>
                                 <div class="input-group input-group-solid">
                                     <span class="input-group-text bg-secondary">$</span>
-                                    <input type="number" step="any" class="form-control ipt-service-price-1"
-                                        value="{{ number_format((float) ($service->rate_original ?? 0) * (float) ($service->rate_agent_up ?? 100) / 100, 8, '.', '') }}">
+                                    <input type="number" step="any" class="form-control ipt-service-price-1">
                                     <input type="text" class="border-2 form-control border-start float-end text-end ipt-service-price-1-percent"
                                         value="{{ $service->rate_agent_up ?? ($markupConfig['markup_agent'] ?? 108) }}"
                                         onkeyup="_services.on.keyup.price_percent(this.value, 1)"
@@ -198,8 +178,7 @@
                                 <label class="required form-label" data-lang="/services::Wholesale Rate - Reseller">Giá nhà phân phối</label>
                                 <div class="input-group input-group-solid">
                                     <span class="input-group-text bg-secondary">$</span>
-                                    <input type="number" step="any" class="form-control ipt-service-price-2"
-                                        value="{{ number_format((float) ($service->rate_original ?? 0) * (float) ($service->rate_distributor_up ?? 100) / 100, 8, '.', '') }}">
+                                    <input type="number" step="any" class="form-control ipt-service-price-2">
                                     <input type="text" class="border-2 form-control border-start float-end text-end ipt-service-price-2-percent"
                                         value="{{ $service->rate_distributor_up ?? ($markupConfig['markup_distributor'] ?? 105) }}"
                                         onkeyup="_services.on.keyup.price_percent(this.value, 2)"
@@ -439,7 +418,7 @@
         </div>
 
         <div class="flex-wrap my-6 d-flex flex-stack">
-            <h3 class="my-2 fw-bold"><span data-lang="/services::Description">Mô tả dịch vụ</span> <button class="px-2 py-0 btn btn-sm btn-outline btn-outline-primary ms-2 btn-copy btn-copy-desc" onclick="_services.on.click.copyFromProvider('desc')" style="display: none;" data-lang="/services::Copy from provider">Sao chép từ nhà cung cấp</button></h3>
+                <h3 class="my-2 fw-bold"><span data-lang="/services::Description">Mô tả dịch vụ</span> <button type="button" class="btn btn-sm btn-outline btn-outline-primary px-2 py-0 btn-copy btn-copy-desc" onclick="_services.on.click.copyFromProvider('desc')" data-lang="/services::Copy from provider">Sao chép từ nhà cung cấp</button></h3>
         </div>
         <div class="shadow-sm card"><div class="p-0 card-body"><div class="bg-transparent txa-service-description h-300px"></div></div></div>
 
@@ -472,11 +451,10 @@
         <div class="flex-wrap mt-6 d-flex flex-stack"><div class="form-check form-switch form-check-custom"><input class="form-check-input cb-service-quantity-discount" type="checkbox" onchange="document.querySelector('.card-discount').setAttribute('style', this.checked ? '' : 'display: none;')"><label class="text-gray-900 form-check-label fs-3 fw-bold" data-lang="/services::Quantity discount">Giảm giá</label></div></div>
         <div class="mt-0 row g-5 card-discount" style="display: none;"><div class="col-xl-12"><div class="shadow-sm card"><div class="card-body"><div class="div-conditions"></div><button type="button" class="btn btn-secondary btn-sm" onclick="_services.on.click.addConditionQuantityDiscount()" data-lang="/services::Add condition">Thêm điều kiện</button></div></div></div></div>
 
-        <div class="flex-wrap mt-6 d-flex flex-stack div-card-check-count"><div class="form-check form-switch form-check-custom"><input class="form-check-input cb-service-check-count" type="checkbox" onchange="document.querySelector('.card-check-count').setAttribute('style', this.checked ? '' : 'display: none;')"><label class="text-gray-900 form-check-label fs-3 fw-bold"><span data-lang="/services::Check count order">Check count order (Get start count and complete the order)</span> <span class="text-danger" data-lang="/services::Beta time">*BETA TIME*</span></label></div></div>
-        <div class="shadow-sm card card-check-count" style="display: none;"><div class="card-body"><div class="row"><div class="mb-5 col-lg-6"><label class="required form-label" data-lang="/services::Type">Type</label><select class="form-select sl-check-count-type" data-kt-select2="true"><option value="youtube-view" data-lang="/services::Youtube - Views">Youtube - Views</option><option value="youtube-like" data-lang="/services::Youtube - Likes">Youtube - Likes</option><option value="youtube-comment" data-lang="/services::Youtube - Comments">Youtube - Comments</option><option value="youtube-subscriber" data-lang="/services::Youtube - Subscribers">Youtube - Subscribers</option></select></div><div class="col-lg-6"><label class="required form-label" data-lang="/services::Complete when over quantity">Complete when over quantity</label><div class="mb-5 input-group"><input type="text" class="text-end form-control ipt-check-count-percent" data-inputmask="'mask': '9', 'repeat': 2, 'greedy' : false" value="0"><span class="input-group-text">%</span></div><div class="form-check form-switch form-check-solid"><input class="form-check-input cb-check-count-auto-check-completion" type="checkbox"><label class="form-check-label" data-lang="/services::Automatically check order completion">Automatically check order completion</label></div></div></div></div></div>
+        <div class="flex-wrap mt-6 d-flex flex-stack"><div class="form-check form-switch form-check-custom"><input class="form-check-input cb-service-check-count" type="checkbox" onchange="document.querySelector('[data-check-count-panel]').setAttribute('style', this.checked ? '' : 'display: none;')"><label class="text-gray-900 form-check-label fs-3 fw-bold" data-lang="/services::Check follower count before order">Kiểm tra số người theo dõi khi đặt hàng</label></div></div>
+        <div class="mt-0 row g-5" data-check-count-panel style="display: none;"><div class="col-xl-12"><div class="shadow-sm card"><div class="card-body"><div class="row"><div class="mb-5 col-lg-6"><label class="required form-label" data-lang="/services::Type">Type</label><select class="form-select sl-check-count-type" data-kt-select2="true"><option value="facebook-followers" data-lang="/services::Facebook - Followers (API)">Facebook - Theo dõi (API)</option><option value="facebook-followers-no-api" data-lang="/services::Facebook - Followers (No API)">Facebook - Theo dõi (No API)</option><option value="facebook-reactions-no-api" data-lang="/services::Facebook - Reactions (No API)">Facebook - Cảm xúc (No API)</option><option value="youtube-view" data-lang="/services::Youtube - Views">Youtube - Views</option><option value="youtube-like" data-lang="/services::Youtube - Likes">Youtube - Likes</option><option value="youtube-comment" data-lang="/services::Youtube - Comments">Youtube - Comments</option><option value="youtube-subscriber" data-lang="/services::Youtube - Subscribers">Youtube - Subscribers</option></select></div><div class="col-lg-6"><label class="required form-label" data-lang="/services::Complete when over quantity">Complete when over quantity</label><div class="mb-5 input-group"><input type="text" class="text-end form-control ipt-check-count-percent" data-inputmask="'mask': '9', 'repeat': 2, 'greedy' : false" value="0"><span class="input-group-text">%</span></div><div class="form-check form-switch form-check-solid"><input class="form-check-input cb-check-count-auto-check-completion" type="checkbox"><label class="form-check-label" data-lang="/services::Automatically check order completion">Automatically check order completion</label></div></div></div></div></div></div></div>
 
-        <div class="flex-wrap mt-6 d-flex flex-stack"><div class="form-check form-switch form-check-custom"><input class="form-check-input cb-service-avg-time" type="checkbox" onchange="document.querySelector('.card-avg-time').setAttribute('style', this.checked ? '' : 'display: none;')"><label class="text-gray-900 form-check-label fs-3 fw-bold" data-lang="/services::Set average time">Thiết lập thời gian trung bình</label></div></div>
-        <div class="mt-0 row g-5 card-avg-time" style="display: none;"><div class="col-12"><div class="shadow-sm card"><div class="card-body"><div class="row"><div class="col-xl-12"><label class="required form-label" data-lang="/services::Time">Thời gian (tính bằng giây)</label><div class="mb-5 input-group input-group-solid"><span class="input-group-text bg-text text-avg-time">0</span><input type="text" class="form-control ipt-service-avg-time" data-inputmask="'mask': '9', 'repeat': 9, 'greedy' : false" value="0" onkeyup="document.querySelector('.text-avg-time').textContent = app.timeAvg(this.value.trim())"></div></div></div></div></div></div></div>
+        @include('admin.services.average-time-v2')
 
         <div class="flex-wrap mt-6 d-flex flex-stack"><div class="form-check form-switch form-check-custom"><input class="form-check-input cb-hidden-api" type="checkbox"><label class="text-gray-900 form-check-label fs-3 fw-bold" data-lang="/services::Restrict access to this service in the API">Hạn chế truy cập dịch vụ này trong API</label></div></div>
         <div class="flex-wrap mt-6 d-flex flex-stack"><div class="form-check form-switch form-check-custom"><input class="form-check-input cb-news" type="checkbox" checked><label class="text-gray-900 form-check-label fs-3 fw-bold"><span data-lang="/services::Update to">Cập nhật</span> <a target="_blank" href="/admin/news" data-lang="/services::NEWS">Thông báo</a></label></div></div>
@@ -485,6 +463,15 @@
         <div class="mt-6 row g-5"><div class="col-12"><button type="button" class="btn btn-primary w-100" onclick="_services.on.click.update('{{ $serviceId }}')" data-lang="button::Update">Update</button><button type="button" class="mt-5 btn btn-sm btn-danger w-100" onclick="_services.on.click.delete('{{ $serviceId }}')" data-lang="button::Delete">Delete</button></div></div>
     </div>
 @endsection
+
+@push('styles')
+<style>
+    #kt_content .btn-copy-feature,
+    #kt_content .btn-copy-desc {
+        display: inline-flex !important;
+    }
+</style>
+@endpush
 
 @push('scripts')
 <script>

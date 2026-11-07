@@ -79,13 +79,16 @@
                     <select id="sl-language" name="language" class="form-select form-select-solid"
                         data-update-url="{{ route('clients.settings.update-language') }}">
                         @foreach ($data['languages'] as $lang)
+                            @php
+                                $languageData = langData((object) $lang, $lang['code'] ?? 'en');
+                            @endphp
                             <option value="{{ $lang['code'] }}" data-lang=""
                                 data-language-id="{{ $lang['id'] }}"
-                                data-icon="{{ $lang['flag_class'] }}"
-                                data-flag-code="{{ $lang['flag_code'] }}"
-                                data-flag-url="{{ $lang['flag_url'] }}"
+                                data-icon="{{ $languageData['flag_class'] }}"
+                                data-flag-code="{{ $languageData['flag_code'] }}"
+                                data-flag-url="{{ $languageData['flag_url'] }}"
                                 data-name="{{ $lang['name'] }}"
-                                data-content="<span class='rounded-1 {{ $lang['flag_class'] }} fs-4 me-1' style='background-image:url({{ $lang['flag_url'] }}) !important'></span> {{ $lang['name'] }}"
+                                data-content="<span class='rounded-1 {{ $languageData['flag_class'] }} fs-4 me-1' style='background-image:url({{ $languageData['flag_url'] }}) !important'></span> {{ $lang['name'] }}"
                                 {{ ($data['lang'] ?? 'en') === $lang['code'] ? 'selected' : '' }}>
                                 {{ $lang['name'] }}
                             </option>

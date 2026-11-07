@@ -74,6 +74,10 @@ var auth = {
             $(document)['on']('click', '#btn-resend', function() {
                 var _0x39ef8e = _0x4ca561;
                 auth['on'][_0x39ef8e(0xb2)]['resendEmail']();
+            }),
+            $(document)['on']('submit', '#install-form', function(_0x2f119d) {
+                _0x2f119d['preventDefault']();
+                auth['on']['click']['install']();
             });
     },
     'on': {
@@ -98,9 +102,11 @@ var auth = {
                     }
                     if (_0x43c6e1[_0x370ddf(0x9c)])
                         throw _0x43c6e1;
-                    app[_0x370ddf(0xd1)](_0x43c6e1[_0x370ddf(0xc1)] ? _0x43c6e1[_0x370ddf(0xc1)] : _0x43c6e1[_0x370ddf(0xa9)]),
-                        app[_0x370ddf(0xc5)](_0x370ddf(0xc8), _0x43c6e1[_0x370ddf(0xa9)]),
-                        window[_0x370ddf(0x84)] = _0x43c6e1['rd'];
+                    if (_0x43c6e1['rd'] !== '2fa-auth') {
+                        app[_0x370ddf(0xd1)](_0x43c6e1[_0x370ddf(0xc1)] ? _0x43c6e1[_0x370ddf(0xc1)] : _0x43c6e1[_0x370ddf(0xa9)]);
+                    }
+                    app[_0x370ddf(0xc5)](_0x370ddf(0xc8), _0x43c6e1[_0x370ddf(0xa9)]);
+                    window[_0x370ddf(0x84)] = _0x43c6e1['rd'];
                 } catch (_0x33f159) {
                     app[_0x370ddf(0xd1)](_0x33f159[_0x370ddf(0x9c)] ? _0x33f159[_0x370ddf(0xc1)] ? _0x33f159[_0x370ddf(0xc1)] : _0x33f159['error'] : 'Undefined\x20error', _0x370ddf(0x9c)),
                         app[_0x370ddf(0xc5)](_0x370ddf(0xb1), _0x33f159['error'] ? _0x33f159[_0x370ddf(0x9c)] : _0x370ddf(0xae));

@@ -23,7 +23,7 @@
                                     <option value="{{ $option['value'] }}" data-currency="{{ $option['currency'] }}"
                                         data-rate="{{ $option['rate'] }}">{{ $option['name'] }}</option>
                                 @endforeach
-                                <option value="1" data-icon="https://cdn-icons-png.flaticon.com/512/5622/5622939.png"
+                                <option value="-1" data-icon="https://cdn-icons-png.flaticon.com/512/5622/5622939.png"
                                     data-lang="Bonus">Bonus</option>
                             </select>
                         </div>

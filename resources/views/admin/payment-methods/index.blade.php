@@ -14,6 +14,7 @@
             <button class="btn btn-warning btn-sm btn-verify btn-verify-27" data-bs-toggle="modal" data-bs-target="#modal-config-xendit" style="display: none;" data-lang="How to config?">Hướng dẫn cấu hình</button>
             <button class="btn btn-warning btn-sm btn-verify btn-verify-28" data-bs-toggle="modal" data-bs-target="#modal-config-xendit" style="display: none;" data-lang="How to config?">Hướng dẫn cấu hình</button>
             <button class="btn btn-warning btn-sm btn-verify btn-verify-32" data-bs-toggle="modal" data-bs-target="#modal-config-bhratpe" style="display: none;" data-lang="How to config?">Hướng dẫn cấu hình</button>
+            <button class="btn btn-warning btn-sm btn-verify btn-verify-46" data-bs-toggle="modal" data-bs-target="#modal-config-heleket" style="display: none;" data-lang="How to config?">Hướng dẫn cấu hình</button>
          </div>
       </div>
       <div class="card mb-5">
@@ -268,6 +269,22 @@
                      <label class="required form-label">Payment API Key</label>
                      <input type="text" class="form-control form-control-solid ipt-cryptomus-key" placeholder="">
                   </div>
+               </div>
+               <div class="div-options div-46" style="display: none;">
+                  <div class="alert alert-info">Create and approve a Heleket merchant first. Use the Merchant ID and Payment API key; do not use a Payout API key.</div>
+                  <div class="mb-5">
+                     <label class="required form-label">Merchant ID</label>
+                     <input type="text" class="form-control form-control-solid ipt-heleket-merchant" autocomplete="off" placeholder="Merchant UUID" required>
+                  </div>
+                  <div class="mb-5">
+                     <label class="required form-label">Payment API key</label>
+                     <input type="password" class="form-control form-control-solid ipt-heleket-payment-key" autocomplete="new-password" required>
+                  </div>
+                  <div class="mb-5">
+                     <label class="form-label">Webhook URL</label>
+                     <input type="text" class="form-control form-control-solid fst-italic ipt-webhook ipt-heleket-webhook" readonly>
+                  </div>
+                  <div class="text-muted fs-8">API key is stored in the payment method's protected config and must never be sent to the client browser.</div>
                </div>
                <!-- FPayment -->
                <div class="div-options div-15" style="display: none;">
@@ -940,6 +957,38 @@
                   <li>Paste it in the 'Merchant ID' field.</li>
                   <li>Copy the QR code image and paste it to the Details field.</li>
                </ol>
+            </div>
+         </div>
+      </div>
+   </div>
+   <div class="modal fade" tabindex="-1" id="modal-config-heleket">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+         <div class="modal-content">
+            <div class="modal-header">
+               <h3 class="modal-title">Heleket - Configuration</h3>
+               <button type="button" class="btn btn-icon btn-sm btn-active-icon-primary" data-bs-dismiss="modal" aria-label="Close">
+                  <span class="svg-icon svg-icon-1">
+                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect opacity="0.5" x="6" y="17.3137" width="16" height="2" rx="1" transform="rotate(-45 6 17.3137)" fill="currentColor"></rect>
+                        <rect x="7.41422" y="6" width="16" height="2" rx="1" transform="rotate(45 7.41422 6)" fill="currentColor"></rect>
+                     </svg>
+                  </span>
+               </button>
+            </div>
+            <div class="modal-body lh-lg fs-6">
+               <ol>
+                  <li>Sign in to <a href="https://heleket.com/" target="_blank" rel="noopener noreferrer">Heleket Business</a>, open <strong>Merchants</strong>, and create or select your merchant.</li>
+                  <li>Open merchant settings and submit your project for moderation. Enter your website domain and complete Heleket's domain verification.</li>
+                  <li>For DNS verification, add the exact TXT record shown on Heleket's confirmation page (for example, <code>heleket=...</code>) in your domain DNS settings. Each domain has its own value; do not copy the example token from a screenshot. Return to Heleket and click <strong>Check</strong>/<strong>Confirm</strong> after DNS has propagated.
+                     <a href="https://heleket.com/img/faq-page/image18.webp" target="_blank" rel="noopener noreferrer">(DNS setup screenshot)</a>
+                  </li>
+                  <li>Alternatively, select meta tag or HTML file verification and follow the generated instructions shown for your domain:
+                     <a href="https://heleket.com/img/faq-page/image28.webp" target="_blank" rel="noopener noreferrer">(verification options screenshot)</a>
+                  </li>
+                  <li>After the merchant is approved, copy its <strong>Merchant ID</strong> and <strong>Payment API key</strong> from merchant/API settings. Use the Payment API key for checkout; a <strong>Payout API key</strong> is not interchangeable.</li>
+                  <li>Return to this form, enter the Merchant ID and Payment API key in the Heleket fields, then save the payment method. Keep the API key secret; it is used only by the server.</li>
+               </ol>
+               <div class="alert alert-info mb-0">The DNS value such as <code>heleket=...</code> only proves domain ownership. It is not the Merchant ID or an API key.</div>
             </div>
          </div>
       </div>

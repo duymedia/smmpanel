@@ -10,12 +10,16 @@ use App\Models\Category;
 use App\Models\Platform;
 use App\Models\Language;
 use App\Models\ApiProvider;
+use App\Models\ChildPanel;
 use App\Models\Config;
+use App\Models\Order;
+use App\Http\Controllers\Crons\CronChildPanelController;
 use App\Smm\Smm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 class ServiceController extends Controller
 {
@@ -28,11 +32,14 @@ class ServiceController extends Controller
         $bool = static fn($value): int => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
 
         $check = $array($data['check_count_data'] ?? null, [
-            'type' => 'youtube-view',
+            'type' => 'facebook-followers',
             'percent' => 0,
             'auto' => 0,
         ]);
-        $check['type'] = trim((string) ($check['type'] ?? 'youtube-view'));
+        $check['type'] = trim((string) ($check['type'] ?? 'facebook-followers'));
+        if (!in_array($check['type'], ['facebook-followers', 'facebook-followers-no-api', 'facebook-reactions-no-api', 'youtube-view', 'youtube-like', 'youtube-comment', 'youtube-subscriber'], true)) {
+            $check['type'] = 'facebook-followers';
+        }
         $check['percent'] = max(0, min(100, (int) ($check['percent'] ?? 0)));
         $check['auto'] = $bool($check['auto'] ?? 0);
 
@@ -43,7 +50,7 @@ class ServiceController extends Controller
         $advanced['min_balance'] = max(0, (float) ($advanced['min_balance'] ?? 0));
         $advanced['max_order'] = max(0, (int) ($advanced['max_order'] ?? 0));
 
-        return [
+        $options = [
             'quantity_discount' => $bool($data['quantity_discount'] ?? 0),
             'quantity_discount_data' => $array($data['quantity_discount_data'] ?? null),
             'advanced_settings' => $bool($data['advanced_settings'] ?? 0),
@@ -54,6 +61,53 @@ class ServiceController extends Controller
             'change_provider' => $bool($data['change_provider'] ?? 0),
             'summaries' => $array($data['summaries'] ?? null),
         ];
+
+        $normalizeAverageTimeV2 = static function ($value): ?string {
+            $averageTimeData = is_string($value) ? json_decode($value, true) : $value;
+            if (!is_array($averageTimeData)) return null;
+            $sourceItems = ($averageTimeData['v'] ?? null) === 2
+                ? ($averageTimeData['items'] ?? [])
+                : $averageTimeData;
+            if (!is_array($sourceItems)) return null;
+
+            $items = [];
+            foreach (array_slice($sourceItems, 0, 6) as $item) {
+                $quantity = is_array($item) ? ($item['quantity'] ?? $item[0] ?? null) : null;
+                $seconds = is_array($item) ? ($item['seconds'] ?? $item[1] ?? null) : null;
+                if (!is_numeric($quantity) || !is_numeric($seconds)) continue;
+                $quantity = (int) $quantity;
+                $seconds = (int) $seconds;
+                if ($quantity > 0 && $quantity <= 100000000 && $seconds >= 0 && $seconds <= 100000000) {
+                    $items[] = [$quantity, $seconds];
+                }
+            }
+
+            return json_encode($items);
+        };
+
+        if (array_key_exists('avg_time', $data)) {
+            $averageTime = is_scalar($data['avg_time']) ? trim((string) $data['avg_time']) : '';
+            $legacyData = json_decode($averageTime, true);
+            if (is_array($legacyData) && ($legacyData['v'] ?? null) === 2) {
+                $options['average_time'] = (string) max(0, (int) ($legacyData['legacy_seconds'] ?? 0));
+                if (!array_key_exists('avg_time_v2', $data)) {
+                    $options['average_time_v2'] = $normalizeAverageTimeV2($legacyData);
+                }
+            } elseif ($averageTime === '') {
+                $options['average_time'] = null;
+            } elseif (is_numeric($averageTime) && (float) $averageTime >= 0) {
+                $options['average_time'] = (string) (int) $averageTime;
+            } elseif (!str_starts_with($averageTime, '{') && strlen($averageTime) <= 255) {
+                $options['average_time'] = $averageTime;
+            } else {
+                $options['average_time'] = null;
+            }
+        }
+        if (array_key_exists('avg_time_v2', $data)) {
+            $options['average_time_v2'] = $normalizeAverageTimeV2($data['avg_time_v2']);
+        }
+
+        return $options;
     }
 
 
@@ -210,6 +264,7 @@ class ServiceController extends Controller
         $query = Service::query()
             ->with(['category:id,name,platform_id,image', 'category.platform:id,name,image'])
             ->where('domain', getDomain());
+        if (isChildPanel()) $query->where('status', true);
 
 
         if ($request->filled('search')) {
@@ -250,6 +305,7 @@ class ServiceController extends Controller
 
         $allCategories = Category::where('domain', getDomain())
             ->with(['platform:id,name,image', 'services' => function ($q) {
+                if (isChildPanel()) $q->where('status', true);
                 $q->orderBy('position', 'asc');
             }])
             ->orderBy('position', 'asc')
@@ -298,7 +354,102 @@ class ServiceController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('admin.services.index', compact('services', 'plat_cat', 'languages', 'providers'));
+        $childPanel = isChildPanel()
+            ? ChildPanel::whereRaw('LOWER(domain_panel) = ?', [strtolower(trim(getDomain()))])->first()
+            : null;
+        $childPanelSyncSettings = $childPanel?->getSetting('service_sync', []) ?? [];
+
+        return view('admin.services.index', compact(
+            'services', 'plat_cat', 'languages', 'providers', 'childPanel', 'childPanelSyncSettings'
+        ));
+    }
+
+
+    public function saveChildSyncSettings(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'markup_percent' => ['required', 'numeric', 'min:0', 'max:1000'],
+            'auto_sync' => ['nullable', 'boolean'],
+        ]);
+
+        $panel = $this->currentChildPanel();
+        $settings = is_array($panel->settings) ? $panel->settings : [];
+        $sync = is_array($settings['service_sync'] ?? null) ? $settings['service_sync'] : [];
+        $sync['markup_percent'] = (float) $data['markup_percent'];
+        $sync['auto_sync'] = $request->boolean('auto_sync');
+        $settings['service_sync'] = $sync;
+        $panel->update(['settings' => $settings]);
+
+        return response()->json([
+            'success' => true,
+            'message' => adminMessage('update'),
+            'settings' => $sync,
+        ]);
+    }
+
+    public function syncChildPanelServices(): JsonResponse
+    {
+        $result = app(CronChildPanelController::class)->syncPanel($this->currentChildPanel());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Services synchronized from the main panel.',
+            'result' => $result,
+        ]);
+    }
+
+    public function deleteChildPanelServices(): JsonResponse
+    {
+        $panel = $this->currentChildPanel();
+        $domain = strtolower(trim((string) $panel->domain_panel));
+        $lock = Cache::lock('child-panel-service-sync:' . sha1($domain), 600);
+        if (!$lock->get()) {
+            return response()->json(['error' => 'A service sync is currently running. Try again shortly.'], 409);
+        }
+
+        try {
+            $result = DB::transaction(function () use ($panel, $domain): array {
+                $serviceIds = Service::where('domain', $domain)->pluck('id');
+                $orderedIds = $serviceIds->isEmpty()
+                    ? collect()
+                    : Order::whereIn('service_id', $serviceIds)->distinct()->pluck('service_id');
+                $deleteIds = $serviceIds->diff($orderedIds);
+                $deleted = $deleteIds->isEmpty()
+                    ? 0
+                    : Service::where('domain', $domain)->whereIn('id', $deleteIds)->delete();
+                $deactivated = $orderedIds->isEmpty()
+                    ? 0
+                    : Service::where('domain', $domain)->whereIn('id', $orderedIds)->update(['status' => false]);
+
+                $settings = is_array($panel->settings) ? $panel->settings : [];
+                $sync = is_array($settings['service_sync'] ?? null) ? $settings['service_sync'] : [];
+                $maps = is_array($sync['maps'] ?? null) ? $sync['maps'] : [];
+                $sync['auto_sync'] = false;
+                $sync['maps'] = array_merge($maps, ['services' => []]);
+                $settings['service_sync'] = $sync;
+                $panel->settings = $settings;
+                $panel->total_services = Service::where('domain', $domain)->where('status', true)->count();
+                $panel->save();
+
+                return ['deleted' => $deleted, 'deactivated' => $deactivated];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => "Removed {$result['deleted']} services; kept {$result['deactivated']} services with order history inactive. Automatic sync is disabled.",
+                'result' => $result,
+            ]);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function currentChildPanel(): ChildPanel
+    {
+        abort_unless(isChildPanel(), 403);
+
+        return ChildPanel::whereRaw('LOWER(domain_panel) = ?', [strtolower(trim(getDomain()))])
+            ->firstOrFail();
     }
 
 
@@ -325,6 +476,8 @@ class ServiceController extends Controller
 
     public function add(Request $request)
     {
+        $this->denyChildPanelServiceChanges();
+
         $categories = Category::with('platform')->where('domain', getDomain())->get();
         $languages = Language::where('status', true)->where('code', '!=', 'en')->where('domain', getDomain())->orderBy('code')->get();
         $providers = ApiProvider::where('domain', getDomain())
@@ -338,12 +491,17 @@ class ServiceController extends Controller
             'markup_distributor' => ($config && $config->markup_distributor > 0) ? $config->markup_distributor : 105.0
         ];
 
-        return view('admin.services.add', compact('categories', 'languages', 'markupConfig', 'providers'));
+        return view('admin.services.add', array_merge(
+            compact('categories', 'languages', 'markupConfig', 'providers'),
+            adminServiceFormData()
+        ));
     }
 
 
     public function create(Request $request)
     {
+        $this->denyChildPanelServiceChanges();
+
         $categories = Category::with('platform')->where('domain', getDomain())->get();
         $languages = Language::where('status', true)->where('code', '!=', 'en')->where('domain', getDomain())->orderBy('code')->get();
 
@@ -371,7 +529,13 @@ class ServiceController extends Controller
 
     public function import(Request $request)
     {
+        $this->denyChildPanelServiceChanges();
+
         $categories = Category::with('platform')->where('domain', getDomain())->get();
+        $languages = Language::where('domain', getDomain())
+            ->where('code', '!=', 'en')
+            ->orderBy('code')
+            ->get(['code', 'name']);
         $providers = ApiProvider::where('domain', getDomain())
             ->where('status', true)
             ->select('id', 'name', 'rate_api', 'fixed_decimal')
@@ -386,12 +550,14 @@ class ServiceController extends Controller
             'markup_distributor' => ($config && $config->markup_distributor > 0) ? $config->markup_distributor : 105.0
         ];
 
-        return view('admin.services.import', compact('categories', 'providers', 'markupConfig'));
+        return view('admin.services.import', compact('categories', 'languages', 'providers', 'markupConfig'));
     }
 
 
     public function storeImport(Request $request)
     {
+        $this->denyChildPanelServiceChanges();
+
         try {
             $payload = $this->normalizeImportPayload($request);
 
@@ -447,7 +613,7 @@ class ServiceController extends Controller
                 ], 400);
             }
 
-            $providerServices = $this->normalizeProviderServicesForImport($providerServices);
+            $providerServices = $this->normalizeProviderServices($providerServices);
 
 
             $psMap = [];
@@ -595,6 +761,8 @@ class ServiceController extends Controller
 
     public function store(Request $request)
     {
+        $this->denyChildPanelServiceChanges();
+
         $validated = $request->validate([
             'category_id' => 'required|exists:categories,id',
             'type' => 'required|in:api,manual',
@@ -621,6 +789,7 @@ class ServiceController extends Controller
             'max' => 'nullable|integer|min:1',
             'position' => 'nullable|integer|min:0',
             'average_time' => 'nullable|string|max:255',
+            'average_time_v2' => 'nullable|string',
             'note' => 'nullable|string',
             'reaction' => 'nullable|string|max:500',
             'sync_rate' => 'sometimes|nullable',
@@ -630,6 +799,13 @@ class ServiceController extends Controller
             'sync_status' => 'sometimes|nullable',
             'service_api' => 'sometimes|nullable|string'
         ]);
+
+        $averageTimeInput = [];
+        if (array_key_exists('average_time', $validated)) $averageTimeInput['avg_time'] = $validated['average_time'];
+        if (array_key_exists('average_time_v2', $validated)) $averageTimeInput['avg_time_v2'] = $validated['average_time_v2'];
+        foreach ($this->serviceOptions($averageTimeInput) as $key => $value) {
+            if (in_array($key, ['average_time', 'average_time_v2'], true)) $validated[$key] = $value;
+        }
 
 
         $validated['min'] = $validated['min'] ?? 1;
@@ -760,6 +936,7 @@ class ServiceController extends Controller
 
     public function edit(Request $request)
     {
+        $this->denyChildPanelServiceChanges();
 
         $serviceId = $request->query('id');
 
@@ -786,7 +963,7 @@ class ServiceController extends Controller
         $languages = Language::where('status', true)
             ->where('code', '!=', 'en')
             ->where('domain', getDomain())
-            ->select('id', 'name', 'code')
+            ->select('id', 'name', 'code', 'flag')
             ->orderBy('code')
             ->get();
 
@@ -808,12 +985,17 @@ class ServiceController extends Controller
             'markup_distributor' => ($config && $config->markup_distributor > 0) ? $config->markup_distributor : 105.0
         ];
 
-        return view('admin.services.edit', compact('service', 'categories', 'languages', 'providers', 'markupConfig'));
+        return view('admin.services.edit', array_merge(
+            compact('service', 'categories', 'languages', 'providers', 'markupConfig'),
+            adminServiceFormData($service, $serviceId)
+        ));
     }
 
 
     public function update(Request $request)
     {
+        $this->denyChildPanelServiceChanges();
+
         $serviceId = $request->query('id');
         if (!$serviceId) {
             return response()->json(['success' => false, 'message' => 'Kh?ng t?m th?y d?ch v?'], 404);
@@ -853,6 +1035,7 @@ class ServiceController extends Controller
                 'min'                  => 'sometimes|nullable|integer|min:1',
                 'max'                  => 'sometimes|nullable|integer|min:1',
                 'average_time'         => 'sometimes|nullable|string|max:255',
+                'average_time_v2'      => 'sometimes|nullable|string',
                 'note'                 => 'sometimes|nullable|string',
                 'reaction'             => 'sometimes|nullable|string|max:500',
                 'sync_rate'            => 'sometimes|nullable',
@@ -866,6 +1049,13 @@ class ServiceController extends Controller
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => 'D? li?u kh?ng h?p l?', 'errors' => $e->errors()], 422);
+        }
+
+        $averageTimeInput = [];
+        if (array_key_exists('average_time', $validated)) $averageTimeInput['avg_time'] = $validated['average_time'];
+        if (array_key_exists('average_time_v2', $validated)) $averageTimeInput['avg_time_v2'] = $validated['average_time_v2'];
+        foreach ($this->serviceOptions($averageTimeInput) as $key => $value) {
+            if (in_array($key, ['average_time', 'average_time_v2'], true)) $validated[$key] = $value;
         }
 
 
@@ -1262,6 +1452,27 @@ class ServiceController extends Controller
 
         $addType = $service->provider_id ? 'Api' : 'Manual';
 
+        $averageTimeValue = $service->average_time ?? '';
+        $averageTimeV2Value = $service->average_time_v2 ?? '';
+        $averageTimeData = json_decode((string) $averageTimeV2Value, true);
+        $legacyData = json_decode((string) $averageTimeValue, true);
+        if (!is_array($averageTimeData) && is_array($legacyData) && ($legacyData['v'] ?? null) === 2) {
+            $averageTimeData = $legacyData;
+            $averageTimeValue = (string) max(0, (int) ($legacyData['legacy_seconds'] ?? 0));
+        }
+        if (is_array($averageTimeData) && ($averageTimeData['v'] ?? null) === 2) {
+            $averageTimeV2Value = json_encode(array_map(
+                static fn ($item) => [$item['quantity'], $item['seconds']],
+                averageTimeV2Items($averageTimeData)
+            ));
+        } elseif (is_array($averageTimeData)) {
+            $averageTimeV2Value = json_encode(array_map(
+                static fn ($item) => [$item['quantity'], $item['seconds']],
+                averageTimeV2Items($averageTimeData)
+            ));
+        }
+        $hasAverageTimeV2 = averageTimeV2Items($averageTimeV2Value) !== [];
+
         return response()->json([
             'service_add_type'              => $addType,
             'provider_id'                   => $service->provider_id,
@@ -1297,9 +1508,10 @@ class ServiceController extends Controller
             'service_quantity_discount'     => $service->quantity_discount ? 1 : 0,
             'service_quantity_discount_data' => json_encode($service->quantity_discount_data ?? []),
             'service_check_count'           => $service->check_count ? 1 : 0,
-            'service_check_count_data'      => json_encode($service->check_count_data ?? ['type' => 'youtube-view', 'percent' => 0, 'auto' => 0]),
-            'service_average_time_custom'   => 0,
-            'service_average_time'          => $service->average_time ?? '',
+            'service_check_count_data'      => json_encode($service->check_count_data ?? ['type' => 'facebook-followers', 'percent' => 0, 'auto' => 0]),
+            'service_average_time_custom'   => ($hasAverageTimeV2 || (is_numeric($averageTimeValue) && (float) $averageTimeValue > 0)) ? 1 : 0,
+            'service_average_time'          => $averageTimeValue,
+            'service_average_time_v2'       => $averageTimeV2Value,
             'service_hidden_api'            => $service->hidden_api ? 1 : 0,
             'service_feature'               => json_encode($service->attributes ?? []),
             'service_summary'               => json_encode($service->summaries ?? []),
@@ -1311,6 +1523,83 @@ class ServiceController extends Controller
         ]);
     }
 
+
+    public function translateName(Request $request): JsonResponse
+    {
+        $text = trim((string) $request->input('text', ''));
+        $target = strtolower(trim((string) $request->input('target', '')));
+
+        if ($text === '' || strlen($text) > 500) {
+            return response()->json(['error' => 'English text is required and must be 500 bytes or fewer.']);
+        }
+
+        $language = Language::where('domain', getDomain())
+            ->where('code', $target)
+            ->where('code', '!=', 'en')
+            ->first();
+        if (!$language) {
+            return response()->json(['error' => 'Selected translation language is not available.']);
+        }
+
+        $pair = langPair('en', $language->code, $language->name);
+        if (!$pair) {
+            return response()->json([
+                'error' => 'Language code "' . $target . '" cannot be mapped to a supported translation locale.',
+            ]);
+        }
+        [, $targetLocale] = explode('|', $pair, 2);
+
+        try {
+            $response = Http::acceptJson()->timeout(20)->get('https://api.mymemory.translated.net/get', [
+                'q' => $text,
+                'langpair' => $pair,
+                'mt' => '1',
+            ]);
+            $payload = $response->json();
+
+            if (!$response->successful() || (int) ($payload['responseStatus'] ?? 0) !== 200) {
+                $details = (string) ($payload['responseDetails'] ?? '');
+                if (str_contains(strtolower($details), 'invalid target language')) {
+                    return response()->json([
+                        'error' => 'Language code "' . $target . '" is not a valid translation language. Use a language code such as "vi" instead of a country code.',
+                    ]);
+                }
+
+                return response()->json([
+                    'error' => $details !== '' ? $details : 'Translation API request failed. Try again later.',
+                ]);
+            }
+
+            $matches = array_values(array_filter(
+                (array) ($payload['matches'] ?? []),
+                fn ($match) => is_array($match)
+                    && str_starts_with(strtolower((string) ($match['target'] ?? '')), strtolower($targetLocale))
+                    && !empty($match['translation'])
+            ));
+            usort($matches, static function (array $a, array $b): int {
+                foreach (['match', 'quality', 'usage-count'] as $key) {
+                    $order = (float) ($b[$key] ?? 0) <=> (float) ($a[$key] ?? 0);
+                    if ($order !== 0) return $order;
+                }
+
+                return 0;
+            });
+
+            $translation = $matches[0]['translation']
+                ?? ($payload['responseData']['translatedText'] ?? '');
+            if ($translation === '') {
+                return response()->json(['error' => 'Translation API returned an empty result.']);
+            }
+
+            return response()->json([
+                'success' => true,
+                'translation' => html_entity_decode((string) $translation, ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['error' => 'Translation API is temporarily unavailable.']);
+        }
+    }
 
     public function ajaxAdd(Request $request): JsonResponse
     {
@@ -1357,6 +1646,27 @@ class ServiceController extends Controller
             $upRetail = (float) ($d['percent_inc'] ?? 100);
             $upAgent = (float) ($d['percent_inc_1'] ?? 100);
             $upDist = (float) ($d['percent_inc_2'] ?? 100);
+            $nameTranslations = $d['name_translated'] ?? [];
+            if (is_string($nameTranslations)) {
+                $nameTranslations = json_decode($nameTranslations, true) ?: [];
+            }
+
+            $serviceName = ['en' => $name];
+            if (is_array($nameTranslations) && $nameTranslations !== []) {
+                $allowedLanguages = array_fill_keys(
+                    Language::where('domain', getDomain())
+                        ->where('code', '!=', 'en')
+                        ->pluck('code')
+                        ->all(),
+                    true
+                );
+
+                foreach ($nameTranslations as $code => $translation) {
+                    if (isset($allowedLanguages[$code]) && is_string($translation) && trim($translation) !== '') {
+                        $serviceName[$code] = trim($translation);
+                    }
+                }
+            }
 
             $sync = $d['sync'] ?? $d['sync_rate'] ?? 0;
             $feature = $d['feature'] ?? [];
@@ -1369,7 +1679,7 @@ class ServiceController extends Controller
                 'category_id'      => $catId,
                 'type'             => strtolower($addType) === 'api' ? 'api' : 'manual',
                 'type_service'     => $type,
-                'name'             => ['en' => $name],
+                'name'             => $serviceName,
                 'title'            => $name,
                 'description'      => $d['description'] ?? '',
                 'image'            => $category->image,
@@ -1391,7 +1701,7 @@ class ServiceController extends Controller
                 'sync_min_max'     => ($d['sync_minmax'] ?? $sync) ? 1 : 0,
                 'sync_refill'      => ($d['sync_refill'] ?? $sync) ? 1 : 0,
                 'sync_cancel'      => ($d['sync_cancel'] ?? $sync) ? 1 : 0,
-                'sync_status'      => ($d['sync_status'] ?? 0) ? 1 : 0,
+                'sync_status'      => ($d['sync_status'] ?? 1) ? 1 : 0,
                 'service_api'      => $addType === 'Api' ? $providerSid : null,
                 'provider_id'      => $addType === 'Api' ? $providerId  : null,
                 'provider_name'    => $providerName,
@@ -1401,7 +1711,10 @@ class ServiceController extends Controller
                 ...$options,
             ]);
 
-            return response()->json(['success' => adminMessage('add')]);
+            return response()->json([
+                'success' => adminMessage('add'),
+                'id' => $service->id,
+            ]);
         } catch (\Exception $e) {
             return response()->json(['error' => 'L?i: ' . $e->getMessage()]);
         }
@@ -1410,6 +1723,10 @@ class ServiceController extends Controller
 
     public function ajaxUpdate(Request $request): JsonResponse
     {
+        if (isChildPanel()) {
+            return response()->json(['error' => 'Service editing is unavailable on child panels.'], 403);
+        }
+
         try {
             $d       = $request->input('data', []);
             $id      = $d['id'] ?? null;
@@ -1482,7 +1799,6 @@ class ServiceController extends Controller
             if (isset($d['sync_cancel'])) $updates['sync_cancel'] = $d['sync_cancel'] ? 1 : 0;
             if (isset($d['sync_status'])) $updates['sync_status'] = $d['sync_status'] ? 1 : 0;
             if (isset($d['description'])) $updates['description'] = $d['description'];
-            if (isset($d['avg_time'])) $updates['average_time'] = $d['avg_time'];
             $attributes = $this->processAttributesField($d['feature'] ?? null);
             $updates['attributes'] = $attributes ?: null;
 
@@ -1574,11 +1890,22 @@ class ServiceController extends Controller
         $decimals = max(0, min(12, (int) ($provider->fixed_decimal ?? 10)));
         $factor = (float) ($provider->rate_api ?? 1) ?: 1;
         $key = 'ajax_provider_services_v2_' . $id . '_' . md5($provider->link . '|' . $provider->api_key . '|' . $decimals . '|' . $factor);
-        $services = Cache::remember($key, now()->addMinutes(5), function () use ($provider, $decimals, $factor) {
-            return $this->normalizeProviderServicesForImport($this->providerServices($provider), $decimals, $factor);
-        });
+        $isEditPage = str_contains((string) $request->headers->get('referer', ''), '/services/edit');
+        if ($isEditPage) {
+            Cache::forget($key);
+            $services = $this->normalizeProviderServices($this->providerServices($provider), $decimals, $factor);
+            foreach ($services as &$service) {
+                $service['feature'] = $this->matchProviderFeatures($service['feature'] ?? []);
+            }
+            unset($service);
+            Cache::put($key, $services, now()->addMinutes(5));
+        } else {
+            $services = Cache::remember($key, now()->addMinutes(5), function () use ($provider, $decimals, $factor) {
+                return $this->normalizeProviderServices($this->providerServices($provider), $decimals, $factor);
+            });
+        }
 
-        return response()->json(['success' => $this->appendCurrentEditProviderService($request, $provider, $services)]);
+        return response()->json(['success' => $services]);
     }
 
     public function ajaxProviderServicesForImport(Request $request): JsonResponse
@@ -1607,10 +1934,13 @@ class ServiceController extends Controller
         $multiplier = 1.0;
         $cacheKey = 'ajax_provider_services_import_v3_' . $providerId . '_' . md5($provider->link . '|' . $provider->api_key . '|' . $decimals . '|' . $multiplier);
         $cache = Cache::store('file');
-        $cached = $cache->get($cacheKey);
+        $isEditPage = str_contains((string) $request->headers->get('referer', ''), '/services/edit');
+        $cached = $isEditPage ? null : $cache->get($cacheKey);
 
-        if ($cached !== null) {
-            return response()->json(['success' => $this->appendCurrentEditProviderService($request, $provider, $cached)]);
+        if ($isEditPage) {
+            $cache->forget($cacheKey);
+        } elseif ($cached !== null) {
+            return response()->json(['success' => $cached]);
         }
 
         try {
@@ -1621,7 +1951,7 @@ class ServiceController extends Controller
                 return response()->json(['error' => $message]);
             }
 
-            $services = $this->normalizeProviderServicesForImport($raw, $decimals, $multiplier);
+            $services = $this->normalizeProviderServices($raw, $decimals, $multiplier);
 
             if (empty($services)) {
                 return response()->json(['error' => 'Nh? cung c?p kh?ng tr? v? d?ch v? h?p l?']);
@@ -1630,7 +1960,7 @@ class ServiceController extends Controller
             // Provider data can contain emoji; the file cache avoids database-cache collation failures.
             $cache->put($cacheKey, $services, now()->addMinutes(5));
 
-            return response()->json(['success' => $this->appendCurrentEditProviderService($request, $provider, $services)]);
+            return response()->json(['success' => $services]);
         } catch (\Exception $e) {
 
             return response()->json(['error' => 'L?i k?t n?i: ' . $e->getMessage()]);
@@ -1664,57 +1994,7 @@ class ServiceController extends Controller
         return ['error' => 'Kh?ng th? t?i d?ch v? t? nh? cung c?p'];
     }
 
-    public function appendCurrentEditProviderService(Request $request, ApiProvider $provider, array $services): array
-    {
-        $referer = (string) $request->headers->get('referer', '');
-        $serviceId = null;
-        if ($referer !== '' && str_contains($referer, '/services/edit')) {
-            parse_str((string) parse_url($referer, PHP_URL_QUERY), $query);
-            $serviceId = is_numeric($query['id'] ?? null) ? (int) $query['id'] : null;
-        }
-
-        if (!$serviceId) {
-            return $services;
-        }
-
-        $service = Service::where('domain', getDomain())
-            ->where('id', $serviceId)
-            ->where('provider_id', $provider->id)
-            ->whereNotNull('service_api')
-            ->first();
-
-        if (!$service || !$service->service_api) {
-            return $services;
-        }
-
-        $providerSid = (string) $service->service_api;
-        foreach ($services as $item) {
-            if ((string) ($item['service'] ?? '') === $providerSid) {
-                // The provider option must show the current rate returned by SMM.
-                return $services;
-            }
-        }
-
-        $services[] = [
-            'service' => $providerSid,
-            'name' => $service->getName('en'),
-            'rate' => (float) ($service->rate_original ?? 0),
-            'min' => (int) ($service->min ?? 1),
-            'max' => (int) ($service->max ?? 10000),
-            'type' => (string) ($service->type_service ?? 'Default'),
-            'category' => 'Current service',
-            'refill' => (bool) $service->refill,
-            'cancel' => (bool) $service->cancel,
-            'dripfeed' => (bool) $service->dripfeed,
-            'desc' => $service->getDescription('en'),
-            'feature' => json_encode($service->attributes ?? []),
-            'summary' => json_encode([]),
-        ];
-
-        return $services;
-    }
-
-    public function normalizeProviderServicesForImport(array $raw, ?int $decimals = null, float $multiplier = 1): array
+    public function normalizeProviderServices(array $raw, ?int $decimals = null, float $multiplier = 1): array
     {
         $services = [];
 
@@ -1762,6 +2042,51 @@ class ServiceController extends Controller
         }
 
         return $services;
+    }
+
+    private function matchProviderFeatures(mixed $features): string
+    {
+        if (is_string($features)) {
+            $features = json_decode($features, true);
+        }
+
+        if (is_string($features)) {
+            $features = [$features];
+        }
+
+        if (!is_array($features)) {
+            return '[]';
+        }
+
+        $options = [
+            'Owner', 'Exclusive', 'Provider Direct', 'New', 'Best seller', 'Promotion', 'Recommend', 'Instant',
+            'Super Fast', 'Real', 'Lifetime', '7 days Refill', '15 days Refill', '30 days Refill',
+            '60 days Refill', '90 days Refill', '365 days Refill', 'No refill', 'Auto Refill', 'No refund',
+            'Refill Button', 'Cancel Button',
+        ];
+        $optionMap = [];
+        foreach ($options as $option) {
+            $optionMap[$this->featureLookupKey($option)] = $option;
+        }
+
+        $matched = [];
+        foreach ($features as $feature) {
+            if (!is_scalar($feature)) {
+                continue;
+            }
+
+            $key = $this->featureLookupKey((string) $feature);
+            if (isset($optionMap[$key])) {
+                $matched[$optionMap[$key]] = $optionMap[$key];
+            }
+        }
+
+        return json_encode(array_values($matched), JSON_UNESCAPED_UNICODE) ?: '[]';
+    }
+
+    private function featureLookupKey(string $feature): string
+    {
+        return preg_replace('/[^a-z0-9]/', '', strtolower(trim($feature))) ?? '';
     }
 
     public function normalizeImportPayload(Request $request): array
@@ -1873,5 +2198,10 @@ class ServiceController extends Controller
                 'markup_distributor' => (float) ($firstItem['percent_inc_2'] ?? 0),
             ],
         ];
+    }
+
+    private function denyChildPanelServiceChanges(): void
+    {
+        abort_if(isChildPanel(), 403);
     }
 }

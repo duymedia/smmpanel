@@ -3,6 +3,7 @@
 
 
 <head>
+    @include('auth.theme-default.partials.bootstrap')
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -49,7 +50,7 @@
                                     Nhập mã bảo mật gồm 6 chữ số</div>
                             </div>
 
-                            <div class="fv-row mb-8">
+                            <div class="fv-row mb-8"> 
                                 <div class="mb-3">
                                     <input type="text" name="code" id="2fa-code" class="form-control"
                                         placeholder="Mã xác minh" data-lang="Verification code" maxlength="6"
@@ -61,7 +62,7 @@
                             <div class="d-flex flex-wrap justify-content-center pb-lg-0">
                                 <button type="button" id="btn-check-2fa" class="btn btn-primary">
                                     <span class="indicator-label" data-lang="Submit">Gửi</span>
-                                    <span class="indicator-progress">Đang xác minh...
+                                    <span class="indicator-progress" data-lang="Verifying..." data-page="/addfunds">Đang xác minh...
                                         <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
                                     </span>
                                 </button>
@@ -99,35 +100,7 @@
         <script src="{{ asset('cdn.whoispanel.com/dashboard/5/js/scripts.bundle.js') }}"></script>
         <script src="{{ asset('cdn.whoispanel.com/libs/jquery.blockUI/2.70/jquery.blockUI.min.js') }}"></script>
         <script src="{{ asset('assets/client/language.js') }}?v={{ filemtime(public_path('assets/client/language.js')) }}"></script>
-        <script>
-            (function () {
-                var language = window.LANGUAGE;
-                if (!language) return;
-
-                var segments = window.location.pathname.split('/');
-                var page = '/' + (segments[1] || '');
-
-                document.querySelectorAll('[data-lang]').forEach(function (element) {
-                    var key = element.getAttribute('data-lang') || element.textContent.trim();
-                    var elementPage = element.getAttribute('data-page') || page;
-                    var group = key.indexOf('::') >= 0 ? key.split('::')[0] : elementPage;
-                    var localized = language.language?.[group]?.[key]
-                        || language.core?.[group]?.[key];
-
-                    if (!localized) return;
-
-                    if (element.matches('input, textarea')) {
-                        if (element.hasAttribute('placeholder')) {
-                            element.setAttribute('placeholder', localized);
-                        } else if (element.hasAttribute('value')) {
-                            element.value = localized;
-                        }
-                    } else {
-                        element.innerHTML = localized;
-                    }
-                });
-            })();
-        </script>
+        @include('auth.theme-default.partials.language')
         <script src="{{ asset('assets/app.js') }}?v=16.8"></script>
         <script src="{{ asset('assets/client/auth.js') }}?v=16.9"></script>
 </body>
